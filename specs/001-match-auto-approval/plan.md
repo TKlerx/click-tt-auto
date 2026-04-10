@@ -39,7 +39,7 @@ All gates pass. No violations to justify.
 ### Documentation (this feature)
 
 ```text
-specs/main/
+specs/001-match-auto-approval/
 ├── plan.md              # This file
 ├── research.md          # Phase 0 output
 ├── data-model.md        # Phase 1 output

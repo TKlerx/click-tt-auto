@@ -1,6 +1,6 @@
 # Tasks: Match Report Auto-Approval
 
-**Input**: Design documents from `specs/main/`
+**Input**: Design documents from `specs/001-match-auto-approval/`
 **Prerequisites**: plan.md, spec.md, research.md, data-model.md, contracts/command-schema.md
 
 **Tests**: Unit tests for validation logic only (core safety-critical code).

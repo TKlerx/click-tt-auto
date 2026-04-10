@@ -20,7 +20,7 @@ Purpose: Track the status of all planned features, their implementation progress
 
 | # | Feature | Status | Depends On | Est. Effort | Next Step |
 | --- | --- | --- | --- | --- | --- |
-| 001 | Match Report Auto-Approval | Planned | - | Spec refinement | Run `/speckit.clarify` |
+| 001 | Match Report Auto-Approval | Tasked | - | Large | Start implementation with `/speckit.implement` |
 
 ## Implementation Roadmap
 
@@ -30,8 +30,8 @@ Purpose: Track the status of all planned features, their implementation progress
 
 ### Begin Immediately
 
-- No tasked or in-progress numbered features are waiting for implementation work
+- 001 Match Report Auto-Approval: Start implementation with `/speckit.implement`
 
 ### Blocked / Prep Needed
 
-- 001 Match Report Auto-Approval: Run `/speckit.clarify`
+- No planned features are blocked on clarify/analyze/planning work
