@@ -1,50 +1,47 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+# click-TT Automation Constitution
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. Single-Purpose CLI Tool
+This project is a Playwright-based CLI automation tool for approving table tennis match reports in click-TT (WTTV). It is NOT a webapp — it is a headless/headed browser automation script run from the command line. Keep dependencies minimal. No frameworks beyond Playwright + TypeScript.
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+### II. Safety-First Automation
+The tool automates approval of match reports in a live system with real consequences. Every approval action must be validated against explicit rules before execution. When in doubt, skip the match and report it for manual review. Never approve a match that fails any validation check. Log every action taken and every skip with clear reasons.
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+### III. Credential Security
+Credentials (username/password) must never be hardcoded or committed to the repository. Use environment variables or a `.env` file (git-ignored). The `.env.example` file documents required variables without values.
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+### IV. Idempotent & Resumable
+The tool must handle interruptions gracefully. If it crashes mid-run, re-running should not cause double-approvals (already-approved matches won't appear in the filtered list). The tool should work page-by-page through the match list.
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+### V. Observable Output
+Every run must produce a clear summary: how many matches were processed, how many approved, how many skipped (with reasons per match). This output goes to stdout and optionally to a JSON report file.
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+### VI. Quality Gates
+- TypeScript strict mode
+- ESLint for code quality
+- Prettier for formatting
+- `validate.ps1` script runs typecheck + lint before commit
+- No production dependencies beyond Playwright
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+## Technology Stack
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+- **Runtime**: Node.js (LTS)
+- **Language**: TypeScript (strict mode)
+- **Browser Automation**: Playwright
+- **CLI Arguments**: Simple arg parsing (minimist or built-in)
+- **Config**: `.env` file for credentials, CLI args for options
+- **Quality**: ESLint, Prettier, TypeScript strict, validate.ps1
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+## Development Workflow
+
+- All changes go through `validate.ps1` before commit
+- Spec Kit workflow: specify → plan → implement
+- Feature branches for new capabilities
+- CONTINUE.md tracks current state
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+Constitution supersedes all other practices. Amendments require documentation and rationale. Safety-first principle is non-negotiable — never trade safety for convenience.
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+**Version**: 1.0.0 | **Ratified**: 2026-04-10 | **Last Amended**: 2026-04-10
