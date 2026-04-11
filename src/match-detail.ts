@@ -175,7 +175,52 @@ function isBefore(first: Node, second: Node): boolean {
   return Boolean(first.compareDocumentPosition(second) & 4);
 }
 
-function detectUnexpectedTopContent(document: Document): { hasErrorMessages: boolean; errorMessageText?: string } {
+function collectText(elements: Element[]): string {
+  return normalizeWhitespace(elements.map((node) => node.textContent).join(" "));
+}
+
+function extractHinweiseBeforeLineup(document: Document, lineupTables: Element[]): string {
+  const firstLineupTable = lineupTables[0] ?? null;
+  if (!firstLineupTable) {
+    return "";
+  }
+
+  const kontrolleContainer = findKontrolleContainer(document);
+  if (!kontrolleContainer) {
+    return "";
+  }
+
+  const hinweiseHeading = Array.from(kontrolleContainer.querySelectorAll("h1, h2, h3, h4, legend, p, div, td")).find(
+    (element) => /^hinweis(?:e|\(e\))?$/i.test(normalizeWhitespace(getDirectText(element) || element.textContent))
+  );
+
+  if (!hinweiseHeading || !isBefore(hinweiseHeading, firstLineupTable)) {
+    return "";
+  }
+
+  const collected: string[] = [];
+  let cursor = hinweiseHeading.nextElementSibling;
+
+  while (cursor && cursor !== firstLineupTable) {
+    if (cursor.tagName.toLowerCase() === "table") {
+      break;
+    }
+
+    const text = normalizeWhitespace(cursor.textContent);
+    if (text) {
+      collected.push(text);
+    }
+
+    cursor = cursor.nextElementSibling;
+  }
+
+  return normalizeWhitespace(collected.join(" "));
+}
+
+function detectUnexpectedTopContent(
+  document: Document,
+  lineupTables: Element[]
+): { hasErrorMessages: boolean; errorMessageText?: string } {
   const buttonRow = Array.from(document.querySelectorAll("body *")).find((element) => {
     const text = normalizeWhitespace(element.textContent);
     return /abbrechen/i.test(text) && /speichern/i.test(text);
@@ -193,7 +238,34 @@ function detectUnexpectedTopContent(document: Document): { hasErrorMessages: boo
   if (explicitErrors.length > 0) {
     return {
       hasErrorMessages: true,
-      errorMessageText: normalizeWhitespace(explicitErrors.map((node) => node.textContent).join(" "))
+      errorMessageText: collectText(explicitErrors)
+    };
+  }
+
+  const firstLineupTable = lineupTables[0] ?? null;
+  if (kontrolleFieldset && firstLineupTable) {
+    const kontrolleContainer =
+      kontrolleFieldset.tagName.toLowerCase() === "fieldset" ? kontrolleFieldset : kontrolleFieldset.parentElement;
+
+    if (kontrolleContainer) {
+      const validationErrors = Array.from(kontrolleContainer.querySelectorAll(".error-msg, .error, .warning")).filter(
+        (element) => isBefore(element, firstLineupTable)
+      );
+
+      if (validationErrors.length > 0) {
+        return {
+          hasErrorMessages: true,
+          errorMessageText: collectText(validationErrors)
+        };
+      }
+    }
+  }
+
+  const hinweiseText = extractHinweiseBeforeLineup(document, lineupTables);
+  if (hinweiseText) {
+    return {
+      hasErrorMessages: true,
+      errorMessageText: hinweiseText
     };
   }
 
@@ -365,7 +437,7 @@ export function parseMatchDetailHtml(
     throw new Error("Could not find both lineup tables on match detail page.");
   }
 
-  const errorState = detectUnexpectedTopContent(document);
+  const errorState = detectUnexpectedTopContent(document, tables);
 
   return {
     matchFormat: detectMatchFormat(document),

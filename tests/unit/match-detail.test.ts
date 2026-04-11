@@ -89,6 +89,116 @@ describe("parseMatchDetailHtml", () => {
     expect(detail.errorMessageText).toContain("falsche Aufstellung");
   });
 
+  it("captures hinweise error blocks inside kontrolle before the lineup tables", () => {
+    const html = `
+      <html>
+        <head>
+          <title>Spielbetrieb Ergebniserfassung (Sechser-Paarkreuz-System)</title>
+        </head>
+        <body>
+          <div class="button-row">
+            <button>Abbrechen</button>
+            <button>&lt;&lt; ZurÃ¼ck</button>
+            <button>Speichern</button>
+          </div>
+          <fieldset>
+            <legend>Kontrolle</legend>
+            <h2>Hinweis(e)</h2>
+            <ul class="error-msg">
+              <li><span class="error-msg">Falsche Einzelaufstellung laut Vorgabe der SpielstÃ¤rke!</span></li>
+              <li><span class="error-msg">Falscher Einzeleinsatz! Der Einsatz der Einzelspieler entspricht nicht der Einzelaufstellung.</span></li>
+            </ul>
+            <table>
+              <caption>TSV Eintracht Belle</caption>
+              <tr><td>MF</td><td>Alice</td><td></td></tr>
+              <tr><td>1</td><td>A1</td><td>1.1</td></tr>
+              <tr><td>2</td><td>A2</td><td>1.2</td></tr>
+              <tr><td>3</td><td>A3</td><td>1.3</td></tr>
+              <tr><td>4</td><td>A4</td><td>1.4</td></tr>
+              <tr><td>5</td><td>A5</td><td>1.5</td></tr>
+              <tr><td>6</td><td>A6</td><td>1.6</td></tr>
+            </table>
+            <table>
+              <caption>TTC Paderborn</caption>
+              <tr><td>MF</td><td>Bob</td><td></td></tr>
+              <tr><td>1</td><td>B1</td><td>2.1</td></tr>
+              <tr><td>2</td><td>B2</td><td>2.2</td></tr>
+              <tr><td>3</td><td>B3</td><td>2.3</td></tr>
+              <tr><td>4</td><td>B4</td><td>2.4</td></tr>
+              <tr><td>5</td><td>B5</td><td>2.5</td></tr>
+              <tr><td>6</td><td>B6</td><td>2.6</td></tr>
+            </table>
+            <h2>Bemerkungen</h2>
+            <p>keine Bemerkungen</p>
+            <p><input id="approval" type="checkbox" />Spielbericht genehmigt</p>
+          </fieldset>
+        </body>
+      </html>
+    `;
+
+    const detail = parseMatchDetailHtml(html, {
+      homeTeam: "TSV Eintracht Belle",
+      guestTeam: "TTC Paderborn"
+    });
+
+    expect(detail.hasErrorMessages).toBe(true);
+    expect(detail.errorMessageText).toContain("Falsche Einzelaufstellung");
+    expect(detail.errorMessageText).toContain("Falscher Einzeleinsatz");
+  });
+
+  it("captures non-empty hinweise text before the lineup tables even without error classes", () => {
+    const html = `
+      <html>
+        <head>
+          <title>Spielbetrieb Ergebniserfassung (Sechser-Paarkreuz-System)</title>
+        </head>
+        <body>
+          <div class="button-row">
+            <button>Abbrechen</button>
+            <button>&lt;&lt; ZurÃ¼ck</button>
+            <button>Speichern</button>
+          </div>
+          <fieldset>
+            <legend>Kontrolle</legend>
+            <h2>Hinweis(e)</h2>
+            <p>Die Einzelaufstellung der Gastmannschaft erfolgte nicht nach SpielstÃ¤rke.</p>
+            <table>
+              <caption>TSV Eintracht Belle</caption>
+              <tr><td>MF</td><td>Alice</td><td></td></tr>
+              <tr><td>1</td><td>A1</td><td>1.1</td></tr>
+              <tr><td>2</td><td>A2</td><td>1.2</td></tr>
+              <tr><td>3</td><td>A3</td><td>1.3</td></tr>
+              <tr><td>4</td><td>A4</td><td>1.4</td></tr>
+              <tr><td>5</td><td>A5</td><td>1.5</td></tr>
+              <tr><td>6</td><td>A6</td><td>1.6</td></tr>
+            </table>
+            <table>
+              <caption>TTC Paderborn</caption>
+              <tr><td>MF</td><td>Bob</td><td></td></tr>
+              <tr><td>1</td><td>B1</td><td>2.1</td></tr>
+              <tr><td>2</td><td>B2</td><td>2.2</td></tr>
+              <tr><td>3</td><td>B3</td><td>2.3</td></tr>
+              <tr><td>4</td><td>B4</td><td>2.4</td></tr>
+              <tr><td>5</td><td>B5</td><td>2.5</td></tr>
+              <tr><td>6</td><td>B6</td><td>2.6</td></tr>
+            </table>
+            <h2>Bemerkungen</h2>
+            <p>keine Bemerkungen</p>
+            <p><input id="approval" type="checkbox" />Spielbericht genehmigt</p>
+          </fieldset>
+        </body>
+      </html>
+    `;
+
+    const detail = parseMatchDetailHtml(html, {
+      homeTeam: "TSV Eintracht Belle",
+      guestTeam: "TTC Paderborn"
+    });
+
+    expect(detail.hasErrorMessages).toBe(true);
+    expect(detail.errorMessageText).toContain("Die Einzelaufstellung der Gastmannschaft");
+  });
+
   it("ignores acceptable notice text below the tables", () => {
     const html = `
       <html>
