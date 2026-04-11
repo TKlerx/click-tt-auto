@@ -309,7 +309,9 @@ async function run(): Promise<void> {
     const report = buildRunReport({
       dryRun: config.dryRun,
       group: config.group,
-      actions
+      actions,
+      totalFound: totalMatchCount || scannedCount,
+      totalScanned: scannedCount
     });
     report.reportPath = await writeRunReport(report, config.reportDir);
     progress.finish();

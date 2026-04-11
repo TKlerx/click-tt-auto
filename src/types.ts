@@ -69,6 +69,9 @@ export interface RunReport {
   dryRun: boolean;
   group: string | null;
   totalFound: number;
+  totalScanned: number;
+  totalActionable: number;
+  totalIgnored: number;
   totalApproved: number;
   totalSkipped: number;
   totalAlreadyApproved: number;

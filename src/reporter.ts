@@ -15,11 +15,18 @@ export function buildRunReport(input: {
   dryRun: boolean;
   group: string | null;
   actions: MatchAction[];
+  totalFound: number;
+  totalScanned: number;
   timestamp?: string;
 }): RunReport {
   const timestamp = input.timestamp ?? new Date().toISOString();
+  const totalActionable = input.actions.length;
+  const totalIgnored = Math.max(0, input.totalScanned - totalActionable);
   const totals = {
-    totalFound: input.actions.length,
+    totalFound: input.totalFound,
+    totalScanned: input.totalScanned,
+    totalActionable,
+    totalIgnored,
     totalApproved: input.actions.filter((action) => action.action === "approved").length,
     totalSkipped: input.actions.filter((action) => action.action === "skipped").length,
     totalAlreadyApproved: input.actions.filter((action) => action.action === "already-approved").length,
@@ -54,6 +61,9 @@ export function formatStdoutReport(report: RunReport): string {
     "",
     "Summary:",
     `  Total found:      ${report.totalFound}`,
+    `  Scanned:          ${report.totalScanned}`,
+    `  Actionable:       ${report.totalActionable}`,
+    `  Ignored:          ${report.totalIgnored}`,
     `  Approved:         ${report.totalApproved}`,
     `  Skipped:          ${report.totalSkipped}`,
     `  Already approved: ${report.totalAlreadyApproved}`,
