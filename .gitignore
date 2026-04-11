@@ -1,0 +1,17 @@
+node_modules/
+dist/
+reports/
+.env
+.env.local
+.env.*
+!.env.example
+coverage/
+playwright-report/
+test-results/
+*.log
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+.vscode/
+.idea/
