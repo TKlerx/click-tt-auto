@@ -1,6 +1,26 @@
 # click-tt-automation
 
-Playwright-based CLI automation for approving click-TT match reports.
+Playwright-based CLI automation for click-TT administration.
+
+It is used to:
+
+- review match reports in click-TT
+- automatically approve reports that match the expected Bezirksoberliga/league rules
+- skip suspicious or non-conforming reports safely instead of clicking unknown pages
+- sync fine candidates into an Excel workbook for follow-up processing
+
+The current implementation lives on `main` and uses TypeScript plus Playwright. The old Selenium-based approach is kept only as historical reference on the legacy `master` branch.
+
+## What It Does
+
+On each run, the tool logs into the click-TT admin area, opens the `Begegnungen` search, scans the result pages, and then decides per match whether it should:
+
+- be approved automatically
+- be skipped with a concrete reason
+- be reported as an error because the page shape was unexpected
+- be added to the fine workbook as a missing fine candidate
+
+The automation is intentionally conservative. If a page does not look like the expected click-TT structure, it prefers stopping or skipping over pressing uncertain controls.
 
 ## Setup
 
@@ -72,6 +92,8 @@ The tool approves only when all of these pass:
 5. The approval checkbox is not already checked.
 
 When a rule fails, the tool clicks `Abbrechen`, records the reason, and continues with the next match.
+
+This makes the tool suitable for semi-automated league administration: it handles the routine approvals quickly, but leaves unusual, risky, or sanction-relevant matches for manual review.
 
 If a fine workbook is configured, the tool also:
 

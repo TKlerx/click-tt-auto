@@ -1,6 +1,6 @@
 # click-TT Automation Specs Overview
 
-Last Updated: 2026-04-11
+Last Updated: 2026-04-13
 
 Purpose: Track the status of all planned features, their implementation progress, and next steps.
 
@@ -20,7 +20,7 @@ Purpose: Track the status of all planned features, their implementation progress
 
 | # | Feature | Status | Depends On | Est. Effort | Next Step |
 | --- | --- | --- | --- | --- | --- |
-| 001 | Match Report Auto-Approval | Partially Implemented | - | Large | Finish manual live validation and commit the remaining workbook/report updates |
+| 001 | Match Report Auto-Approval | Partially Implemented | - | Large | Continue live validation and refine any remaining edge cases found in production use |
 
 ## Implementation Roadmap
 
@@ -30,7 +30,7 @@ Purpose: Track the status of all planned features, their implementation progress
 
 ### Begin Immediately
 
-- 001 Match Report Auto-Approval: Perform manual end-to-end validation and finalize docs/commit workflow
+- 001 Match Report Auto-Approval: Continue live validation and edge-case hardening during real season usage
 
 ### Blocked / Prep Needed
 
