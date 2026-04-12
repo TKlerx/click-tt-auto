@@ -1,10 +1,12 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { createInterface } from "node:readline/promises";
 import { chromium } from "playwright";
 import type { Page } from "playwright";
 import { handleApproval } from "./approver.js";
 import { ensureSessionActive, login } from "./auth.js";
 import { loadConfig } from "./config.js";
+import { getStatusFineCandidateState, loadFineWorkbookIndex, syncFineWorkbook } from "./fines.js";
 import { assertMatchListPage, findMatchLink, goToNextPage, readMatchListPage } from "./match-list.js";
 import { readMatchDetailPage } from "./match-detail.js";
 import { navigateToMatchSearch } from "./navigation.js";
@@ -24,6 +26,14 @@ function formatMatchLabel(match: MatchEntry): string {
 
 function shouldInspectMatch(match: MatchEntry): boolean {
   return match.status.toLowerCase() === "abgeschlossen" && !match.isApproved;
+}
+
+function shouldCreateStatusFine(match: MatchEntry): boolean {
+  return match.status.toLowerCase() === "nicht angetreten";
+}
+
+function shouldTrackStatusFine(state: "disabled" | "missing" | "existing" | "ignored"): boolean {
+  return state === "missing";
 }
 
 function createSafeSlug(value: string): string {
@@ -65,7 +75,7 @@ function getImpossibleCountMessage(match: MatchEntry, homeCount: number, guestCo
 }
 
 function isFatalDetailPageError(message: string): boolean {
-  return /^Impossible player count detected\b/.test(message) || /^Expected detail page fields missing:\b/.test(message);
+  return /^Impossible player count detected\b/.test(message) || /^Expected detail page fields missing:/.test(message);
 }
 
 async function assertReasonablePlayerCounts(
@@ -89,14 +99,25 @@ async function pauseForInspection(reason: string): Promise<void> {
   console.error(`HALTED: ${reason}`);
   console.error("Browser left open for inspection. Press Enter in this terminal to close it.");
 
-  await new Promise<void>((resolve) => {
-    process.stdin.resume();
-    process.stdin.setEncoding("utf8");
-    process.stdin.once("data", () => {
-      process.stdin.pause();
-      resolve();
-    });
+  process.stdin.setEncoding("utf8");
+  process.stdin.resume();
+
+  // Discard any buffered newline so we wait for an explicit fresh Enter press.
+  while (process.stdin.read() !== null) {
+    // Keep draining buffered input.
+  }
+
+  const rl = createInterface({
+    input: process.stdin,
+    output: process.stdout
   });
+
+  try {
+    await rl.question("");
+  } finally {
+    rl.close();
+    process.stdin.pause();
+  }
 }
 
 async function run(): Promise<void> {
@@ -109,10 +130,21 @@ async function run(): Promise<void> {
   const page = await context.newPage();
   const actions: MatchAction[] = [];
   const processedKeys = new Set<string>();
+  const statusFineKeys = new Set<string>();
+  const statusFineMatches: MatchEntry[] = [];
   const progress = new ProgressReporter({ plainText: config.plainProgress });
   let haltReason: string | null = null;
   let totalMatchCount = 0;
   let scannedCount = 0;
+  let openedCount = 0;
+  let fineWorkbookIndex = { enabled: false, existingKeys: new Set<string>(), ignoredKeys: new Set<string>() };
+
+  const fineLookupOptions = {
+    defaultLiga: config.fineLiga,
+    defaultGruppe: config.fineGruppe,
+    spielleiter: config.fineSpielleiter,
+    naKosten: config.fineNaKosten
+  };
 
   try {
     const modeSuffix = [
@@ -124,10 +156,23 @@ async function run(): Promise<void> {
       .filter(Boolean)
       .join(" | ");
     console.log(`click-TT Match Auto-Approval${modeSuffix ? ` [${modeSuffix}]` : ""}`);
+    if (config.fineWorkbookPath) {
+      try {
+        fineWorkbookIndex = await loadFineWorkbookIndex({
+          workbookPath: config.fineWorkbookPath,
+          sheetName: config.fineSheetName,
+          ignoreColumnName: config.fineIgnoreColumn
+        });
+      } catch {
+        fineWorkbookIndex = { enabled: false, existingKeys: new Set<string>(), ignoredKeys: new Set<string>() };
+      }
+    }
     console.log("Logging in...");
     await login(page, config.baseUrl, config.username, config.password);
     console.log("Navigating to Begegnungen...");
-    await navigateToMatchSearch(page, config.group);
+    await navigateToMatchSearch(page, config.group, {
+      onlyUnapproved: !config.fineWorkbookPath
+    });
 
     let pageNumber = 1;
     let totalPages = 1;
@@ -147,6 +192,7 @@ async function run(): Promise<void> {
         totalPages,
         actions,
         scannedCount,
+        openedCount,
         totalMatchCount,
         pageMatchIndex: 0,
         pageMatchCount
@@ -155,13 +201,26 @@ async function run(): Promise<void> {
       for (const [matchIndex, match] of parsedPage.allMatches.entries()) {
         scannedCount += 1;
         const matchKey = `${match.date}|${match.homeTeam}|${match.guestTeam}|${match.group}`;
-        if (!shouldInspectMatch(match) || processedKeys.has(matchKey)) {
+        const statusFineState = shouldCreateStatusFine(match)
+          ? getStatusFineCandidateState(match, fineWorkbookIndex, fineLookupOptions)
+          : "disabled";
+        const trackStatusFine = shouldTrackStatusFine(statusFineState);
+        const needsStatusFineDetail = shouldCreateStatusFine(match) && statusFineState === "missing" && Boolean(config.fineWorkbookPath);
+        const needsDetailVisit = shouldInspectMatch(match) || needsStatusFineDetail;
+
+        if (!needsDetailVisit || processedKeys.has(matchKey)) {
+          if (trackStatusFine && !statusFineKeys.has(matchKey)) {
+            statusFineKeys.add(matchKey);
+            statusFineMatches.push(match);
+          }
+
           progress.update({
             dryRun: config.dryRun,
             pageNumber,
             totalPages,
             actions,
             scannedCount,
+            openedCount,
             totalMatchCount,
             pageMatchIndex: matchIndex + 1,
             pageMatchCount,
@@ -173,15 +232,24 @@ async function run(): Promise<void> {
 
         const link = await findMatchLink(page, match);
         if (!link || (await link.count()) === 0) {
-          const action: MatchAction = { match, action: "error", error: "Match link not found on current list page" };
-          actions.push(action);
-          progress.log(formatAction("[ERROR]", match, action.error));
+          if (trackStatusFine && !statusFineKeys.has(matchKey)) {
+            statusFineKeys.add(matchKey);
+            statusFineMatches.push(match);
+          }
+
+          if (shouldInspectMatch(match)) {
+            const action: MatchAction = { match, action: "error", error: "Match link not found on current list page" };
+            actions.push(action);
+            progress.log(formatAction("[ERROR]", match, action.error));
+          }
+
           progress.update({
             dryRun: config.dryRun,
             pageNumber,
             totalPages,
             actions,
             scannedCount,
+            openedCount,
             totalMatchCount,
             pageMatchIndex: matchIndex + 1,
             pageMatchCount,
@@ -193,11 +261,43 @@ async function run(): Promise<void> {
         try {
           await Promise.all([page.waitForLoadState("domcontentloaded"), link.click()]);
           await ensureSessionActive(page);
+          openedCount += 1;
 
           const detail = await readMatchDetailPage(page, {
             homeTeam: match.homeTeam,
             guestTeam: match.guestTeam
           });
+          if (detail.competitionName) {
+            match.group = detail.competitionName;
+          }
+          if (detail.competitionLiga) {
+            match.liga = detail.competitionLiga;
+          }
+          if (detail.competitionGruppe !== undefined) {
+            match.gruppe = detail.competitionGruppe;
+          }
+
+          if (needsStatusFineDetail && !statusFineKeys.has(matchKey)) {
+            statusFineKeys.add(matchKey);
+            statusFineMatches.push(match);
+          }
+
+          if (!shouldInspectMatch(match)) {
+            await handleApproval(page, true, false);
+            progress.update({
+              dryRun: config.dryRun,
+              pageNumber,
+              totalPages,
+              actions,
+              scannedCount,
+              openedCount,
+              totalMatchCount,
+              pageMatchIndex: matchIndex + 1,
+              pageMatchCount,
+              currentMatchLabel: formatMatchLabel(match)
+            });
+            continue;
+          }
           await assertReasonablePlayerCounts(
             page,
             config.reportDir,
@@ -217,6 +317,7 @@ async function run(): Promise<void> {
               totalPages,
               actions,
               scannedCount,
+              openedCount,
               totalMatchCount,
               pageMatchIndex: matchIndex + 1,
               pageMatchCount,
@@ -252,31 +353,43 @@ async function run(): Promise<void> {
             totalPages,
             actions,
             scannedCount,
+            openedCount,
             totalMatchCount,
             pageMatchIndex: matchIndex + 1,
             pageMatchCount,
             currentMatchLabel: formatMatchLabel(match)
           });
         } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          if (isFatalDetailPageError(message)) {
-            if (/^Expected detail page fields missing:\b/.test(message)) {
-              const snapshotPath = await captureDetailHtmlSnapshot(page, config.reportDir, match);
-              throw new Error(`${message}. Detail HTML saved to: ${snapshotPath}`);
-            }
+          let message = error instanceof Error ? error.message : String(error);
+          const isFatalDetailError = isFatalDetailPageError(message);
 
-            throw error;
+          if (isFatalDetailError && !/Detail HTML saved to:/i.test(message)) {
+            const snapshotPath = await captureDetailHtmlSnapshot(page, config.reportDir, match);
+            message = `${message}. Detail HTML saved to: ${snapshotPath}`;
           }
 
-          const action: MatchAction = { match, action: "error", error: message };
-          actions.push(action);
-          progress.log(formatAction("[ERROR]", match, message));
+          if (isFatalDetailError && config.haltOnError) {
+            throw new Error(message);
+          }
+
+          if (trackStatusFine && !statusFineKeys.has(matchKey)) {
+            statusFineKeys.add(matchKey);
+            statusFineMatches.push(match);
+          }
+
+          if (needsDetailVisit) {
+            const action: MatchAction = { match, action: "error", error: message };
+            actions.push(action);
+            progress.log(formatAction("[ERROR]", match, message));
+          }
+
           progress.update({
             dryRun: config.dryRun,
             pageNumber,
             totalPages,
             actions,
             scannedCount,
+            openedCount,
             totalMatchCount,
             pageMatchIndex: matchIndex + 1,
             pageMatchCount,
@@ -298,7 +411,10 @@ async function run(): Promise<void> {
         break;
       }
 
-      const advanced = await goToNextPage(page, pageNumber);
+      const advanced = await goToNextPage(page, pageNumber, {
+        debug: config.debug,
+        reportDir: config.reportDir
+      });
       if (!advanced) {
         break;
       }
@@ -311,8 +427,35 @@ async function run(): Promise<void> {
       group: config.group,
       actions,
       totalFound: totalMatchCount || scannedCount,
-      totalScanned: scannedCount
+      totalScanned: scannedCount,
+      totalOpened: openedCount
     });
+
+    try {
+      report.fineSync = await syncFineWorkbook({
+        workbookPath: config.fineWorkbookPath,
+        sheetName: config.fineSheetName,
+        ignoreColumnName: config.fineIgnoreColumn,
+        spielleiter: config.fineSpielleiter,
+        defaultLiga: config.fineLiga,
+        defaultGruppe: config.fineGruppe,
+        naKosten: config.fineNaKosten,
+        dryRun: config.dryRun,
+        actions,
+        statusFineMatches
+      });
+    } catch (error) {
+      report.fineSync = {
+        enabled: true,
+        totalCandidates: 0,
+        appended: 0,
+        existing: 0,
+        ignored: 0,
+        ...(config.fineWorkbookPath ? { workbookPath: config.fineWorkbookPath } : {}),
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
+
     report.reportPath = await writeRunReport(report, config.reportDir);
     progress.finish();
     console.log("");

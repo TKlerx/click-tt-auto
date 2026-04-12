@@ -113,6 +113,12 @@
 - [X] T032 [P] Create README.md with setup instructions, usage examples, and explanation of validation rules
 - [X] T033 Run validate.ps1 and fix any typecheck/lint issues
 - [ ] T034 Manual end-to-end test: run --dry-run against live click-TT, review report, then run live and verify approvals in the webapp
+- [X] T035 Add explicit detail-page safety guards, headed debug mode, and halt-for-inspection behavior
+- [X] T036 Improve detail parsing for nested / side-by-side lineup tables and acceptable bottom-of-page Hinweise
+- [X] T037 Add richer progress reporting (overall/page/item progress, ETA, plain-progress fallback)
+- [X] T038 Extend stdout/JSON reporting with scanned/actionable/ignored counts and fine-workbook sync summary
+- [X] T039 Implement fine workbook sync in src/fines.ts using ExcelJS with duplicate suppression and ignore-column support
+- [X] T040 Export `Nicht angetreten` fine candidates and workbook failure reasons, including already-approved search-result rows
 
 ---
 

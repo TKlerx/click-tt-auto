@@ -17,6 +17,7 @@ export function buildRunReport(input: {
   actions: MatchAction[];
   totalFound: number;
   totalScanned: number;
+  totalOpened: number;
   timestamp?: string;
 }): RunReport {
   const timestamp = input.timestamp ?? new Date().toISOString();
@@ -25,6 +26,7 @@ export function buildRunReport(input: {
   const totals = {
     totalFound: input.totalFound,
     totalScanned: input.totalScanned,
+    totalOpened: input.totalOpened,
     totalActionable,
     totalIgnored,
     totalApproved: input.actions.filter((action) => action.action === "approved").length,
@@ -62,6 +64,7 @@ export function formatStdoutReport(report: RunReport): string {
     "Summary:",
     `  Total found:      ${report.totalFound}`,
     `  Scanned:          ${report.totalScanned}`,
+    `  Opened:           ${report.totalOpened}`,
     `  Actionable:       ${report.totalActionable}`,
     `  Ignored:          ${report.totalIgnored}`,
     `  Approved:         ${report.totalApproved}`,
@@ -69,6 +72,29 @@ export function formatStdoutReport(report: RunReport): string {
     `  Already approved: ${report.totalAlreadyApproved}`,
     `  Errors:           ${report.totalErrors}`
   ];
+
+  if (report.fineSync?.enabled) {
+    lines.push(
+      "",
+      `Fine Workbook${report.fineSync.dryRun ? " (Dry Run)" : ""}:`,
+      `  Candidates:       ${report.fineSync.totalCandidates}`,
+      `  ${report.fineSync.dryRun ? "Would append" : "Appended"}:         ${report.fineSync.appended}`,
+      `  Existing:         ${report.fineSync.existing}`,
+      `  Ignored:          ${report.fineSync.ignored}`
+    );
+
+    if (report.fineSync.sheetName) {
+      lines.push(`  Sheet:            ${report.fineSync.sheetName}`);
+    }
+
+    if (report.fineSync.workbookPath) {
+      lines.push(`  Workbook:         ${report.fineSync.workbookPath}`);
+    }
+
+    if (report.fineSync.error) {
+      lines.push(`  Error:            ${report.fineSync.error}`);
+    }
+  }
 
   if (skipped.length > 0) {
     lines.push("", "Skipped matches:");

@@ -16,7 +16,9 @@ function normalizePageText(value: string | null | undefined): string {
 
 export async function assertAdminShellPage(page: Page): Promise<void> {
   const pageText = normalizePageText(await page.locator("body").textContent());
-  const hasLogoutLink = (await page.getByRole("link", { name: /abmelden/i }).count()) > 0;
+  const hasLogoutLink =
+    (await page.getByRole("link", { name: /abmelden/i }).count()) > 0 ||
+    (await page.locator("a").filter({ hasText: /abmelden/i }).count()) > 0;
   const hasChampionshipTabs =
     /spielbetrieb/i.test(pageText) && /kontrolle|organisation|konfiguration/i.test(pageText);
 

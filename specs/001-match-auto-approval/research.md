@@ -39,6 +39,30 @@
 **Alternatives considered**:
 - Count players to infer format — less explicit, could misidentify incomplete lineups
 
+## Decision: Fine Workbook Sync
+
+**Decision**: Use ExcelJS to append fine candidates directly into the existing season workbook instead of generating a separate spreadsheet per run.
+**Rationale**: The Staffelleiter already maintains one workbook and needs append-only behavior, duplicate suppression, and an ignore column for known false positives.
+**Alternatives considered**:
+- CSV export per run — would require manual merge work
+- New workbook each run — poor fit for an ongoing season ledger
+
+## Decision: Competition Metadata Source
+
+**Decision**: Parse `Liga` and `Gruppe` from the match detail page heading when available and only fall back to configured defaults if the page does not expose clean values.
+**Rationale**: The search-results page can contain unstable or misleading header text, while the detail page heading reliably names the competition.
+**Alternatives considered**:
+- Parse the list-page group header — too brittle, can capture table header text
+- Hardcode group from CLI filter — insufficient when running across multiple groups
+
+## Decision: Handling `Nicht angetreten`
+
+**Decision**: `Nicht angetreten` rows are never auto-approved, but they still produce fine workbook candidates from the search results, even when click-TT already shows a checkmark.
+**Rationale**: Approval state in click-TT and sanction bookkeeping are separate workflows. The workbook must stay complete even if the result was already marked in click-TT.
+**Alternatives considered**:
+- Ignore approved `Nicht angetreten` rows entirely — loses sanction entries
+- Open every `Nicht angetreten` detail page — unnecessary overhead for the initial export path
+
 ## Decision: CLI Argument Parsing
 
 **Decision**: minimist (lightweight) or Node.js built-in `parseArgs` (Node 18.3+)

@@ -14,6 +14,18 @@ async function clickByText(page: Page, texts: RegExp[]): Promise<void> {
       await Promise.all([page.waitForLoadState("domcontentloaded"), roleButton.click()]);
       return;
     }
+
+    const textLink = page.locator("a").filter({ hasText: text }).first();
+    if ((await textLink.count()) > 0) {
+      await Promise.all([page.waitForLoadState("domcontentloaded"), textLink.click()]);
+      return;
+    }
+
+    const textButton = page.locator("button, input[type='submit'], input[type='button']").filter({ hasText: text }).first();
+    if ((await textButton.count()) > 0) {
+      await Promise.all([page.waitForLoadState("domcontentloaded"), textButton.click()]);
+      return;
+    }
   }
 
   throw new Error(`Navigation target not found: ${texts.map((text) => text.source).join(", ")}`);
@@ -69,7 +81,8 @@ async function findApprovalCheckbox(page: Page) {
 export async function assertMatchFilterPage(page: Page): Promise<void> {
   const bodyText = normalizePageText(await page.locator("body").textContent());
   const approvalCheckbox = await findApprovalCheckbox(page);
-  const hasSearchButton = (await page.getByRole("button", { name: /suchen/i }).count()) > 0;
+  const searchButton = await findButtonLikeControl(page, /suchen/i);
+  const hasSearchButton = searchButton !== null;
   const hasExpectedContext = /begegnungen|gruppe|genehmigt/i.test(bodyText);
 
   if (!approvalCheckbox || !hasSearchButton || !hasExpectedContext) {
@@ -79,7 +92,11 @@ export async function assertMatchFilterPage(page: Page): Promise<void> {
   }
 }
 
-export async function navigateToMatchSearch(page: Page, group: string | null): Promise<void> {
+export async function navigateToMatchSearch(
+  page: Page,
+  group: string | null,
+  options: { onlyUnapproved: boolean } = { onlyUnapproved: true }
+): Promise<void> {
   await clickByText(page, [/Spielbetrieb.?Kontrolle/i, /Spielbetrieb/i]);
   await clickByText(page, [/Begegnungen/i]);
   await assertMatchFilterPage(page);
@@ -89,8 +106,13 @@ export async function navigateToMatchSearch(page: Page, group: string | null): P
     throw new Error('Could not find checkbox "nur noch nicht genehmigte Begegnungen anzeigen".');
   }
 
-  if (!(await approvalCheckbox.isChecked().catch(() => false))) {
+  const isChecked = await approvalCheckbox.isChecked().catch(() => false);
+  if (options.onlyUnapproved && !isChecked) {
     await approvalCheckbox.check();
+  }
+
+  if (!options.onlyUnapproved && isChecked) {
+    await approvalCheckbox.uncheck();
   }
 
   if (group) {
@@ -104,8 +126,8 @@ export async function navigateToMatchSearch(page: Page, group: string | null): P
     });
   }
 
-  const searchButton = page.getByRole("button", { name: /suchen/i }).first();
-  if ((await searchButton.count()) === 0) {
+  const searchButton = await findButtonLikeControl(page, /suchen/i);
+  if (!searchButton) {
     throw new Error("Search button not found on match filter page.");
   }
 
@@ -114,12 +136,22 @@ export async function navigateToMatchSearch(page: Page, group: string | null): P
 }
 
 export async function returnToListAfterSave(page: Page): Promise<void> {
-  const target = page.getByRole("link", { name: /zurück zur einstiegsseite|zuruck zur einstiegsseite/i }).first();
-  if ((await target.count()) === 0) {
+  const roleTarget = page.getByRole("link", { name: /zurück zur einstiegsseite|zuruck zur einstiegsseite/i }).first();
+  if ((await roleTarget.count()) > 0) {
+    await Promise.all([page.waitForLoadState("domcontentloaded"), roleTarget.click()]);
+    await assertMatchListPage(page);
+    return;
+  }
+
+  const textTarget = page
+    .locator("a")
+    .filter({ hasText: /zurück zur einstiegsseite|zuruck zur einstiegsseite/i })
+    .first();
+  if ((await textTarget.count()) === 0) {
     throw new Error("Return-to-list control not found after saving.");
   }
 
-  await Promise.all([page.waitForLoadState("domcontentloaded"), target.click()]);
+  await Promise.all([page.waitForLoadState("domcontentloaded"), textTarget.click()]);
   await assertMatchListPage(page);
 }
 

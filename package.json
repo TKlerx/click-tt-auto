@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "dotenv": "^17.2.3",
+    "exceljs": "^4.4.0",
     "minimist": "^1.2.8",
     "playwright": "^1.56.1"
   },

@@ -2,12 +2,14 @@
 
 **Feature Branch**: `001-match-auto-approval`  
 **Created**: 2026-04-10  
-**Status**: Draft  
+**Status**: In Progress  
 **Input**: User description: "Automate the approval of table tennis match reports in click-TT admin (WTTV) for the Staffelleiter role"
 
 ## Context
 
 The click-TT admin webapp (https://wttv.click-tt.de/cgi-bin/WebObjects/nuLigaAdminTTDE.woa) is used by league organizers (Staffelleiter) to review and approve match reports. The webapp is stateful — URLs contain incrementing counters, the browser back button does not work reliably, and each approval requires ~7 clicks through multiple pages. With ~284 unapproved matches per season across 10 pages, this is extremely tedious when ~90% of matches are straightforward auto-approvable.
+
+The same run should also reduce the remaining manual follow-up work. Skipped matches often need to be reviewed for fines, so the tool should optionally append missing fine candidates to an existing Excel workbook, including `Nicht angetreten` rows taken directly from the search results.
 
 ### Target Webapp Characteristics
 - **Stateful URLs**: Counter embedded in URL path (e.g., `/wo/8.0.63.3.5.1.1.3.37.1`), increments with each navigation
@@ -65,13 +67,31 @@ As a Staffelleiter managing multiple groups (Bezirksoberliga, 1. Bezirksliga 1, 
 
 ---
 
+### User Story 4 - Fine Workbook Sync (Priority: P2)
+
+As a Staffelleiter, I want skipped matches and `Nicht angetreten` cases to be appended to my Excel fine workbook — so I do not need to manually transfer every issue from the run report into my season ledger.
+
+**Why this priority**: This removes the main bookkeeping work that remains after the approval pass.
+
+**Independent Test**: Run the tool with a configured workbook path, verify that missing rows are appended once, existing rows are not duplicated, ignored false positives stay suppressed, and `Nicht angetreten` rows are exported even when click-TT already shows them as approved.
+
+**Acceptance Scenarios**:
+
+1. **Given** a configured fine workbook and a skipped match, **When** the run completes, **Then** the tool appends a row only if the same fine candidate is not already present or marked ignored.
+2. **Given** a `Nicht angetreten` row on the search results page, **When** the run completes, **Then** the tool appends a fine candidate with `Grund = Nicht angetreten`, even if the row already has a checkmark in click-TT.
+3. **Given** a skipped match with concrete failure reasons, **When** the fine row is appended, **Then** the workbook `Bemerkung` contains the human-readable reason(s) that caused auto-approval to fail.
+
+---
+
 ### Edge Cases
 
 - **Session expiry**: What if the session expires mid-run? Tool should detect login page redirect and either re-login or abort gracefully with a clear error.
 - **Empty match list**: No unapproved matches found → tool reports "0 matches found" and exits cleanly.
 - **Network timeout**: Playwright page load timeout → skip current match, log error, continue with next.
 - **Match already approved by someone else**: If the "Spielbericht genehmigt" checkbox is already checked when entering a match → skip it (already done).
+- **`Nicht angetreten` with checkmark**: A row may already show a checkmark in click-TT but still needs to be present in the fine workbook. Approval processing should skip it, but workbook export should still consider it.
 - **Unexpected page structure**: If the detail page doesn't match expected structure (e.g., different Paarkreuz system) → skip and log.
+- **Duplicate fine candidates**: Workbook sync should be append-only and suppress duplicates based on match identity and sanction reason.
 
 ## Requirements
 
@@ -80,8 +100,8 @@ As a Staffelleiter managing multiple groups (Bezirksoberliga, 1. Bezirksliga 1, 
 - **FR-001**: System MUST authenticate with click-TT using provided credentials (username + password via environment variables)
 - **FR-002**: System MUST navigate to Spielbetrieb Kontrolle → Begegnungen
 - **FR-003**: System MUST check "nur noch nicht genehmigte Begegnungen anzeigen" and click "Suchen"
-- **FR-004**: System MUST iterate through ALL pages of results sequentially (page 1→2→3...). On each page, skip matches that already show a checkmark (previously approved). Track skipped matches internally to avoid re-processing if the same match appears again.
-- **FR-005**: System MUST skip matches where Status is NOT "abgeschlossen" on the list page
+- **FR-004**: System MUST iterate through ALL pages of results sequentially (page 1→2→3...). On each page, skip matches that already show a checkmark for auto-approval purposes. Track processed matches internally to avoid re-processing if the same match appears again.
+- **FR-005**: System MUST skip matches where Status is NOT "abgeschlossen" on the list page for approval purposes. `Nicht angetreten` rows may still be collected for optional fine-workbook export.
 - **FR-006**: System MUST open each "abgeschlossen" match via the "erfassen" link
 - **FR-007**: System MUST check for ANY text content between the top button row (Abbrechen / << Zurück / Speichern) and the "Kontrolle" fieldset/table heading. Known errors use `<p class="error-msg">`, but any text in that region indicates an issue. If any content is found there, the match is NOT auto-approvable. Text below the tables (e.g., "Hinweis(e) zur Genehmigung") is acceptable and should be ignored. If DOM structure is unexpected, skip the match (safe default).
 - **FR-008**: System MUST verify MF (Mannschaftsführer) is present for BOTH teams — either as an "MF" row in the lineup table OR mentioned in the "Bemerkungen" section
@@ -89,16 +109,23 @@ As a Staffelleiter managing multiple groups (Bezirksoberliga, 1. Bezirksliga 1, 
 - **FR-010**: System MUST only check "Spielbericht genehmigt" and click "Speichern" when ALL validation checks pass
 - **FR-011**: System MUST click "Abbrechen" when any validation check fails, returning to the list without making changes
 - **FR-012**: System MUST click "Zurück zur Einstiegsseite" after saving, to return to the filtered match list
-- **FR-013**: System MUST produce a detailed summary report in two formats: (1) human-readable summary to stdout for immediate feedback, and (2) a JSON report file (e.g., `report-2026-04-10.json`) for later reference. Both must list: total matches found, approved count, skipped count, and for each skipped match: home team, guest team, date, and specific reason(s) for skipping (e.g., "fewer than 6 players on guest team", "MF missing for both teams", "error message found: falsche Aufstellung", "status: nicht angetreten"). This report is critical for the Staffelleiter to handle skipped matches manually.
+- **FR-013**: System MUST produce a detailed summary report in two formats: (1) human-readable summary to stdout for immediate feedback, and (2) a JSON report file (e.g., `report-2026-04-10.json`) for later reference. The summary must distinguish between total rows found, scanned rows, actionable rows, ignored rows, approved count, skipped count, already-approved count, and errors. For each skipped match, the report must include home team, guest team, date, and specific reason(s) for skipping (e.g., "guest has 5 numbered players", "MF missing for both teams", "error message found: falsche Aufstellung"). This report is critical for the Staffelleiter to handle skipped matches manually.
 - **FR-014**: System MUST support `--dry-run` flag that evaluates all rules without approving
 - **FR-015**: System MUST support `--group` flag to filter by specific group
 - **FR-016**: System MUST support `--headed` flag to run with visible browser (default: headless)
+- **FR-017**: System MUST support an optional Excel fine workbook configuration via environment variables. When configured, the tool MUST append missing fine candidates to that workbook instead of generating a separate spreadsheet per run.
+- **FR-018**: System MUST derive `Liga` and `Gruppe` for workbook export from the match detail page when that metadata is available there, and use configured fallbacks only when the page does not expose clean values.
+- **FR-019**: System MUST append `Nicht angetreten` fine candidates from the search results page even when the click-TT row is already marked approved, provided the workbook does not already contain the corresponding entry and it is not marked ignored.
+- **FR-020**: System MUST write the failure reason(s) for skipped matches into the workbook `Bemerkung` column so the Staffelleiter can understand why the match was not auto-approved.
+- **FR-021**: System MUST support an ignore column in the workbook so known false positives can be suppressed on later runs.
+- **FR-022**: System MUST support a configurable fine amount for `Nicht angetreten` workbook rows.
 
 ### Key Entities
 
 - **Match (Begegnung)**: A table tennis match between two teams, with date, home team, guest team, score, status, and approval state
 - **Team Lineup**: List of 6 numbered players (1-6) plus MF (Mannschaftsführer) and doubles pairings (D1-D3)
 - **Validation Result**: Per-match result indicating pass/fail for each rule, with failure reasons
+- **Fine Candidate**: A workbook row candidate derived from a skipped match or a `Nicht angetreten` result
 
 ## Navigation Flow
 
@@ -116,6 +143,8 @@ As a Staffelleiter managing multiple groups (Bezirksoberliga, 1. Bezirksliga 1, 
 5. Match list page (paginated, ~30 per page)
    → For each match with status "abgeschlossen":
      → Click "erfassen"
+   → For each match with status "nicht angetreten":
+     → Record optional fine candidate for workbook export
 6. Match detail page (Kontrolle tab)
    → Check: no red text at top
    → Check: MF present for both teams (table or Bemerkungen)
@@ -127,6 +156,9 @@ As a Staffelleiter managing multiple groups (Bezirksoberliga, 1. Bezirksliga 1, 
    → After last match on page: navigate to next page
    → Repeat until all pages processed
 7. Print summary report
+8. If workbook sync is configured:
+   → Append missing fine candidates
+   → Skip workbook rows already present or marked ignored
 ```
 
 ## Success Criteria
@@ -138,6 +170,8 @@ As a Staffelleiter managing multiple groups (Bezirksoberliga, 1. Bezirksliga 1, 
 - **SC-003**: Full run of ~284 matches completes in under 30 minutes
 - **SC-004**: Summary report accurately lists all skipped matches with correct reasons
 - **SC-005**: Tool handles session issues and network errors without crashing
+- **SC-006**: Workbook sync never creates duplicate fine rows for the same match and sanction reason
+- **SC-007**: `Nicht angetreten` workbook rows are captured even if click-TT already shows the result as approved
 
 ## Clarifications
 
@@ -145,6 +179,8 @@ As a Staffelleiter managing multiple groups (Bezirksoberliga, 1. Bezirksliga 1, 
 
 - Q: How should the tool detect "red text at the top"? → A: Check for ANY text content between the top button row (Abbrechen / << Zurück / Speichern) and the "Kontrolle" fieldset/table. Known error elements use `<p class="error-msg">`, but any unexpected text in that region should also trigger a skip. In case of doubt, skip the match (safe default).
 - Q: What should happen when a match has fewer than 6 players (e.g., walkover/nicht angetreten)? → A: Always skip — no exceptions. The summary report must list these with the specific reason so the Staffelleiter can handle them manually.
+- Q: Should `Nicht angetreten` rows still be exported to the fine workbook when the search result already shows a checkmark? → A: Yes. Approval processing should skip them, but workbook sync should still append the sanction row if it is missing from Excel.
+- Q: What should be written to the fine workbook for skipped matches? → A: Use the sanction reason as `Grund` where appropriate and include the concrete auto-approval failure reason(s) in `Bemerkung`.
 - Q: How should the tool handle pagination after approving matches? → A: Process pages sequentially (1→2→3...). Approved matches stay in the current search results with a checkmark — use this to skip already-approved ones. Track visited-and-skipped matches internally to avoid re-processing. Approved matches only disappear on a new search, so no need to re-search between pages.
 - Q: Should the summary report be written to a file or just printed to stdout? → A: Both. Human-readable summary to stdout for immediate feedback, plus a JSON file (e.g., `report-2026-04-10.json`) for later reference and run history.
 - Q: Should the tool support match formats other than Sechser-Paarkreuz-System? → A: Stage 1: Sechser-Paarkreuz only (6 players per team). Stage 2 (future): add Vierer-Paarkreuz support (4 players per team). For now, skip matches that don't match Sechser format.

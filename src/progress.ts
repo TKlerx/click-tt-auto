@@ -7,6 +7,7 @@ interface ProgressSnapshot {
   totalPages: number;
   actions: MatchAction[];
   scannedCount?: number;
+  openedCount?: number;
   totalMatchCount?: number;
   pageMatchIndex?: number;
   pageMatchCount?: number;
@@ -99,6 +100,7 @@ function buildProgressLine(snapshot: ProgressSnapshot, terminalWidth: number, st
   const totalMatchCount = snapshot.totalMatchCount ?? 0;
   const elapsedMs = Date.now() - startedAt;
   const scannedCount = snapshot.scannedCount ?? summary.processed;
+  const openedCount = snapshot.openedCount ?? 0;
   const totalBarCount = Math.max(totalMatchCount, Math.max(scannedCount, 1));
   const eta = formatEta(scannedCount, totalMatchCount, elapsedMs);
   const matchLabel = snapshot.currentMatchLabel ? ` | ${snapshot.currentMatchLabel}` : "";
@@ -106,6 +108,7 @@ function buildProgressLine(snapshot: ProgressSnapshot, terminalWidth: number, st
     `All ${buildPageBar(scannedCount, totalBarCount, barWidth)} ${scannedCount}/${totalMatchCount || "?"} ` +
     `| Pg ${buildPageBar(snapshot.pageNumber, snapshot.totalPages, barWidth)} ${snapshot.pageNumber}/${snapshot.totalPages} ` +
     `| It ${buildPageBar(itemCount > 0 ? itemIndex : 0, Math.max(itemCount, 1), barWidth)} ${itemIndex}/${itemCount} ` +
+    `| Opened ${openedCount} ` +
     `| ${snapshot.dryRun ? "Would approve" : "Approved"} ${summary.approved} ` +
     `| Skipped ${summary.skipped} ` +
     `| Already ${summary.alreadyApproved} ` +
@@ -125,11 +128,13 @@ function buildPlainProgressLine(snapshot: ProgressSnapshot, startedAt: number): 
   const totalMatchCount = snapshot.totalMatchCount ?? 0;
   const elapsedMs = Date.now() - startedAt;
   const scannedCount = snapshot.scannedCount ?? summary.processed;
+  const openedCount = snapshot.openedCount ?? 0;
 
   return [
     `Progress ${scannedCount}/${totalMatchCount || "?"}`,
     `page ${snapshot.pageNumber}/${snapshot.totalPages}`,
     `item ${itemIndex}/${itemCount}`,
+    `opened ${openedCount}`,
     `${snapshot.dryRun ? "would-approve" : "approved"} ${summary.approved}`,
     `skipped ${summary.skipped}`,
     `already ${summary.alreadyApproved}`,

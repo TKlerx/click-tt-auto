@@ -1,3 +1,5 @@
+import fs from "node:fs/promises";
+import path from "node:path";
 import type { Locator, Page } from "playwright";
 import { createDocument, normalizeWhitespace } from "./dom.js";
 import type { MatchEntry, PaginationInfo, ParsedMatchListPage } from "./types.js";
@@ -29,27 +31,61 @@ function parseTotalMatches(text: string): number {
   return Number(match[1]);
 }
 
+async function readVisiblePagination(page: Page): Promise<PaginationInfo> {
+  const bodyText = normalizeWhitespace(await page.locator("body").textContent());
+  return parsePagination(bodyText);
+}
+
 function isApprovedRow(row: Element): boolean {
   const text = normalizeWhitespace(row.textContent);
   const icons = Array.from(row.querySelectorAll("img, svg, input[type='checkbox']"));
   const iconMatch = icons.some((element) => {
     const haystack = normalizeWhitespace(
-      element.getAttribute("alt") ??
-        element.getAttribute("title") ??
-        element.getAttribute("aria-label") ??
-        ""
+      [
+        element.getAttribute("alt"),
+        element.getAttribute("title"),
+        element.getAttribute("aria-label"),
+        element.getAttribute("src"),
+        element.getAttribute("class")
+      ]
+        .filter(Boolean)
+        .join(" ")
     );
-    return /genehmigt|approved|check/i.test(haystack);
+    return /genehmigt|approved|check(?:\.gif)?|icons\/check/i.test(haystack);
   });
 
   return iconMatch || /\bgenehmigt\b/i.test(text);
 }
 
 function findGroupForRow(row: Element): string {
+  const ignoredTexts = [
+    /auswahl/i,
+    /datum/i,
+    /heimmannschaft/i,
+    /gastmannschaft/i,
+    /spiellokal/i,
+    /spiele/i,
+    /status/i,
+    /punkte/i,
+    /bericht/i
+  ];
+
   let cursor: Element | null = row.previousElementSibling;
   while (cursor) {
+    if (cursor.tagName.toLowerCase() === "tr" && cursor.querySelector("th")) {
+      cursor = cursor.previousElementSibling;
+      continue;
+    }
+
     const text = normalizeWhitespace(cursor.textContent);
-    if (text && !cursor.querySelector("a[href]")) {
+    const shouldIgnore = ignoredTexts.some((pattern) => pattern.test(text));
+    const boldText = normalizeWhitespace(cursor.querySelector("b, strong")?.textContent);
+
+    if (boldText && !shouldIgnore) {
+      return boldText;
+    }
+
+    if (text && !cursor.querySelector("a[href]") && !shouldIgnore) {
       return text;
     }
     cursor = cursor.previousElementSibling;
@@ -74,6 +110,14 @@ function parseMatchRow(row: Element, index: number): MatchEntry | null {
     cells.find((cell) => /^(\d+)\s*:\s*(\d+)$/.test(cell)) ??
     "";
   const score = parseScore(scoreCell);
+  const fixedHomeTeam =
+    dateIndex >= 2
+      ? normalizeWhitespace(cells[dateIndex + 2] ?? "")
+      : "";
+  const fixedGuestTeam =
+    dateIndex >= 2
+      ? normalizeWhitespace(cells[dateIndex + 3] ?? "")
+      : "";
 
   const relevantCells = cells.slice(dateIndex >= 0 ? dateIndex + 1 : 0);
   const teamCandidates = relevantCells.filter((cell) => {
@@ -92,7 +136,9 @@ function parseMatchRow(row: Element, index: number): MatchEntry | null {
     return /[A-Za-zÄÖÜäöü]/.test(cell);
   });
 
-  const [homeTeam = "", guestTeam = ""] = teamCandidates.slice(-2);
+  const [fallbackHomeTeam = "", fallbackGuestTeam = ""] = teamCandidates.slice(-2);
+  const homeTeam = fixedHomeTeam || fallbackHomeTeam;
+  const guestTeam = fixedGuestTeam || fallbackGuestTeam;
   if (!date || !homeTeam || !guestTeam) {
     return null;
   }
@@ -143,11 +189,105 @@ export async function assertMatchListPage(page: Page): Promise<void> {
   }
 }
 
-export async function goToNextPage(page: Page, currentPage: number): Promise<boolean> {
+async function writePagerDebugSnapshot(
+  page: Page,
+  reportDir: string | undefined,
+  currentPage: number,
+  phase: string
+): Promise<string | null> {
+  if (!reportDir) {
+    return null;
+  }
+
+  await fs.mkdir(reportDir, { recursive: true });
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "").replace(/-/g, "");
+  const filePath = path.join(reportDir, `debug-pager-p${currentPage}-${phase}-${timestamp}.html`);
+  await fs.writeFile(filePath, await page.content(), "utf8");
+  return filePath;
+}
+
+async function logPagerDebug(
+  page: Page,
+  currentPage: number,
+  nextPageNumber: string,
+  phase: string,
+  reportDir?: string
+): Promise<void> {
+  const bodyText = normalizeWhitespace(await page.locator("body").textContent());
+  const pageSummary = bodyText.match(/Seite\s+\d+\s*\/\s*\d+/i)?.[0] ?? "Seite ? / ?";
+  const directNextCount = await page.getByRole("link", { name: new RegExp(`^${nextPageNumber}$`) }).count();
+  const jumpCount = await page.locator('a:has(img[title="10 Seiten vor"])').count();
+  const pagerSnippet = normalizeWhitespace(
+    (await page
+      .locator("table")
+      .filter({ hasText: /Seite\s+\d+\s*\/\s*\d+/i })
+      .first()
+      .textContent()
+      .catch(() => "")) || ""
+  );
+  const snapshotPath = await writePagerDebugSnapshot(page, reportDir, currentPage, phase);
+
+  console.error(
+    `[PAGER DEBUG] ${phase} on page ${currentPage}: ${pageSummary} | next=${nextPageNumber} directLink=${directNextCount} jumpLink=${jumpCount}`
+  );
+  if (pagerSnippet) {
+    console.error(`[PAGER DEBUG] Pager text: ${pagerSnippet}`);
+  }
+  if (snapshotPath) {
+    console.error(`[PAGER DEBUG] Snapshot saved to: ${snapshotPath}`);
+  }
+}
+
+export async function goToNextPage(
+  page: Page,
+  currentPage: number,
+  options: { debug?: boolean; reportDir?: string } = {}
+): Promise<boolean> {
   const nextPageNumber = String(currentPage + 1);
   const nextLink = page.getByRole("link", { name: new RegExp(`^${nextPageNumber}$`) }).first();
   if ((await nextLink.count()) === 0) {
-    return false;
+    if (options.debug) {
+      await logPagerDebug(page, currentPage, nextPageNumber, "next-link-missing", options.reportDir);
+    }
+
+    if (currentPage % 10 !== 0) {
+      return false;
+    }
+
+    const pagerAdvance = page
+      .locator("a")
+      .filter({
+        has: page.locator('img[title="10 Seiten vor"]')
+      })
+      .filter({
+        hasNot: page.locator('img[title*="letzten"], img[src*="arrow.right_end"]')
+      })
+      .first();
+
+    if ((await pagerAdvance.count()) === 0) {
+      if (options.debug) {
+        await logPagerDebug(page, currentPage, nextPageNumber, "jump-link-missing", options.reportDir);
+      }
+      return false;
+    }
+
+    await Promise.all([page.waitForLoadState("domcontentloaded"), pagerAdvance.click()]);
+
+    const paginationAfterJump = await readVisiblePagination(page);
+    if (paginationAfterJump.currentPage === Number(nextPageNumber)) {
+      return true;
+    }
+
+    const revealedNextLink = page.getByRole("link", { name: new RegExp(`^${nextPageNumber}$`) }).first();
+    if ((await revealedNextLink.count()) === 0) {
+      if (options.debug) {
+        await logPagerDebug(page, currentPage, nextPageNumber, "next-link-still-missing-after-jump", options.reportDir);
+      }
+      return false;
+    }
+
+    await Promise.all([page.waitForLoadState("domcontentloaded"), revealedNextLink.click()]);
+    return true;
   }
 
   await Promise.all([page.waitForLoadState("domcontentloaded"), nextLink.click()]);

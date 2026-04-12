@@ -19,6 +19,8 @@ Represents a match row on the Begegnungen list page.
 | isApproved | boolean | Whether checkmark is present (already approved) |
 | erfassenUrl | string | URL of the "erfassen" link |
 | group | string | Group name (e.g., "Bezirksoberliga Erwachsene") |
+| liga | string? | Parsed league name for workbook export |
+| gruppe | string? | Parsed group value for workbook export |
 
 ### MatchDetail (from detail page)
 
@@ -27,6 +29,9 @@ Represents the parsed content of a match detail/Kontrolle page.
 | Field | Type | Description |
 |-------|------|-------------|
 | matchFormat | string | Detected format (e.g., "Sechser-Paarkreuz-System") |
+| competitionName | string? | Full competition label from the page heading |
+| competitionLiga | string? | Parsed league name from the competition heading |
+| competitionGruppe | string? | Parsed group suffix from the competition heading |
 | homeTeam | TeamLineup | Home team lineup data |
 | guestTeam | TeamLineup | Guest team lineup data |
 | hasErrorMessages | boolean | Whether text exists between buttons and Kontrolle |
@@ -83,12 +88,47 @@ Represents the parsed content of a match detail/Kontrolle page.
 | timestamp | string | ISO timestamp of run start |
 | dryRun | boolean | Whether this was a dry run |
 | group | string? | Group filter if specified |
-| totalFound | number | Total unapproved matches found |
+| totalFound | number | Total rows found in search results |
+| totalScanned | number | Total rows scanned from search results |
+| totalActionable | number | Total rows that led to actions |
+| totalIgnored | number | Total scanned rows ignored for approval |
 | totalApproved | number | Matches approved this run |
 | totalSkipped | number | Matches skipped (failed validation) |
 | totalAlreadyApproved | number | Matches already approved (checkmark) |
 | totalErrors | number | Matches that errored during processing |
 | actions | MatchAction[] | Detailed per-match results |
+| fineSync | FineSyncResult? | Optional workbook-sync summary |
+
+### FineCandidate
+
+| Field | Type | Description |
+|-------|------|-------------|
+| liga | string | League value written to workbook |
+| gruppe | string | Group value written to workbook |
+| serie | string | Hinserie / Rückserie derived from date |
+| datum | string | Match date without time |
+| spielnummer | string | Optional match number |
+| heim | string | Home team |
+| gast | string | Guest team |
+| strafeGegen | string | Team the fine applies to |
+| grund | string | Fine reason / sanction label |
+| rechtsgrundlage | string | Rule reference if known |
+| bemerkung | string | Human-readable failure explanation |
+| kosten | number \| string | Fine amount if known |
+| spielleiter | string | Workbook value for Staffelleiter |
+
+### FineSyncResult
+
+| Field | Type | Description |
+|-------|------|-------------|
+| enabled | boolean | Whether workbook sync was configured |
+| workbookPath | string? | Target workbook path |
+| sheetName | string? | Target worksheet |
+| totalCandidates | number | Total fine candidates derived this run |
+| appended | number | Candidates appended to workbook |
+| existing | number | Candidates already present in workbook |
+| ignored | number | Candidates suppressed by ignore column |
+| error | string? | Workbook sync error, if any |
 
 ## State Transitions
 
@@ -96,7 +136,8 @@ Represents the parsed content of a match detail/Kontrolle page.
 
 ```
 [List Entry] → status check
-  ├── status != "abgeschlossen" → SKIPPED (reason: status)
+  ├── status == "nicht angetreten" → APPROVAL-SKIP + OPTIONAL-FINE-CANDIDATE
+  ├── status != "abgeschlossen" → IGNORED FOR APPROVAL
   ├── isApproved == true → ALREADY-APPROVED
   └── status == "abgeschlossen" → [Open Detail Page]
       ├── format != Sechser → SKIPPED (reason: unsupported format)
@@ -106,4 +147,9 @@ Represents the parsed content of a match detail/Kontrolle page.
       ├── homeTeam.playerCount < 6 → SKIPPED (reason: fewer than 6 players home)
       ├── guestTeam.playerCount < 6 → SKIPPED (reason: fewer than 6 players guest)
       └── ALL PASS → APPROVED (or DRY-RUN-WOULD-APPROVE)
+
+[Run Complete] → OPTIONAL WORKBOOK SYNC
+  ├── candidate exists in workbook → EXISTING
+  ├── candidate row marked ignored → IGNORED
+  └── candidate missing → APPENDED
 ```

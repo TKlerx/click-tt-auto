@@ -24,10 +24,15 @@ export interface MatchEntry {
   isApproved: boolean;
   erfassenUrl: string;
   group: string;
+  liga?: string;
+  gruppe?: string;
 }
 
 export interface MatchDetail {
   matchFormat: string;
+  competitionName?: string;
+  competitionLiga?: string;
+  competitionGruppe?: string;
   homeTeam: TeamLineup;
   guestTeam: TeamLineup;
   hasErrorMessages: boolean;
@@ -70,6 +75,7 @@ export interface RunReport {
   group: string | null;
   totalFound: number;
   totalScanned: number;
+  totalOpened: number;
   totalActionable: number;
   totalIgnored: number;
   totalApproved: number;
@@ -77,6 +83,7 @@ export interface RunReport {
   totalAlreadyApproved: number;
   totalErrors: number;
   actions: MatchAction[];
+  fineSync?: FineSyncResult;
   reportPath?: string;
 }
 
@@ -92,6 +99,13 @@ export interface AppConfig {
   slowMoMs: number;
   group: string | null;
   reportDir: string;
+  fineWorkbookPath: string | null;
+  fineSheetName: string | null;
+  fineIgnoreColumn: string;
+  fineSpielleiter: string | null;
+  fineLiga: string | null;
+  fineGruppe: string | null;
+  fineNaKosten: number;
 }
 
 export interface PaginationInfo {
@@ -104,4 +118,32 @@ export interface ParsedMatchListPage {
   matches: MatchEntry[];
   pagination: PaginationInfo;
   totalMatches: number;
+}
+
+export interface FineCandidate {
+  liga: string;
+  gruppe: string;
+  serie: string;
+  datum: string;
+  spielnummer: string;
+  heim: string;
+  gast: string;
+  strafeGegen: string;
+  grund: string;
+  rechtsgrundlage: string;
+  bemerkung: string;
+  kosten: number | string;
+  spielleiter: string;
+}
+
+export interface FineSyncResult {
+  enabled: boolean;
+  dryRun?: boolean;
+  workbookPath?: string;
+  sheetName?: string;
+  totalCandidates: number;
+  appended: number;
+  existing: number;
+  ignored: number;
+  error?: string;
 }

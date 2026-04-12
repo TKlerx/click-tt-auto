@@ -1,6 +1,7 @@
 node_modules/
 dist/
 reports/
+data/*.xlsx
 .env
 .env.local
 .env.*

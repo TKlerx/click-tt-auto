@@ -8,6 +8,7 @@ function detailHtml(contentBetween = "", bemerkungen = ""): string {
         <title>Spielbetrieb Ergebniserfassung (Sechser-Paarkreuz-System)</title>
       </head>
       <body>
+        <h1>Spielbetrieb Ergebniserfassung (Sechser-Paarkreuz-System)<br />Bezirksoberliga Erwachsene, TSV Eintracht Belle - TTC Paderborn<br />10.10.2025, 20:00 Uhr</h1>
         <div class="button-row">
           <button>Abbrechen</button>
           <button>&lt;&lt; Zurück</button>
@@ -54,10 +55,27 @@ describe("parseMatchDetailHtml", () => {
     });
 
     expect(detail.matchFormat).toContain("Sechser-Paarkreuz-System");
+    expect(detail.competitionName).toBe("Bezirksoberliga Erwachsene");
+    expect(detail.competitionLiga).toBe("Bezirksoberliga");
+    expect(detail.competitionGruppe).toBe("");
     expect(detail.homeTeam.hasMF).toBe(true);
     expect(detail.homeTeam.playerCount).toBe(6);
     expect(detail.guestTeam.playerCount).toBe(6);
     expect(detail.hasErrorMessages).toBe(false);
+  });
+
+  it("extracts liga and gruppe separately from numbered competitions", () => {
+    const detail = parseMatchDetailHtml(
+      detailHtml().replace("Bezirksoberliga Erwachsene", "Bezirksliga 2 Erwachsene"),
+      {
+        homeTeam: "TSV Eintracht Belle",
+        guestTeam: "TTC Paderborn"
+      }
+    );
+
+    expect(detail.competitionName).toBe("Bezirksliga 2 Erwachsene");
+    expect(detail.competitionLiga).toBe("Bezirksliga");
+    expect(detail.competitionGruppe).toBe("2");
   });
 
   it("stops when required detail page fields are missing", () => {

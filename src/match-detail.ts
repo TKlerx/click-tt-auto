@@ -295,6 +295,44 @@ function detectMatchFormat(document: Document): string {
   return headings.map((node) => normalizeWhitespace(node.textContent)).find((text) => /Paarkreuz/i.test(text)) ?? "Unknown";
 }
 
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function detectCompetitionName(document: Document, teamHints: { homeTeam: string; guestTeam: string }): string {
+  const headingText = normalizeWhitespace(document.querySelector("h1")?.textContent);
+  if (!headingText) {
+    return "";
+  }
+
+  const pattern = new RegExp(
+    `(?:ergebniserfassung\\s*)?(?:\\([^)]*\\)\\s*)?(.+?),\\s*${escapeRegex(teamHints.homeTeam)}\\s*-\\s*${escapeRegex(
+      teamHints.guestTeam
+    )}`,
+    "i"
+  );
+  const teamMatch = headingText.match(pattern);
+  if (!teamMatch) {
+    return "";
+  }
+
+  return normalizeWhitespace(teamMatch[1]).replace(/^spielbetrieb\s*ergebniserfassung\s*(?:\([^)]*\))?\s*/i, "");
+}
+
+function splitCompetitionName(competitionName: string): { competitionLiga: string; competitionGruppe: string } {
+  const normalizedCompetition = normalizeWhitespace(competitionName)
+    .replace(/\bErwachsene\b/gi, "")
+    .replace(/\bJugend\b/gi, "")
+    .trim();
+
+  const match = normalizedCompetition.match(/^(.*?)(?:\s+(\d+))?$/);
+
+  return {
+    competitionLiga: normalizeWhitespace(match?.[1]) || normalizedCompetition,
+    competitionGruppe: normalizeWhitespace(match?.[2]) || ""
+  };
+}
+
 function extractBemerkungen(document: Document): string {
   const heading = Array.from(document.querySelectorAll("h1, h2, h3, h4, legend, p, div, td")).find((element) =>
     /^bemerkungen$/i.test(normalizeWhitespace(getDirectText(element) || normalizeWhitespace(element.textContent)))
@@ -438,9 +476,13 @@ export function parseMatchDetailHtml(
   }
 
   const errorState = detectUnexpectedTopContent(document, tables);
+  const competitionName = detectCompetitionName(document, teamHints);
+  const competitionInfo = competitionName ? splitCompetitionName(competitionName) : null;
 
   return {
     matchFormat: detectMatchFormat(document),
+    ...(competitionName ? { competitionName } : {}),
+    ...(competitionInfo ?? {}),
     homeTeam: parsedTeams.homeTeam,
     guestTeam: parsedTeams.guestTeam,
     hasErrorMessages: errorState.hasErrorMessages,
