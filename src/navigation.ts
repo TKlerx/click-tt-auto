@@ -180,20 +180,52 @@ export async function navigateToMatchSearch(
 }
 
 export async function returnToListAfterSave(page: Page): Promise<void> {
-  const roleTarget = page.getByRole("link", { name: /zurück zur einstiegsseite|zuruck zur einstiegsseite/i }).first();
-  if ((await roleTarget.count()) > 0) {
-    await clickAndSettle(page, roleTarget);
+  try {
     await assertMatchListPage(page);
     return;
+  } catch {
+    // Not already on list page.
   }
 
-  const textTarget = page.locator("a").filter({ hasText: /zurück zur einstiegsseite|zuruck zur einstiegsseite/i }).first();
-  if ((await textTarget.count()) === 0) {
-    throw new Error("Return-to-list control not found after saving.");
+  const returnPatterns = [
+    /zur[üuÃ]ck zur einstiegsseite|zuruck zur einstiegsseite/i,
+    /<<\s*zur[üuÃ]ck|<<\s*zuruck/i,
+    /^zur[üuÃ]ck$|^zuruck$/i,
+    /begegnungen/i
+  ];
+
+  for (const pattern of returnPatterns) {
+    const roleTarget = page.getByRole("link", { name: pattern }).first();
+    if ((await roleTarget.count()) > 0) {
+      await clickAndSettle(page, roleTarget);
+      await assertMatchListPage(page);
+      return;
+    }
+
+    const textTarget = page.locator("a").filter({ hasText: pattern }).first();
+    if ((await textTarget.count()) > 0) {
+      await clickAndSettle(page, textTarget);
+      await assertMatchListPage(page);
+      return;
+    }
+
+    const buttonTarget = await findButtonLikeControl(page, pattern);
+    if (buttonTarget) {
+      await clickAndSettle(page, buttonTarget);
+      await assertMatchListPage(page);
+      return;
+    }
   }
 
-  await clickAndSettle(page, textTarget);
-  await assertMatchListPage(page);
+  try {
+    await page.goBack({ waitUntil: "domcontentloaded" });
+    await assertMatchListPage(page);
+    return;
+  } catch {
+    // Fall through to final error.
+  }
+
+  throw new Error(`Return-to-list control not found after saving. Visible anchors: ${await collectAnchorSnapshot(page)}`);
 }
 
 export async function cancelAndReturn(page: Page): Promise<void> {

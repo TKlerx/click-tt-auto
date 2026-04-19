@@ -92,6 +92,7 @@ export interface AppConfig {
   password: string;
   baseUrl: string;
   dryRun: boolean;
+  processAll: boolean;
   debug: boolean;
   headed: boolean;
   haltOnError: boolean;

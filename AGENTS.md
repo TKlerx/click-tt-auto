@@ -27,3 +27,5 @@ TypeScript 5.x, Node.js LTS (22.x): Follow standard conventions
 
 <!-- MANUAL ADDITIONS START -->
 <!-- MANUAL ADDITIONS END -->
+
+@RTK.md

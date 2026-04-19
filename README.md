@@ -94,6 +94,7 @@ npm run approve -- --dry-run
 npm run approve -- --headed
 npm run approve -- --debug
 npm run approve -- --debug --no-halt-on-error
+npm run approve -- --dry-run --process-all
 npm run approve -- --dry-run --headed --slow-mo 1500
 npm run approve -- --group "Bezirksoberliga Erwachsene"
 ```
@@ -106,6 +107,7 @@ npm run approve -- --group "Bezirksoberliga Erwachsene"
 - `--halt-on-error`: pause headed runs on fatal page-shape errors and keep the browser open
 - `--no-halt-on-error`: continue after fatal page-shape errors even in debug mode
 - `--plain-progress`: use plain line-by-line progress output instead of the redrawn progress bar
+- `--process-all`: open every match row detail page instead of only approval-relevant/fine-relevant rows
 - `--slow-mo <ms>`: add a delay between Playwright actions; in debug mode the effective minimum is `1200`
 - `--group "<name>"`: restrict the run to a specific click-TT group label
 - `--report-dir <path>`: write JSON reports and debug HTML snapshots to a custom directory

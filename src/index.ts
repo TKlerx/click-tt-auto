@@ -78,6 +78,10 @@ function isFatalDetailPageError(message: string): boolean {
   return /^Impossible player count detected\b/.test(message) || /^Expected detail page fields missing:/.test(message);
 }
 
+function isRetriableDetailParseError(message: string): boolean {
+  return /^Expected detail page fields missing:/.test(message) || /^Could not find both lineup tables on match detail page\./.test(message);
+}
+
 async function assertReasonablePlayerCounts(
   page: Page,
   reportDir: string,
@@ -120,6 +124,31 @@ async function pauseForInspection(reason: string): Promise<void> {
   }
 }
 
+async function readMatchDetailPageWithRetry(
+  page: Page,
+  teamHints: { homeTeam: string; guestTeam: string }
+): Promise<Awaited<ReturnType<typeof readMatchDetailPage>>> {
+  const retryDelaysMs = [500, 1000, 1500];
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt <= retryDelaysMs.length; attempt += 1) {
+    try {
+      return await readMatchDetailPage(page, teamHints);
+    } catch (error) {
+      lastError = error;
+      const message = error instanceof Error ? error.message : String(error);
+      if (!isRetriableDetailParseError(message) || attempt === retryDelaysMs.length) {
+        throw error;
+      }
+
+      await page.waitForTimeout(retryDelaysMs[attempt]!);
+      await waitForMatchDetailPage(page, { timeoutMs: retryDelaysMs[attempt]! + 1000 });
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
+}
+
 async function run(): Promise<void> {
   const config = loadConfig();
   const browser = await chromium.launch({
@@ -149,6 +178,7 @@ async function run(): Promise<void> {
   try {
     const modeSuffix = [
       config.dryRun ? "DRY RUN" : null,
+      config.processAll ? "PROCESS ALL" : null,
       config.debug ? "DEBUG" : null,
       config.plainProgress ? "PLAIN PROGRESS" : null,
       config.slowMoMs > 0 ? `SLOW ${config.slowMoMs}ms` : null
@@ -171,7 +201,7 @@ async function run(): Promise<void> {
     await login(page, config.baseUrl, config.username, config.password);
     console.log("Navigating to Begegnungen...");
     await navigateToMatchSearch(page, config.group, {
-      onlyUnapproved: !config.fineWorkbookPath
+      onlyUnapproved: !config.fineWorkbookPath && !config.processAll
     });
 
     let pageNumber = 1;
@@ -206,7 +236,7 @@ async function run(): Promise<void> {
           : "disabled";
         const trackStatusFine = shouldTrackStatusFine(statusFineState);
         const needsStatusFineDetail = shouldCreateStatusFine(match) && statusFineState === "missing" && Boolean(config.fineWorkbookPath);
-        const needsDetailVisit = shouldInspectMatch(match) || needsStatusFineDetail;
+        const needsDetailVisit = config.processAll || shouldInspectMatch(match) || needsStatusFineDetail;
 
         if (!needsDetailVisit || processedKeys.has(matchKey)) {
           if (trackStatusFine && !statusFineKeys.has(matchKey)) {
@@ -264,7 +294,7 @@ async function run(): Promise<void> {
           await waitForMatchDetailPage(page);
           openedCount += 1;
 
-          const detail = await readMatchDetailPage(page, {
+          const detail = await readMatchDetailPageWithRetry(page, {
             homeTeam: match.homeTeam,
             guestTeam: match.guestTeam
           });

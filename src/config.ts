@@ -10,6 +10,7 @@ interface CliArgs {
   headed?: boolean;
   "halt-on-error"?: boolean;
   "plain-progress"?: boolean;
+  "process-all"?: boolean;
   "slow-mo"?: string;
   "report-dir"?: string;
 }
@@ -21,7 +22,7 @@ export function loadConfig(argv = process.argv.slice(2)): AppConfig {
   const explicitHaltOnError = argv.includes("--halt-on-error");
 
   const args = minimist<CliArgs>(argv, {
-    boolean: ["dry-run", "debug", "headed", "halt-on-error", "plain-progress"],
+    boolean: ["dry-run", "debug", "headed", "halt-on-error", "plain-progress", "process-all"],
     string: ["group", "slow-mo", "report-dir"],
     alias: { g: "group" },
     default: {
@@ -30,6 +31,7 @@ export function loadConfig(argv = process.argv.slice(2)): AppConfig {
       headed: false,
       "halt-on-error": false,
       "plain-progress": false,
+      "process-all": false,
       "slow-mo": "0",
       "report-dir": "reports"
     }
@@ -67,6 +69,7 @@ export function loadConfig(argv = process.argv.slice(2)): AppConfig {
     password,
     baseUrl,
     dryRun: Boolean(args["dry-run"]),
+    processAll: Boolean(args["process-all"]),
     debug,
     headed: debug || Boolean(args.headed),
     haltOnError: explicitNoHaltOnError ? false : explicitHaltOnError || debug,
