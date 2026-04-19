@@ -139,6 +139,7 @@ If a fine workbook is configured, the tool also:
 - appends missing fine candidates for skipped matches
 - appends missing `Nicht angetreten` rows found on the search results page, even if the row is already marked approved in click-TT
 - adds an `Ignore` column when needed so false positives can be suppressed on later runs
+- writes `Datum` as a real Excel date value
 - adds an `Eingetragen am` column and fills it as a real Excel date/time value for newly appended rows
 - writes the auto-approval failure reason into `Bemerkung` for appended skipped-match fines
 

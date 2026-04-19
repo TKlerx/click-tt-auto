@@ -22,6 +22,8 @@ const BASE_HEADERS = [
 ] as const;
 
 const ADDED_AT_COLUMN_NAME = "Eingetragen am";
+const DATE_COLUMN_NAME = "Datum";
+const DATE_NUMBER_FORMAT = "dd.mm.yyyy";
 const ADDED_AT_NUMBER_FORMAT = "yyyy-mm-dd hh:mm:ss";
 
 interface FineSyncOptions {
@@ -99,6 +101,39 @@ function getActionFailureSummary(action: MatchAction): string {
 function extractDateOnly(value: string): string {
   const match = value.match(/\d{1,2}\.\d{1,2}\.\d{4}/);
   return match?.[0] ?? value;
+}
+
+function parseWorkbookDate(value: string): Date | null {
+  const normalizedValue = normalizeWhitespace(value);
+  const dotMatch = normalizedValue.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  if (dotMatch) {
+    const [, day, month, year] = dotMatch;
+    return new Date(Number(year), Number(month) - 1, Number(day));
+  }
+
+  const isoMatch = normalizedValue.match(/^(\d{4})-(\d{2})-(\d{2})(?:T.*)?$/);
+  if (isoMatch) {
+    const [, year, month, day] = isoMatch;
+    return new Date(Number(year), Number(month) - 1, Number(day));
+  }
+
+  return null;
+}
+
+function normalizeDateKey(value: Date | string): string {
+  if (value instanceof Date) {
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, "0");
+    const day = String(value.getDate()).padStart(2, "0");
+    return `${day}.${month}.${year}`;
+  }
+
+  const parsed = parseWorkbookDate(value);
+  if (parsed) {
+    return normalizeDateKey(parsed);
+  }
+
+  return normalizeWhitespace(value);
 }
 
 function deriveSerie(value: string): string {
@@ -214,7 +249,7 @@ function buildCandidate(
     liga: leagueInfo.liga,
     gruppe: leagueInfo.gruppe,
     serie: deriveSerie(match.date),
-    datum: extractDateOnly(match.date),
+    datum: parseWorkbookDate(extractDateOnly(match.date)) ?? extractDateOnly(match.date),
     spielnummer: "",
     heim: match.homeTeam,
     gast: match.guestTeam,
@@ -365,7 +400,7 @@ export function deriveFineCandidates(
 
 function buildCandidateKey(candidate: FineCandidate): string {
   return [
-    candidate.datum,
+    normalizeDateKey(candidate.datum),
     candidate.heim,
     candidate.gast,
     candidate.strafeGegen,
@@ -590,7 +625,11 @@ export async function syncFineWorkbook(options: FineSyncOptions): Promise<FineSy
     setRequiredCellValue(worksheet, nextRowIndex, headerMap.get("Liga"), candidate.liga);
     setRequiredCellValue(worksheet, nextRowIndex, headerMap.get("Gruppe"), candidate.gruppe);
     setRequiredCellValue(worksheet, nextRowIndex, headerMap.get("Serie"), candidate.serie);
-    setRequiredCellValue(worksheet, nextRowIndex, headerMap.get("Datum"), candidate.datum);
+    setRequiredCellValue(worksheet, nextRowIndex, headerMap.get(DATE_COLUMN_NAME), candidate.datum);
+    const dateColumnIndex = headerMap.get(DATE_COLUMN_NAME);
+    if (dateColumnIndex) {
+      worksheet.getCell(nextRowIndex, dateColumnIndex).numFmt = DATE_NUMBER_FORMAT;
+    }
     setRequiredCellValue(worksheet, nextRowIndex, headerMap.get("Spielnummer"), candidate.spielnummer);
     setRequiredCellValue(worksheet, nextRowIndex, headerMap.get("Heim"), candidate.heim);
     setRequiredCellValue(worksheet, nextRowIndex, headerMap.get("Gast"), candidate.gast);

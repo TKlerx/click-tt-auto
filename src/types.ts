@@ -125,7 +125,7 @@ export interface FineCandidate {
   liga: string;
   gruppe: string;
   serie: string;
-  datum: string;
+  datum: Date | string;
   spielnummer: string;
   heim: string;
   gast: string;

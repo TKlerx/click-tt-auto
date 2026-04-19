@@ -197,6 +197,9 @@ describe("syncFineWorkbook", () => {
     expect(worksheet?.getCell(1, 15).value).toBe("Ignore");
     expect(worksheet?.rowCount).toBe(3);
     expect(worksheet?.getCell(3, 9).value).toBe("Falsche Einzelaufstellung laut Vorgabe der Spielstärke!");
+    const dateValue = worksheet?.getCell(3, 4).value;
+    expect(dateValue instanceof Date).toBe(true);
+    expect(worksheet?.getCell(3, 4).numFmt).toBe("dd.mm.yyyy");
     const addedAtValue = worksheet?.getCell(3, 14).value;
     expect(addedAtValue instanceof Date).toBe(true);
     expect(worksheet?.getCell(3, 14).numFmt).toBe("yyyy-mm-dd hh:mm:ss");
