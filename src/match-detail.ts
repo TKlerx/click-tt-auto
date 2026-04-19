@@ -498,3 +498,34 @@ export async function readMatchDetailPage(
 ): Promise<MatchDetail> {
   return parseMatchDetailHtml(await page.content(), teamHints);
 }
+
+export async function waitForMatchDetailPage(
+  page: Page,
+  options: { timeoutMs?: number } = {}
+): Promise<void> {
+  const timeoutMs = options.timeoutMs ?? 5000;
+
+  await page
+    .waitForFunction(
+      () => {
+        const normalize = (value: string | null | undefined) => (value ?? "").replace(/\s+/g, " ").trim();
+        const heading = Array.from(document.querySelectorAll("h1, h2, h3, title")).some((element) =>
+          /ergebniserfassung|paarkreuz/i.test(normalize(element.textContent))
+        );
+        const saveControl = Array.from(document.querySelectorAll('input[type="submit"], button, a')).some((element) =>
+          /speichern/i.test(normalize(element.textContent || element.getAttribute("value")))
+        );
+        const kontrolle = Array.from(document.querySelectorAll("fieldset, h1, h2, h3, legend")).some((element) =>
+          /kontrolle/i.test(normalize(element.textContent))
+        );
+        const tableCount = document.querySelectorAll("table").length;
+
+        return heading && saveControl && kontrolle && tableCount > 0;
+      },
+      undefined,
+      { timeout: timeoutMs }
+    )
+    .catch(() => {
+      // Parsing will surface precise missing fields if markers never settle.
+    });
+}

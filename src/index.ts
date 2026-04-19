@@ -8,8 +8,8 @@ import { ensureSessionActive, login } from "./auth.js";
 import { loadConfig } from "./config.js";
 import { getStatusFineCandidateState, loadFineWorkbookIndex, syncFineWorkbook } from "./fines.js";
 import { assertMatchListPage, findMatchLink, goToNextPage, readMatchListPage } from "./match-list.js";
-import { readMatchDetailPage } from "./match-detail.js";
-import { navigateToMatchSearch } from "./navigation.js";
+import { readMatchDetailPage, waitForMatchDetailPage } from "./match-detail.js";
+import { cancelAndReturn, navigateToMatchSearch } from "./navigation.js";
 import { ProgressReporter } from "./progress.js";
 import { buildRunReport, formatStdoutReport, writeRunReport } from "./reporter.js";
 import type { MatchAction, MatchEntry } from "./types.js";
@@ -261,6 +261,7 @@ async function run(): Promise<void> {
         try {
           await Promise.all([page.waitForLoadState("domcontentloaded"), link.click()]);
           await ensureSessionActive(page);
+          await waitForMatchDetailPage(page);
           openedCount += 1;
 
           const detail = await readMatchDetailPage(page, {
@@ -397,12 +398,13 @@ async function run(): Promise<void> {
           });
 
           try {
-            const cancelButton = page.getByRole("button", { name: /abbrechen/i }).first();
-            if ((await cancelButton.count()) > 0) {
-              await Promise.all([page.waitForLoadState("domcontentloaded"), cancelButton.click()]);
-            }
+            await assertMatchListPage(page);
           } catch {
-            // Best effort only. The loop will fail fast if the page cannot recover.
+            try {
+              await cancelAndReturn(page);
+            } catch {
+              // Best effort only. The loop will fail fast if the page cannot recover.
+            }
           }
         }
       }
