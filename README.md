@@ -49,6 +49,43 @@ Optional fine-workbook settings:
 - `CLICK_TT_FINE_DEFAULT_LIGA` / `CLICK_TT_FINE_DEFAULT_GRUPPE`: fallback values when the list page does not expose a clean group name
 - `CLICK_TT_FINE_NA_KOSTEN`: fine amount used for appended `Nicht angetreten` rows
 
+## Recommended Run Order
+
+### How To Run
+
+1. Install dependencies once:
+
+```bash
+npm install
+npx playwright install chromium
+```
+
+2. Create a local `.env` file, for example by copying `.env.example`, and fill in your click-TT credentials.
+
+3. Start with a safe dry run:
+
+```bash
+npm run approve -- --dry-run
+```
+
+4. If you want to watch the browser while checking behavior:
+
+```bash
+npm run approve -- --dry-run --headed
+```
+
+5. If the dry run looks correct, run the real approval:
+
+```bash
+npm run approve --
+```
+
+Recommended everyday workflow:
+
+- use `npm run approve -- --dry-run` to verify what would happen
+- use `npm run approve --` only after the dry run looks right
+- use `npm run approve -- --debug` when you need slow motion, extra diagnostics, and browser inspection on errors
+
 ## Usage
 
 ```bash
@@ -100,6 +137,7 @@ If a fine workbook is configured, the tool also:
 - appends missing fine candidates for skipped matches
 - appends missing `Nicht angetreten` rows found on the search results page, even if the row is already marked approved in click-TT
 - adds an `Ignore` column when needed so false positives can be suppressed on later runs
+- adds an `Eingetragen am` column and fills it as a real Excel date/time value for newly appended rows
 - writes the auto-approval failure reason into `Bemerkung` for appended skipped-match fines
 
 With `--dry-run`, these workbook candidates are still calculated and reported, but the Excel file is not modified.

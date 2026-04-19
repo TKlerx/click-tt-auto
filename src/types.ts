@@ -134,6 +134,7 @@ export interface FineCandidate {
   bemerkung: string;
   kosten: number | string;
   spielleiter: string;
+  eingetragenAm: Date | string;
 }
 
 export interface FineSyncResult {

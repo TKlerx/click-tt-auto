@@ -17,8 +17,12 @@ const BASE_HEADERS = [
   "Rechtsgrundlage",
   "Bemerkung",
   "Kosten",
-  "Spielleiter"
+  "Spielleiter",
+  "Eingetragen am"
 ] as const;
+
+const ADDED_AT_COLUMN_NAME = "Eingetragen am";
+const ADDED_AT_NUMBER_FORMAT = "yyyy-mm-dd hh:mm:ss";
 
 interface FineSyncOptions {
   workbookPath: string | null;
@@ -219,7 +223,8 @@ function buildCandidate(
     rechtsgrundlage: input.rechtsgrundlage ?? "",
     bemerkung: input.bemerkung ?? "",
     kosten: input.kosten ?? "",
-    spielleiter: options.spielleiter ?? ""
+    spielleiter: options.spielleiter ?? "",
+    eingetragenAm: ""
   };
 }
 
@@ -392,7 +397,8 @@ function collectWorkbookKeys(
       rechtsgrundlage: getCellValue(worksheet, rowIndex, headerMap.get("Rechtsgrundlage")),
       bemerkung: getCellValue(worksheet, rowIndex, headerMap.get("Bemerkung")),
       kosten: getCellValue(worksheet, rowIndex, headerMap.get("Kosten")) || "",
-      spielleiter: getCellValue(worksheet, rowIndex, headerMap.get("Spielleiter"))
+      spielleiter: getCellValue(worksheet, rowIndex, headerMap.get("Spielleiter")),
+      eingetragenAm: getCellValue(worksheet, rowIndex, headerMap.get(ADDED_AT_COLUMN_NAME))
     };
     const key = buildCandidateKey(candidate);
     if (!key.replace(/\|/g, "")) {
@@ -487,13 +493,27 @@ function getHeaderMap(worksheet: Worksheet): Map<string, number> {
   return map;
 }
 
-function ensureIgnoreColumn(worksheet: Worksheet, ignoreColumnName: string): Map<string, number> {
+function ensureColumn(worksheet: Worksheet, columnName: string, minimumColumnIndex: number): Map<string, number> {
   const headerMap = getHeaderMap(worksheet);
-  if (!headerMap.has(ignoreColumnName)) {
-    const columnIndex = Math.max(worksheet.getRow(1).cellCount, BASE_HEADERS.length) + 1;
-    worksheet.getCell(1, columnIndex).value = ignoreColumnName;
-    headerMap.set(ignoreColumnName, columnIndex);
+  if (!headerMap.has(columnName)) {
+    const columnIndex = Math.max(worksheet.getRow(1).cellCount + 1, minimumColumnIndex);
+    worksheet.getCell(1, columnIndex).value = columnName;
+    headerMap.set(columnName, columnIndex);
   }
+  return headerMap;
+}
+
+function ensureWorkbookColumns(worksheet: Worksheet, ignoreColumnName: string): Map<string, number> {
+  let headerMap = getHeaderMap(worksheet);
+
+  if (!headerMap.has(ADDED_AT_COLUMN_NAME)) {
+    headerMap = ensureColumn(worksheet, ADDED_AT_COLUMN_NAME, BASE_HEADERS.length);
+  }
+
+  if (!headerMap.has(ignoreColumnName)) {
+    headerMap = ensureColumn(worksheet, ignoreColumnName, BASE_HEADERS.length + 1);
+  }
+
   return headerMap;
 }
 
@@ -516,7 +536,7 @@ function getCellValue(worksheet: Worksheet, rowIndex: number, columnIndex: numbe
   return normalizeWhitespace(cellValueToString(worksheet.getCell(rowIndex, columnIndex).value));
 }
 
-function setRequiredCellValue(worksheet: Worksheet, rowIndex: number, columnIndex: number | undefined, value: number | string): void {
+function setRequiredCellValue(worksheet: Worksheet, rowIndex: number, columnIndex: number | undefined, value: Date | number | string): void {
   if (!columnIndex) {
     throw new Error("Expected worksheet column is missing.");
   }
@@ -545,8 +565,9 @@ export async function syncFineWorkbook(options: FineSyncOptions): Promise<FineSy
   const workbook = new ExcelWorkbookCtor();
   await workbook.xlsx.readFile(options.workbookPath);
   const worksheet = getWorksheet(workbook, options.sheetName);
-  const headerMap = ensureIgnoreColumn(worksheet, options.ignoreColumnName);
+  const headerMap = ensureWorkbookColumns(worksheet, options.ignoreColumnName);
   const { existingKeys, ignoredKeys } = collectWorkbookKeys(worksheet, options.ignoreColumnName);
+  const appendedAt = new Date();
 
   let appended = 0;
   let existing = 0;
@@ -579,6 +600,11 @@ export async function syncFineWorkbook(options: FineSyncOptions): Promise<FineSy
     setRequiredCellValue(worksheet, nextRowIndex, headerMap.get("Bemerkung"), candidate.bemerkung);
     setRequiredCellValue(worksheet, nextRowIndex, headerMap.get("Kosten"), candidate.kosten);
     setRequiredCellValue(worksheet, nextRowIndex, headerMap.get("Spielleiter"), candidate.spielleiter);
+    setRequiredCellValue(worksheet, nextRowIndex, headerMap.get(ADDED_AT_COLUMN_NAME), appendedAt);
+    const addedAtColumnIndex = headerMap.get(ADDED_AT_COLUMN_NAME);
+    if (addedAtColumnIndex) {
+      worksheet.getCell(nextRowIndex, addedAtColumnIndex).numFmt = ADDED_AT_NUMBER_FORMAT;
+    }
     setRequiredCellValue(worksheet, nextRowIndex, headerMap.get(options.ignoreColumnName), "");
 
     existingKeys.add(key);

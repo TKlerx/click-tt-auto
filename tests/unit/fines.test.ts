@@ -116,6 +116,7 @@ describe("deriveFineCandidates", () => {
     expect(candidates).toHaveLength(1);
     expect(candidates[0]?.serie).toBe("Rückserie");
   });
+
   it("ignores ordinary abgeschlossen rows in status fine matches", () => {
     const candidates = deriveFineCandidates(
       [],
@@ -133,7 +134,7 @@ describe("deriveFineCandidates", () => {
 });
 
 describe("syncFineWorkbook", () => {
-  it("adds the ignore column and appends only missing candidates", async () => {
+  it("adds the metadata columns and appends only missing candidates", async () => {
     const workbookPath = await createWorkbook(
       [
         "Liga",
@@ -150,9 +151,7 @@ describe("syncFineWorkbook", () => {
         "Kosten",
         "Spielleiter"
       ],
-      [
-        ["Bezirksoberliga", "", "Hinserie", "03.10.2025", "", "TuRa Elsen III", "TTS Detmold", "TTS Detmold", "Nicht angetreten", "A 20.1.1", "", 100, "Timo Klerx"]
-      ]
+      [["Bezirksoberliga", "", "Hinserie", "03.10.2025", "", "TuRa Elsen III", "TTS Detmold", "TTS Detmold", "Nicht angetreten", "A 20.1.1", "", 100, "Timo Klerx"]]
     );
 
     const result = await syncFineWorkbook({
@@ -194,9 +193,13 @@ describe("syncFineWorkbook", () => {
     const workbook = new Workbook();
     await workbook.xlsx.readFile(workbookPath);
     const worksheet = workbook.getWorksheet("Sheet1");
-    expect(worksheet?.getCell(1, 14).value).toBe("Ignore");
+    expect(worksheet?.getCell(1, 14).value).toBe("Eingetragen am");
+    expect(worksheet?.getCell(1, 15).value).toBe("Ignore");
     expect(worksheet?.rowCount).toBe(3);
     expect(worksheet?.getCell(3, 9).value).toBe("Falsche Einzelaufstellung laut Vorgabe der Spielstärke!");
+    const addedAtValue = worksheet?.getCell(3, 14).value;
+    expect(addedAtValue instanceof Date).toBe(true);
+    expect(worksheet?.getCell(3, 14).numFmt).toBe("yyyy-mm-dd hh:mm:ss");
   });
 
   it("does not append candidates whose existing row is marked ignored", async () => {
@@ -215,11 +218,10 @@ describe("syncFineWorkbook", () => {
         "Bemerkung",
         "Kosten",
         "Spielleiter",
+        "Eingetragen am",
         "Ignore"
       ],
-      [
-        ["Bezirksoberliga", "", "Hinserie", "03.10.2025", "", "SC Wewer", "SV Heide Paderborn", "SV Heide Paderborn", "MF fehlt", "", "MF missing for SV Heide Paderborn", "", "Timo Klerx", "x"]
-      ]
+      [["Bezirksoberliga", "", "Hinserie", "03.10.2025", "", "SC Wewer", "SV Heide Paderborn", "SV Heide Paderborn", "MF fehlt", "", "MF missing for SV Heide Paderborn", "", "Timo Klerx", "", "x"]]
     );
 
     const result = await syncFineWorkbook({
@@ -322,11 +324,10 @@ describe("syncFineWorkbook", () => {
         "Bemerkung",
         "Kosten",
         "Spielleiter",
+        "Eingetragen am",
         "Ignore"
       ],
-      [
-        ["Bezirksoberliga", "", "Hinserie", "03.10.2025", "", "TuRa Elsen III", "TTS Detmold", "TTS Detmold", "Nicht angetreten", "A 20.1.1", "", 100, "Timo Klerx", ""]
-      ]
+      [["Bezirksoberliga", "", "Hinserie", "03.10.2025", "", "TuRa Elsen III", "TTS Detmold", "TTS Detmold", "Nicht angetreten", "A 20.1.1", "", 100, "Timo Klerx", "", ""]]
     );
 
     const workbookIndex = await loadFineWorkbookIndex({
