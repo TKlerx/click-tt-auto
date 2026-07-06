@@ -172,7 +172,8 @@ async function run(): Promise<void> {
     defaultLiga: config.fineLiga,
     defaultGruppe: config.fineGruppe,
     spielleiter: config.fineSpielleiter,
-    naKosten: config.fineNaKosten
+    naKosten: config.fineNaKosten,
+    fineCatalogue: config.fineCatalogue
   };
 
   try {
@@ -472,6 +473,7 @@ async function run(): Promise<void> {
         defaultLiga: config.fineLiga,
         defaultGruppe: config.fineGruppe,
         naKosten: config.fineNaKosten,
+        fineCatalogue: config.fineCatalogue,
         dryRun: config.dryRun,
         actions,
         statusFineMatches

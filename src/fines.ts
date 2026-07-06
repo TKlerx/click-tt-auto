@@ -1,6 +1,17 @@
 import ExcelJS, { type Workbook as ExcelWorkbook, type Worksheet } from "exceljs";
 import { normalizeForSearch, normalizeWhitespace } from "./dom.js";
-import type { FineCandidate, FineSyncResult, MatchAction, MatchEntry, ValidationCheck } from "./types.js";
+import type {
+  FineCandidate,
+  FineCatalogue,
+  FineCatalogueEntry,
+  FineCatalogueFineDetails,
+  FineCatalogueLeague,
+  FineCatalogueMatchSummary,
+  FineSyncResult,
+  MatchAction,
+  MatchEntry,
+  ValidationCheck
+} from "./types.js";
 
 const { Workbook: ExcelWorkbookCtor } = ExcelJS;
 
@@ -22,6 +33,7 @@ const BASE_HEADERS = [
 ] as const;
 
 const ADDED_AT_COLUMN_NAME = "Eingetragen am";
+const CLICK_TT_TEXT_COLUMN_NAME = "Click-TT Text";
 const DATE_COLUMN_NAME = "Datum";
 const DATE_NUMBER_FORMAT = "dd.mm.yyyy";
 const ADDED_AT_NUMBER_FORMAT = "yyyy-mm-dd hh:mm:ss";
@@ -34,6 +46,7 @@ interface FineSyncOptions {
   defaultLiga: string | null;
   defaultGruppe: string | null;
   naKosten: number;
+  fineCatalogue: FineCatalogue | null;
   dryRun?: boolean;
   actions: MatchAction[];
   statusFineMatches: MatchEntry[];
@@ -50,7 +63,19 @@ interface FineWorkbookIndex {
   ignoredKeys: Set<string>;
 }
 
+interface CatalogueResolution {
+  entry: FineCatalogueEntry | null;
+  matched: boolean;
+  pattern: string;
+  lowestTeamApplied: boolean;
+}
+
 type StatusFineCandidateState = "disabled" | "missing" | "existing" | "ignored";
+
+const EVENT_NICHT_ANGETRETEN = "nicht-angetreten";
+const EVENT_MF_FEHLT = "mf-fehlt";
+const EVENT_UNVOLLSTAENDIGE_EINZELAUFSTELLUNG = "unvollstaendige-einzelaufstellung";
+const EVENT_ERROR_MESSAGE = "error-message";
 
 function cellValueToString(value: unknown): string {
   if (value === null || value === undefined) {
@@ -147,6 +172,19 @@ function deriveSerie(value: string): string {
   return month >= 8 ? "Hinserie" : "Rückserie";
 }
 
+function deriveSeason(value: string): string {
+  const dateText = extractDateOnly(value);
+  const match = dateText.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  if (!match) {
+    return "";
+  }
+
+  const month = Number(match[2]);
+  const year = Number(match[3]);
+  const startYear = month >= 8 ? year : year - 1;
+  return `${startYear}-${startYear + 1}`;
+}
+
 function parseLeagueInfo(group: string, defaultLiga: string | null, defaultGruppe: string | null): LeagueInfo {
   const normalizedGroup = normalizeWhitespace(group)
     .replace(/\bErwachsene\b/gi, "")
@@ -187,6 +225,164 @@ function resolveLeagueInfo(
   }
 
   return parseLeagueInfo(match.group, defaultLiga, defaultGruppe);
+}
+
+function resolveCatalogueSeasonEntry(
+  seasonCatalogue: FineCatalogue["seasons"][string] | undefined,
+  leagueInfo: LeagueInfo,
+  eventCode: string
+): FineCatalogueEntry | null {
+  if (!seasonCatalogue) {
+    return null;
+  }
+
+  const normalizedLiga = normalizeForSearch(leagueInfo.liga);
+  const exactLeague = Object.entries(seasonCatalogue.leagues ?? {}).find(
+    ([leagueName]) => normalizeForSearch(leagueName) === normalizedLiga
+  )?.[1];
+  const wildcardLeague = seasonCatalogue.leagues?.["*"];
+
+  return (
+    exactLeague?.events?.[eventCode] ??
+    wildcardLeague?.events?.[eventCode] ??
+    seasonCatalogue.events?.[eventCode] ??
+    null
+  );
+}
+
+function findCatalogueLeague(
+  seasonCatalogue: FineCatalogue["seasons"][string] | undefined,
+  leagueInfo: LeagueInfo
+): FineCatalogueLeague | undefined {
+  if (!seasonCatalogue) {
+    return undefined;
+  }
+
+  const normalizedLiga = normalizeForSearch(leagueInfo.liga);
+  return Object.entries(seasonCatalogue.leagues ?? {}).find(([leagueName]) => normalizeForSearch(leagueName) === normalizedLiga)?.[1];
+}
+
+function isListedLowestTeam(
+  seasonCatalogue: FineCatalogue["seasons"][string] | undefined,
+  leagueInfo: LeagueInfo,
+  teamName: string
+): boolean {
+  if (!seasonCatalogue || !teamName) {
+    return false;
+  }
+
+  const normalizedTeam = normalizeForSearch(teamName);
+  const exactLeague = findCatalogueLeague(seasonCatalogue, leagueInfo);
+  const wildcardLeague = seasonCatalogue.leagues?.["*"];
+  const lowestTeams = [
+    ...(exactLeague?.lowestTeams ?? []),
+    ...(wildcardLeague?.lowestTeams ?? []),
+    ...(seasonCatalogue.lowestTeams ?? [])
+  ];
+
+  return lowestTeams.some((candidate) => normalizeForSearch(candidate) === normalizedTeam);
+}
+
+function isLowestTeam(catalogue: FineCatalogue | null, season: string, leagueInfo: LeagueInfo, teamName: string): boolean {
+  if (!catalogue) {
+    return false;
+  }
+
+  return (
+    isListedLowestTeam(catalogue.seasons[season], leagueInfo, teamName) ||
+    isListedLowestTeam(catalogue.seasons["*"], leagueInfo, teamName)
+  );
+}
+
+function applyFineDetails(entry: FineCatalogueEntry, details: FineCatalogueFineDetails): FineCatalogueEntry {
+  const result: FineCatalogueEntry = { ...entry };
+
+  if (details.grund !== undefined) {
+    result.grund = details.grund;
+  }
+
+  if (details.rechtsgrundlage !== undefined) {
+    result.rechtsgrundlage = details.rechtsgrundlage;
+  }
+
+  if (details.kosten !== undefined) {
+    result.kosten = details.kosten;
+  }
+
+  return result;
+}
+
+function resolveCatalogueEntry(
+  catalogue: FineCatalogue | null,
+  season: string,
+  leagueInfo: LeagueInfo,
+  eventCode: string,
+  text: string,
+  strafeGegen: string
+): CatalogueResolution {
+  if (!catalogue) {
+    return { entry: null, matched: false, pattern: "", lowestTeamApplied: false };
+  }
+
+  const entry =
+    resolveCatalogueSeasonEntry(catalogue.seasons[season], leagueInfo, eventCode) ??
+    resolveCatalogueSeasonEntry(catalogue.seasons["*"], leagueInfo, eventCode);
+
+  if (!entry) {
+    return { entry: null, matched: false, pattern: "", lowestTeamApplied: false };
+  }
+
+  const normalizedText = normalizeForSearch(text);
+  const pattern = entry.patterns?.find((candidate) => normalizedText.includes(normalizeForSearch(candidate.match)));
+  const patternedEntry = pattern ? applyFineDetails(entry, pattern) : entry;
+
+  if (!patternedEntry.lowestTeam || !isLowestTeam(catalogue, season, leagueInfo, strafeGegen)) {
+    return { entry: patternedEntry, matched: true, pattern: pattern?.match ?? "", lowestTeamApplied: false };
+  }
+
+  return {
+    entry: applyFineDetails(patternedEntry, patternedEntry.lowestTeam),
+    matched: true,
+    pattern: pattern?.match ?? "",
+    lowestTeamApplied: true
+  };
+}
+
+function applyCatalogueEntry(
+  input: {
+    grund: string;
+    rechtsgrundlage?: string;
+    kosten?: number | string;
+  },
+  entry: FineCatalogueEntry | null
+): {
+  grund: string;
+  rechtsgrundlage?: string;
+  kosten?: number | string;
+} {
+  if (!entry) {
+    return input;
+  }
+
+  const result: {
+    grund: string;
+    rechtsgrundlage?: string;
+    kosten?: number | string;
+  } = {
+    grund: entry.grund ?? input.grund,
+  };
+
+  const rechtsgrundlage = entry.rechtsgrundlage ?? input.rechtsgrundlage;
+  if (rechtsgrundlage !== undefined) {
+    result.rechtsgrundlage = rechtsgrundlage;
+  }
+
+  const kosten = entry.kosten ?? input.kosten;
+  if (kosten !== undefined) {
+    result.kosten = kosten;
+  }
+
+  return result;
 }
 
 function inferTeamFromPoints(match: MatchEntry): string {
@@ -235,16 +431,30 @@ function inferTeamFromMessage(message: string, match: MatchEntry): string {
 
 function buildCandidate(
   match: MatchEntry,
-  options: Pick<FineSyncOptions, "defaultLiga" | "defaultGruppe" | "spielleiter">,
+  options: Pick<FineSyncOptions, "defaultLiga" | "defaultGruppe" | "spielleiter" | "fineCatalogue">,
   input: {
+    eventCode: string;
+    matchText?: string;
+    clickTtText?: string;
     strafeGegen: string;
     grund: string;
     bemerkung?: string;
     rechtsgrundlage?: string;
-    kosten?: number | "";
+    kosten?: number | string;
   }
 ): FineCandidate {
   const leagueInfo = resolveLeagueInfo(match, options.defaultLiga, options.defaultGruppe);
+  const fineSeason = deriveSeason(match.date);
+  const catalogueResolution = resolveCatalogueEntry(
+    options.fineCatalogue,
+    fineSeason,
+    leagueInfo,
+    input.eventCode,
+    input.matchText ?? input.grund,
+    input.strafeGegen
+  );
+  const fineDetails = applyCatalogueEntry(input, catalogueResolution.entry);
+
   return {
     liga: leagueInfo.liga,
     gruppe: leagueInfo.gruppe,
@@ -254,22 +464,29 @@ function buildCandidate(
     heim: match.homeTeam,
     gast: match.guestTeam,
     strafeGegen: input.strafeGegen,
-    grund: input.grund,
-    rechtsgrundlage: input.rechtsgrundlage ?? "",
+    grund: fineDetails.grund,
+    rechtsgrundlage: fineDetails.rechtsgrundlage ?? "",
+    clickTtText: input.clickTtText ?? "",
     bemerkung: input.bemerkung ?? "",
-    kosten: input.kosten ?? "",
+    kosten: fineDetails.kosten ?? "",
     spielleiter: options.spielleiter ?? "",
-    eingetragenAm: ""
+    eingetragenAm: "",
+    fineEvent: input.eventCode,
+    fineSeason,
+    fineCatalogueMatched: catalogueResolution.matched,
+    fineCataloguePattern: catalogueResolution.pattern,
+    fineLowestTeamApplied: catalogueResolution.lowestTeamApplied
   };
 }
 
 function buildStatusFineCandidate(
   match: MatchEntry,
-  options: Pick<FineSyncOptions, "defaultLiga" | "defaultGruppe" | "spielleiter" | "naKosten">
+  options: Pick<FineSyncOptions, "defaultLiga" | "defaultGruppe" | "spielleiter" | "naKosten" | "fineCatalogue">
 ): FineCandidate {
   const liableTeam = inferTeamFromPoints(match);
 
   return buildCandidate(match, options, {
+    eventCode: EVENT_NICHT_ANGETRETEN,
     strafeGegen: liableTeam,
     grund: "Nicht angetreten",
     rechtsgrundlage: "A 20.1.1",
@@ -281,7 +498,7 @@ function buildStatusFineCandidate(
 function extractMfCandidates(
   action: MatchAction,
   check: ValidationCheck,
-  options: Pick<FineSyncOptions, "defaultLiga" | "defaultGruppe" | "spielleiter">
+  options: Pick<FineSyncOptions, "defaultLiga" | "defaultGruppe" | "spielleiter" | "fineCatalogue">
 ): FineCandidate[] {
   const match = action.match;
   const reason = check.reason ?? "";
@@ -289,6 +506,8 @@ function extractMfCandidates(
   const matches = Array.from(reason.matchAll(/MF missing for ([^;]+)(?:;|$)/g));
   return matches.map((result) =>
     buildCandidate(match, options, {
+      eventCode: EVENT_MF_FEHLT,
+      matchText: reason,
       strafeGegen: normalizeWhitespace(result[1]),
       grund: "MF fehlt",
       bemerkung: failureSummary
@@ -299,7 +518,7 @@ function extractMfCandidates(
 function extractPlayerCountCandidates(
   action: MatchAction,
   check: ValidationCheck,
-  options: Pick<FineSyncOptions, "defaultLiga" | "defaultGruppe" | "spielleiter">
+  options: Pick<FineSyncOptions, "defaultLiga" | "defaultGruppe" | "spielleiter" | "fineCatalogue">
 ): FineCandidate[] {
   const match = action.match;
   const reason = check.reason ?? "";
@@ -311,6 +530,8 @@ function extractPlayerCountCandidates(
   if (homeMatch) {
     candidates.push(
       buildCandidate(match, options, {
+        eventCode: EVENT_UNVOLLSTAENDIGE_EINZELAUFSTELLUNG,
+        matchText: reason,
         strafeGegen: match.homeTeam,
         grund: "Unvollständige Einzelaufstellung",
         bemerkung: failureSummary
@@ -321,6 +542,8 @@ function extractPlayerCountCandidates(
   if (guestMatch) {
     candidates.push(
       buildCandidate(match, options, {
+        eventCode: EVENT_UNVOLLSTAENDIGE_EINZELAUFSTELLUNG,
+        matchText: reason,
         strafeGegen: match.guestTeam,
         grund: "Unvollständige Einzelaufstellung",
         bemerkung: failureSummary
@@ -334,7 +557,7 @@ function extractPlayerCountCandidates(
 function extractErrorMessageCandidates(
   action: MatchAction,
   check: ValidationCheck,
-  options: Pick<FineSyncOptions, "defaultLiga" | "defaultGruppe" | "spielleiter">
+  options: Pick<FineSyncOptions, "defaultLiga" | "defaultGruppe" | "spielleiter" | "fineCatalogue">
 ): FineCandidate[] {
   const match = action.match;
   const reason = check.reason ?? "";
@@ -345,6 +568,9 @@ function extractErrorMessageCandidates(
 
   return [
     buildCandidate(match, options, {
+      eventCode: EVENT_ERROR_MESSAGE,
+      matchText: message,
+      clickTtText: message,
       strafeGegen: inferTeamFromMessage(message, match),
       grund: message,
       bemerkung: getActionFailureSummary(action)
@@ -355,7 +581,7 @@ function extractErrorMessageCandidates(
 export function deriveFineCandidates(
   actions: MatchAction[],
   statusFineMatches: MatchEntry[],
-  options: Pick<FineSyncOptions, "defaultLiga" | "defaultGruppe" | "spielleiter" | "naKosten">
+  options: Pick<FineSyncOptions, "defaultLiga" | "defaultGruppe" | "spielleiter" | "naKosten" | "fineCatalogue">
 ): FineCandidate[] {
   const candidates: FineCandidate[] = [];
 
@@ -430,10 +656,16 @@ function collectWorkbookKeys(
       strafeGegen: getCellValue(worksheet, rowIndex, headerMap.get("Strafe gegen")),
       grund: getCellValue(worksheet, rowIndex, headerMap.get("Grund")),
       rechtsgrundlage: getCellValue(worksheet, rowIndex, headerMap.get("Rechtsgrundlage")),
+      clickTtText: getCellValue(worksheet, rowIndex, headerMap.get(CLICK_TT_TEXT_COLUMN_NAME)),
       bemerkung: getCellValue(worksheet, rowIndex, headerMap.get("Bemerkung")),
       kosten: getCellValue(worksheet, rowIndex, headerMap.get("Kosten")) || "",
       spielleiter: getCellValue(worksheet, rowIndex, headerMap.get("Spielleiter")),
-      eingetragenAm: getCellValue(worksheet, rowIndex, headerMap.get(ADDED_AT_COLUMN_NAME))
+      eingetragenAm: getCellValue(worksheet, rowIndex, headerMap.get(ADDED_AT_COLUMN_NAME)),
+      fineEvent: "",
+      fineSeason: "",
+      fineCatalogueMatched: false,
+      fineCataloguePattern: "",
+      fineLowestTeamApplied: false
     };
     const key = buildCandidateKey(candidate);
     if (!key.replace(/\|/g, "")) {
@@ -477,7 +709,7 @@ export async function loadFineWorkbookIndex(options: {
 export function getStatusFineCandidateState(
   match: MatchEntry,
   workbookIndex: FineWorkbookIndex,
-  options: Pick<FineSyncOptions, "defaultLiga" | "defaultGruppe" | "spielleiter" | "naKosten">
+  options: Pick<FineSyncOptions, "defaultLiga" | "defaultGruppe" | "spielleiter" | "naKosten" | "fineCatalogue">
 ): StatusFineCandidateState {
   if (!workbookIndex.enabled) {
     return "disabled";
@@ -545,8 +777,12 @@ function ensureWorkbookColumns(worksheet: Worksheet, ignoreColumnName: string): 
     headerMap = ensureColumn(worksheet, ADDED_AT_COLUMN_NAME, BASE_HEADERS.length);
   }
 
+  if (!headerMap.has(CLICK_TT_TEXT_COLUMN_NAME)) {
+    headerMap = ensureColumn(worksheet, CLICK_TT_TEXT_COLUMN_NAME, BASE_HEADERS.length + 1);
+  }
+
   if (!headerMap.has(ignoreColumnName)) {
-    headerMap = ensureColumn(worksheet, ignoreColumnName, BASE_HEADERS.length + 1);
+    headerMap = ensureColumn(worksheet, ignoreColumnName, BASE_HEADERS.length + 2);
   }
 
   return headerMap;
@@ -579,6 +815,28 @@ function setRequiredCellValue(worksheet: Worksheet, rowIndex: number, columnInde
   worksheet.getCell(rowIndex, columnIndex).value = value;
 }
 
+function buildCatalogueMatchSummary(
+  candidate: FineCandidate,
+  state: FineCatalogueMatchSummary["state"]
+): FineCatalogueMatchSummary {
+  return {
+    state,
+    event: candidate.fineEvent,
+    season: candidate.fineSeason,
+    liga: candidate.liga,
+    gruppe: candidate.gruppe,
+    match: `${candidate.heim} vs ${candidate.gast} (${normalizeDateKey(candidate.datum)})`,
+    strafeGegen: candidate.strafeGegen,
+    grund: candidate.grund,
+    rechtsgrundlage: candidate.rechtsgrundlage,
+    kosten: candidate.kosten,
+    clickTtText: candidate.clickTtText,
+    catalogueMatched: candidate.fineCatalogueMatched,
+    pattern: candidate.fineCataloguePattern,
+    lowestTeamApplied: candidate.fineLowestTeamApplied
+  };
+}
+
 export async function syncFineWorkbook(options: FineSyncOptions): Promise<FineSyncResult> {
   if (!options.workbookPath) {
     return {
@@ -594,7 +852,8 @@ export async function syncFineWorkbook(options: FineSyncOptions): Promise<FineSy
     defaultLiga: options.defaultLiga,
     defaultGruppe: options.defaultGruppe,
     spielleiter: options.spielleiter,
-    naKosten: options.naKosten
+    naKosten: options.naKosten,
+    fineCatalogue: options.fineCatalogue
   });
 
   const workbook = new ExcelWorkbookCtor();
@@ -608,19 +867,24 @@ export async function syncFineWorkbook(options: FineSyncOptions): Promise<FineSy
   let existing = 0;
   let ignored = 0;
   let nextRowIndex = getLastDataRow(worksheet) + 1;
+  const catalogueMatches: FineCatalogueMatchSummary[] = [];
 
   for (const candidate of candidates) {
     const key = buildCandidateKey(candidate);
 
     if (ignoredKeys.has(key)) {
       ignored += 1;
+      catalogueMatches.push(buildCatalogueMatchSummary(candidate, "ignored"));
       continue;
     }
 
     if (existingKeys.has(key)) {
       existing += 1;
+      catalogueMatches.push(buildCatalogueMatchSummary(candidate, "existing"));
       continue;
     }
+
+    catalogueMatches.push(buildCatalogueMatchSummary(candidate, options.dryRun ? "would-append" : "appended"));
 
     setRequiredCellValue(worksheet, nextRowIndex, headerMap.get("Liga"), candidate.liga);
     setRequiredCellValue(worksheet, nextRowIndex, headerMap.get("Gruppe"), candidate.gruppe);
@@ -636,6 +900,7 @@ export async function syncFineWorkbook(options: FineSyncOptions): Promise<FineSy
     setRequiredCellValue(worksheet, nextRowIndex, headerMap.get("Strafe gegen"), candidate.strafeGegen);
     setRequiredCellValue(worksheet, nextRowIndex, headerMap.get("Grund"), candidate.grund);
     setRequiredCellValue(worksheet, nextRowIndex, headerMap.get("Rechtsgrundlage"), candidate.rechtsgrundlage);
+    setRequiredCellValue(worksheet, nextRowIndex, headerMap.get(CLICK_TT_TEXT_COLUMN_NAME), candidate.clickTtText);
     setRequiredCellValue(worksheet, nextRowIndex, headerMap.get("Bemerkung"), candidate.bemerkung);
     setRequiredCellValue(worksheet, nextRowIndex, headerMap.get("Kosten"), candidate.kosten);
     setRequiredCellValue(worksheet, nextRowIndex, headerMap.get("Spielleiter"), candidate.spielleiter);
@@ -663,6 +928,7 @@ export async function syncFineWorkbook(options: FineSyncOptions): Promise<FineSy
     totalCandidates: candidates.length,
     appended,
     existing,
-    ignored
+    ignored,
+    catalogueMatches
   };
 }

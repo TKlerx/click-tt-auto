@@ -94,6 +94,31 @@ export function formatStdoutReport(report: RunReport): string {
     if (report.fineSync.error) {
       lines.push(`  Error:            ${report.fineSync.error}`);
     }
+
+    if (report.fineSync.catalogueMatches && report.fineSync.catalogueMatches.length > 0) {
+      const maxRows = 12;
+      lines.push("", "Fine Catalogue Matches:");
+      report.fineSync.catalogueMatches.slice(0, maxRows).forEach((candidate, index) => {
+        const flags = [
+          candidate.catalogueMatched ? "catalogue" : "fallback",
+          candidate.pattern ? `pattern: ${candidate.pattern}` : null,
+          candidate.lowestTeamApplied ? "lowest-team" : null,
+          candidate.state
+        ]
+          .filter(Boolean)
+          .join(", ");
+        lines.push(
+          `  ${index + 1}. ${candidate.match} - ${candidate.event} -> ${candidate.grund} (${candidate.rechtsgrundlage || "no rule"}, ${candidate.kosten || "no amount"}) [${flags}]`
+        );
+        if (candidate.clickTtText) {
+          lines.push(`     Click-TT: ${candidate.clickTtText}`);
+        }
+      });
+
+      if (report.fineSync.catalogueMatches.length > maxRows) {
+        lines.push(`  ... ${report.fineSync.catalogueMatches.length - maxRows} more in JSON report`);
+      }
+    }
   }
 
   if (skipped.length > 0) {

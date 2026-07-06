@@ -107,6 +107,8 @@ export interface AppConfig {
   fineLiga: string | null;
   fineGruppe: string | null;
   fineNaKosten: number;
+  fineCataloguePath: string | null;
+  fineCatalogue: FineCatalogue | null;
 }
 
 export interface PaginationInfo {
@@ -132,10 +134,46 @@ export interface FineCandidate {
   strafeGegen: string;
   grund: string;
   rechtsgrundlage: string;
+  clickTtText: string;
   bemerkung: string;
   kosten: number | string;
   spielleiter: string;
   eingetragenAm: Date | string;
+  fineEvent: string;
+  fineSeason: string;
+  fineCatalogueMatched: boolean;
+  fineCataloguePattern: string;
+  fineLowestTeamApplied: boolean;
+}
+
+export interface FineCatalogueFineDetails {
+  grund?: string;
+  rechtsgrundlage?: string;
+  kosten?: number | string;
+}
+
+export interface FineCatalogueEntry extends FineCatalogueFineDetails {
+  patterns?: FineCataloguePattern[];
+  lowestTeam?: FineCatalogueFineDetails;
+}
+
+export interface FineCataloguePattern extends FineCatalogueFineDetails {
+  match: string;
+}
+
+export interface FineCatalogueLeague {
+  events?: Record<string, FineCatalogueEntry>;
+  lowestTeams?: string[];
+}
+
+export interface FineCatalogueSeason {
+  events?: Record<string, FineCatalogueEntry>;
+  leagues?: Record<string, FineCatalogueLeague>;
+  lowestTeams?: string[];
+}
+
+export interface FineCatalogue {
+  seasons: Record<string, FineCatalogueSeason>;
 }
 
 export interface FineSyncResult {
@@ -147,5 +185,23 @@ export interface FineSyncResult {
   appended: number;
   existing: number;
   ignored: number;
+  catalogueMatches?: FineCatalogueMatchSummary[];
   error?: string;
+}
+
+export interface FineCatalogueMatchSummary {
+  state: "appended" | "existing" | "ignored" | "would-append";
+  event: string;
+  season: string;
+  liga: string;
+  gruppe: string;
+  match: string;
+  strafeGegen: string;
+  grund: string;
+  rechtsgrundlage: string;
+  kosten: number | string;
+  clickTtText: string;
+  catalogueMatched: boolean;
+  pattern: string;
+  lowestTeamApplied: boolean;
 }

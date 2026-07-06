@@ -1,0 +1,115 @@
+{
+  "seasons": {
+    "2025-2026": {
+      "events": {
+        "nicht-angetreten": {
+          "grund": "Nichtantreten einer Mannschaft",
+          "rechtsgrundlage": "A 20.1.1",
+          "kosten": 100,
+          "lowestTeam": {
+            "kosten": 50
+          }
+        },
+        "mf-fehlt": {
+          "grund": "Fehlende Angabe des Mannschaftsführers",
+          "rechtsgrundlage": "A 20.1.9 a",
+          "kosten": 10
+        },
+        "unvollstaendige-einzelaufstellung": {
+          "grund": "Unvollständiges Antreten einer Mannschaft im Einzel",
+          "rechtsgrundlage": "A 20.1.6",
+          "kosten": 10
+        },
+        "error-message": {
+          "patterns": [
+            {
+              "match": "Falsche Einzelaufstellung",
+              "grund": "Falsche Einzel- oder Doppelaufstellung",
+              "rechtsgrundlage": "A 20.1.5 b",
+              "kosten": 10
+            },
+            {
+              "match": "Falsche Doppelaufstellung",
+              "grund": "Falsche Einzel- oder Doppelaufstellung",
+              "rechtsgrundlage": "A 20.1.5 b",
+              "kosten": 10
+            },
+            {
+              "match": "falsche Spielpaarung",
+              "grund": "Falsche Spielpaarung/en im Spielbericht",
+              "rechtsgrundlage": "A 20.1.7",
+              "kosten": 10
+            },
+            {
+              "match": "Spielberechtigung",
+              "grund": "Spiel- oder Einsatzberechtigung",
+              "rechtsgrundlage": "A 20.1.5 a",
+              "kosten": 10
+            },
+            {
+              "match": "Einsatzberechtigung",
+              "grund": "Spiel- oder Einsatzberechtigung",
+              "rechtsgrundlage": "A 20.1.5 a",
+              "kosten": 10
+            },
+            {
+              "match": "Fehlerhafte Eintragung",
+              "grund": "Fehlerhafte Eintragung eines Spielberichts in click-TT",
+              "rechtsgrundlage": "A 20.1.13",
+              "kosten": 10
+            },
+            {
+              "match": "Vorsätzliche Falscheintragung",
+              "grund": "Vorsätzliche Falscheintragung auf dem Spielbericht und/oder in click-TT",
+              "rechtsgrundlage": "A 20.1.4",
+              "kosten": 100
+            },
+            {
+              "match": "Spiel-PIN",
+              "grund": "Fehlender Spiel-PIN für den digitalen Spielbericht bzw. Verweigerung der Mitwirkung",
+              "rechtsgrundlage": "A 20.1.19",
+              "kosten": 10
+            }
+          ]
+        }
+      },
+      "leagues": {
+        "Bezirksoberliga": {
+          "lowestTeams": [],
+          "events": {
+            "nicht-angetreten": {
+              "grund": "Nichtantreten einer Mannschaft",
+              "rechtsgrundlage": "A 20.1.1",
+              "kosten": 100,
+              "lowestTeam": {
+                "kosten": 50
+              }
+            }
+          }
+        }
+      }
+    },
+    "2026-2027": {
+      "events": {
+        "nicht-angetreten": {
+          "grund": "Nichtantreten einer Mannschaft",
+          "rechtsgrundlage": "A 20.1.1",
+          "kosten": 100,
+          "lowestTeam": {
+            "kosten": 50
+          }
+        },
+        "mf-fehlt": {
+          "grund": "Fehlende Angabe des Mannschaftsführers",
+          "rechtsgrundlage": "A 20.1.9 a",
+          "kosten": 10
+        },
+        "unvollstaendige-einzelaufstellung": {
+          "grund": "Unvollständiges Antreten einer Mannschaft im Einzel",
+          "rechtsgrundlage": "A 20.1.6",
+          "kosten": 10
+        }
+      }
+    }
+  }
+}

@@ -38,6 +38,7 @@ CLICK_TT_URL=https://wttv.click-tt.de/cgi-bin/WebObjects/nuLigaAdminTTDE.woa
 CLICK_TT_FINE_WORKBOOK_PATH=data/2025-2026 - Ordnungsstrafen BOL 1BL.xlsx
 CLICK_TT_FINE_SHEET_NAME=Sheet1
 CLICK_TT_FINE_IGNORE_COLUMN=Ignore
+CLICK_TT_FINE_CATALOGUE_PATH=data/fine-catalogue.json
 ```
 
 Optional fine-workbook settings:
@@ -47,7 +48,57 @@ Optional fine-workbook settings:
 - `CLICK_TT_FINE_IGNORE_COLUMN`: column used to suppress known false positives on future runs
 - `CLICK_TT_FINE_SPIELLEITER`: default value for the `Spielleiter` column on appended rows
 - `CLICK_TT_FINE_DEFAULT_LIGA` / `CLICK_TT_FINE_DEFAULT_GRUPPE`: fallback values when the list page does not expose a clean group name
-- `CLICK_TT_FINE_NA_KOSTEN`: fine amount used for appended `Nicht angetreten` rows
+- `CLICK_TT_FINE_CATALOGUE_PATH`: optional season and league-specific fine catalogue JSON
+- `CLICK_TT_FINE_NA_KOSTEN`: fallback fine amount used for appended `Nicht angetreten` rows when no catalogue entry matches
+
+Fine catalogue example:
+
+```json
+{
+  "seasons": {
+    "2025-2026": {
+      "events": {
+        "mf-fehlt": {
+          "grund": "Fehlende Angabe des Mannschaftsführers",
+          "rechtsgrundlage": "A 20.1.9 a",
+          "kosten": 10
+        },
+        "error-message": {
+          "patterns": [
+            {
+              "match": "Falsche Einzelaufstellung",
+              "grund": "Falsche Einzel- oder Doppelaufstellung",
+              "rechtsgrundlage": "A 20.1.5 b",
+              "kosten": 10
+            }
+          ]
+        }
+      },
+      "leagues": {
+        "Bezirksoberliga": {
+          "lowestTeams": [],
+          "events": {
+            "nicht-angetreten": {
+              "grund": "Nichtantreten einer Mannschaft",
+              "rechtsgrundlage": "A 20.1.1",
+              "kosten": 100,
+              "lowestTeam": {
+                "kosten": 50
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+The season is derived from the match date (`August-July`, for example `2025-2026`). League names are matched case-insensitively after whitespace normalization. Use `*` as a wildcard league or season. Supported event keys are `nicht-angetreten`, `mf-fehlt`, `unvollstaendige-einzelaufstellung`, and `error-message`.
+
+League-specific reductions are represented by putting a different event entry below that league. Lowest-team reductions are represented by adding exact team names to `lowestTeams` at season or league level, then setting a `lowestTeam` override on the affected event. The tool does not infer lowest-team status from names like `III`, because it cannot know from one match row whether that is truly the lowest registered team.
+
+For `error-message`, optional `patterns` are checked against the click-TT message text in order. The first pattern whose `match` text appears in the message can override `Grund`, `Rechtsgrundlage`, and `Kosten`. Fines that do not appear on match reports, such as transfer applications or tournament approvals, should stay out of automatic matching and be handled manually.
 
 ## Recommended Run Order
 
@@ -139,11 +190,12 @@ If a fine workbook is configured, the tool also:
 - appends missing fine candidates for skipped matches
 - appends missing `Nicht angetreten` rows found on the search results page, even if the row is already marked approved in click-TT
 - adds an `Ignore` column when needed so false positives can be suppressed on later runs
+- adds a `Click-TT Text` column when needed and writes the original red click-TT message there for human review
 - writes `Datum` as a real Excel date value
 - adds an `Eingetragen am` column and fills it as a real Excel date/time value for newly appended rows
 - writes the auto-approval failure reason into `Bemerkung` for appended skipped-match fines
 
-With `--dry-run`, these workbook candidates are still calculated and reported, but the Excel file is not modified.
+With `--dry-run`, these workbook candidates are still calculated and reported, but the Excel file is not modified. The stdout summary and JSON report include the catalogue resolution for each fine candidate: event key, season, league, pattern match, lowest-team override, final rule, and final amount.
 
 ## Development
 

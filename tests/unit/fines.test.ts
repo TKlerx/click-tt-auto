@@ -4,7 +4,7 @@ import path from "node:path";
 import { Workbook } from "exceljs";
 import { afterEach, describe, expect, it } from "vitest";
 import { deriveFineCandidates, getStatusFineCandidateState, loadFineWorkbookIndex, syncFineWorkbook } from "../../src/fines.js";
-import type { MatchAction, MatchEntry } from "../../src/types.js";
+import type { FineCatalogue, MatchAction, MatchEntry } from "../../src/types.js";
 
 const tempDirs: string[] = [];
 
@@ -77,7 +77,8 @@ describe("deriveFineCandidates", () => {
         defaultLiga: "Bezirksoberliga",
         defaultGruppe: "",
         spielleiter: "Timo Klerx",
-        naKosten: 125
+        naKosten: 125,
+        fineCatalogue: null
       }
     );
 
@@ -109,7 +110,8 @@ describe("deriveFineCandidates", () => {
         defaultLiga: "Bezirksoberliga",
         defaultGruppe: "",
         spielleiter: "Timo Klerx",
-        naKosten: 100
+        naKosten: 100,
+        fineCatalogue: null
       }
     );
 
@@ -125,11 +127,166 @@ describe("deriveFineCandidates", () => {
         defaultLiga: "Bezirksoberliga",
         defaultGruppe: "",
         spielleiter: "Timo Klerx",
-        naKosten: 100
+        naKosten: 100,
+        fineCatalogue: null
       }
     );
 
     expect(candidates).toHaveLength(0);
+  });
+
+  it("applies the matching season and league catalogue entry", () => {
+    const fineCatalogue: FineCatalogue = {
+      seasons: {
+        "2025-2026": {
+          leagues: {
+            "*": {
+              events: {
+                [ "nicht-angetreten" ]: {
+                  rechtsgrundlage: "Default 2025",
+                  kosten: 90
+                }
+              }
+            },
+            Bezirksoberliga: {
+              events: {
+                [ "nicht-angetreten" ]: {
+                  grund: "Nicht angetreten BOL",
+                  rechtsgrundlage: "BOL 2025",
+                  kosten: 125
+                }
+              }
+            }
+          }
+        },
+        "2026-2027": {
+          leagues: {
+            Bezirksoberliga: {
+              events: {
+                [ "nicht-angetreten" ]: {
+                  rechtsgrundlage: "BOL 2026",
+                  kosten: 150
+                }
+              }
+            }
+          }
+        }
+      }
+    };
+
+    const candidates = deriveFineCandidates(
+      [],
+      [
+        baseMatch({ date: "03.10.2025 20:00", liga: "Bezirksoberliga", status: "nicht angetreten", points: "2:0" }),
+        baseMatch({ date: "03.10.2025 20:00", liga: "1. Bezirksliga", status: "nicht angetreten", points: "2:0" }),
+        baseMatch({ date: "03.10.2026 20:00", liga: "Bezirksoberliga", status: "nicht angetreten", points: "2:0" })
+      ],
+      {
+        defaultLiga: null,
+        defaultGruppe: "",
+        spielleiter: "Timo Klerx",
+        naKosten: 100,
+        fineCatalogue
+      }
+    );
+
+    expect(candidates).toHaveLength(3);
+    expect(candidates[0]).toMatchObject({ grund: "Nicht angetreten BOL", rechtsgrundlage: "BOL 2025", kosten: 125 });
+    expect(candidates[1]).toMatchObject({ grund: "Nicht angetreten", rechtsgrundlage: "Default 2025", kosten: 90 });
+    expect(candidates[2]).toMatchObject({ grund: "Nicht angetreten", rechtsgrundlage: "BOL 2026", kosten: 150 });
+  });
+
+  it("uses catalogue patterns to classify click-TT error text", () => {
+    const action: MatchAction = {
+      match: baseMatch({ homeTeam: "SC Wewer", guestTeam: "SV Heide Paderborn" }),
+      action: "skipped",
+      validation: {
+        isApprovable: false,
+        checks: [
+          {
+            rule: "error-messages",
+            passed: false,
+            reason: "error message found: Falsche Einzelaufstellung laut Vorgabe der Spielstärke!"
+          }
+        ]
+      }
+    };
+
+    const candidates = deriveFineCandidates([action], [], {
+      defaultLiga: null,
+      defaultGruppe: "",
+      spielleiter: "Timo Klerx",
+      naKosten: 100,
+      fineCatalogue: {
+        seasons: {
+          "2025-2026": {
+            events: {
+              "error-message": {
+                patterns: [
+                  {
+                    match: "Falsche Einzelaufstellung",
+                    grund: "Falsche Einzel- oder Doppelaufstellung",
+                    rechtsgrundlage: "A 20.1.5 b",
+                    kosten: 10
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    });
+
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]).toMatchObject({
+      grund: "Falsche Einzel- oder Doppelaufstellung",
+      rechtsgrundlage: "A 20.1.5 b",
+      kosten: 10
+    });
+    expect(candidates[0]?.bemerkung).toContain("Falsche Einzelaufstellung laut Vorgabe der Spielstärke");
+  });
+
+  it("applies lowest-team overrides only for explicitly listed teams", () => {
+    const fineCatalogue: FineCatalogue = {
+      seasons: {
+        "2025-2026": {
+          leagues: {
+            Bezirksoberliga: {
+              lowestTeams: ["TTS Detmold III"],
+              events: {
+                "nicht-angetreten": {
+                  grund: "Nichtantreten einer Mannschaft",
+                  rechtsgrundlage: "A 20.1.1",
+                  kosten: 100,
+                  lowestTeam: {
+                    kosten: 50
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    };
+
+    const candidates = deriveFineCandidates(
+      [],
+      [
+        baseMatch({ guestTeam: "TTS Detmold III", status: "nicht angetreten", points: "2:0" }),
+        baseMatch({ guestTeam: "TTS Detmold II", status: "nicht angetreten", points: "2:0" })
+      ],
+      {
+        defaultLiga: null,
+        defaultGruppe: "",
+        spielleiter: "Timo Klerx",
+        naKosten: 100,
+        fineCatalogue
+      }
+    );
+
+    expect(candidates).toHaveLength(2);
+    expect(candidates[0]).toMatchObject({ strafeGegen: "TTS Detmold III", kosten: 50 });
+    expect(candidates[1]).toMatchObject({ strafeGegen: "TTS Detmold II", kosten: 100 });
   });
 });
 
@@ -162,6 +319,7 @@ describe("syncFineWorkbook", () => {
       defaultLiga: "Bezirksoberliga",
       defaultGruppe: "",
       naKosten: 100,
+      fineCatalogue: null,
       actions: [
         {
           match: baseMatch({ homeTeam: "SC Wewer", guestTeam: "SV Heide Paderborn" }),
@@ -194,9 +352,16 @@ describe("syncFineWorkbook", () => {
     await workbook.xlsx.readFile(workbookPath);
     const worksheet = workbook.getWorksheet("Sheet1");
     expect(worksheet?.getCell(1, 14).value).toBe("Eingetragen am");
-    expect(worksheet?.getCell(1, 15).value).toBe("Ignore");
+    expect(worksheet?.getCell(1, 15).value).toBe("Click-TT Text");
+    expect(worksheet?.getCell(1, 16).value).toBe("Ignore");
     expect(worksheet?.rowCount).toBe(3);
     expect(worksheet?.getCell(3, 9).value).toBe("Falsche Einzelaufstellung laut Vorgabe der Spielstärke!");
+    expect(worksheet?.getCell(3, 15).value).toBe("Falsche Einzelaufstellung laut Vorgabe der Spielstärke!");
+    expect(result.catalogueMatches?.[1]).toMatchObject({
+      event: "error-message",
+      clickTtText: "Falsche Einzelaufstellung laut Vorgabe der Spielstärke!",
+      state: "appended"
+    });
     const dateValue = worksheet?.getCell(3, 4).value;
     expect(dateValue instanceof Date).toBe(true);
     expect(worksheet?.getCell(3, 4).numFmt).toBe("dd.mm.yyyy");
@@ -235,6 +400,7 @@ describe("syncFineWorkbook", () => {
       defaultLiga: "Bezirksoberliga",
       defaultGruppe: "",
       naKosten: 100,
+      fineCatalogue: null,
       actions: [
         {
           match: baseMatch({ homeTeam: "SC Wewer", guestTeam: "SV Heide Paderborn" }),
@@ -291,6 +457,7 @@ describe("syncFineWorkbook", () => {
       defaultLiga: "Bezirksoberliga",
       defaultGruppe: "",
       naKosten: 100,
+      fineCatalogue: null,
       dryRun: true,
       actions: [],
       statusFineMatches: [baseMatch({ status: "nicht angetreten", points: "2:0" })]
@@ -346,7 +513,8 @@ describe("syncFineWorkbook", () => {
         defaultLiga: "Bezirksoberliga",
         defaultGruppe: "",
         spielleiter: "Timo Klerx",
-        naKosten: 100
+        naKosten: 100,
+        fineCatalogue: null
       }
     );
 

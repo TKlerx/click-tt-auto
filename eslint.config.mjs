@@ -1,5 +1,6 @@
 import js from "@eslint/js";
 import globals from "globals";
+import process from "node:process";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
@@ -15,7 +16,7 @@ export default tseslint.config(
       sourceType: "module",
       parserOptions: {
         project: "./tsconfig.json",
-        tsconfigRootDir: import.meta.dirname
+        tsconfigRootDir: process.cwd()
       },
       globals: {
         ...globals.node
