@@ -21,6 +21,7 @@ Purpose: Track the status of all planned features, their implementation progress
 | # | Feature | Status | Depends On | Est. Effort | Next Step |
 | --- | --- | --- | --- | --- | --- |
 | 001 | Match Report Auto-Approval | Partially Implemented | - | Large | Continue live validation and refine any remaining edge cases found in production use |
+| 002 | Rasterzahl Wish Optimizer | Tasked | - | Large | Full spec-kit set incl. tasks.md (35 tasks); constitution amended v2.0.0. Begin Phase 1, or `/speckit.implement` |
 
 ## Implementation Roadmap
 
