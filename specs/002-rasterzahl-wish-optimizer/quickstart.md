@@ -51,5 +51,5 @@ pwsh -File ./validate.ps1
 ## Notes
 
 - Rulebook (`Rasterzahlen_OWL_komplett.pdf`) is built-in and never re-parsed.
-- Weights are tunable (`--weights`); default lets hall over-usage dominate.
+- Weights are tunable (`--weights specs/002-rasterzahl-wish-optimizer/weights.example.json`); default lets hall over-usage dominate.
 - Absolute calendar constraints (even Kalenderwoche, specific Punktspieltage) are shown in the report but not optimized against in v1.

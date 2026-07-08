@@ -1,0 +1,19 @@
+{
+  "model": {
+    "clubs": [{ "id": "club", "name": "Club", "venues": [{ "hall": "1", "name": "Hall", "capacity": 1 }], "notes": "" }],
+    "teams": [
+      { "id": "a", "clubId": "club", "label": "Erwachsene", "group": { "league": "L", "name": "G" }, "homeWeekday": "friday", "hall": "1", "rasterzahl": { "kind": "assignable" }, "confidence": "ok" },
+      { "id": "b", "clubId": "club", "label": "Erwachsene II", "group": { "league": "L", "name": "G" }, "homeWeekday": "friday", "hall": "1", "rasterzahl": { "kind": "assignable" }, "confidence": "ok" }
+    ],
+    "groups": [{ "ref": { "league": "L", "name": "G" }, "size": 12, "teamIds": ["a", "b"] }],
+    "wishes": [{ "clubId": "club", "teamA": "a", "teamB": "b", "relation": "wechsel", "source": "freetext", "confidence": "review" }],
+    "absoluteConstraints": [],
+    "warnings": []
+  },
+  "assignment": { "a": 6, "b": 12 },
+  "expected": {
+    "objective": 30,
+    "overUsages": 3,
+    "unfulfilledWishes": 0
+  }
+}
