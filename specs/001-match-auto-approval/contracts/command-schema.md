@@ -16,7 +16,7 @@ npm run approve [-- options]
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--dry-run` | boolean | false | Evaluate all rules without approving. No changes made to click-TT. |
-| `--group <name>` | string | "Alle meine Gruppen" | Filter by specific group (e.g., "Bezirksoberliga Erwachsene") |
+| `--group <name>` | string | "Alle meine Gruppen" | Filter by specific group (e.g., "Bezirksoberliga Erwachsene"). In the JSON report, `group: null` means the default (Alle meine Gruppen, no filter). |
 | `--headed` | boolean | false | Run with visible browser window (default: headless) |
 | `--debug` | boolean | false | Convenience mode: visible browser, slower actions, halt on fatal errors |
 | `--no-halt-on-error` | boolean | false | Override debug's default halt behavior and continue after fatal page errors |

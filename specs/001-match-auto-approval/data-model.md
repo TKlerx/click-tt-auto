@@ -117,6 +117,8 @@ Represents the parsed content of a match detail/Kontrolle page.
 | kosten | number \| string | Fine amount if known |
 | spielleiter | string | Workbook value for Staffelleiter |
 
+**Dedup key**: `heim` + `gast` + `datum` + `grund`. A candidate whose key matches an existing or ignore-flagged workbook row is not appended. `spielnummer` is metadata only and is excluded from the key.
+
 ### FineSyncResult
 
 | Field | Type | Description |

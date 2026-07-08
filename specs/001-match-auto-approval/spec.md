@@ -85,13 +85,13 @@ As a Staffelleiter, I want skipped matches and `Nicht angetreten` cases to be ap
 
 ### Edge Cases
 
-- **Session expiry**: What if the session expires mid-run? Tool should detect login page redirect and either re-login or abort gracefully with a clear error.
+- **Session expiry**: If the session expires mid-run (login page redirect detected), the tool MUST re-login automatically and resume from the current page/match. Already-approved matches show a checkmark and are skipped on resume, so resumption is idempotent.
 - **Empty match list**: No unapproved matches found → tool reports "0 matches found" and exits cleanly.
 - **Network timeout**: Playwright page load timeout → skip current match, log error, continue with next.
 - **Match already approved by someone else**: If the "Spielbericht genehmigt" checkbox is already checked when entering a match → skip it (already done).
 - **`Nicht angetreten` with checkmark**: A row may already show a checkmark in click-TT but still needs to be present in the fine workbook. Approval processing should skip it, but workbook export should still consider it.
 - **Unexpected page structure**: If the detail page doesn't match expected structure (e.g., different Paarkreuz system) → skip and log.
-- **Duplicate fine candidates**: Workbook sync should be append-only and suppress duplicates based on match identity and sanction reason.
+- **Duplicate fine candidates**: Workbook sync should be append-only and suppress duplicates. Match identity for dedup = home team + guest team + match date + sanction reason (`Grund`); the click-TT internal match number is not used.
 
 ## Requirements
 
@@ -119,6 +119,7 @@ As a Staffelleiter, I want skipped matches and `Nicht angetreten` cases to be ap
 - **FR-020**: System MUST write the failure reason(s) for skipped matches into the workbook `Bemerkung` column so the Staffelleiter can understand why the match was not auto-approved.
 - **FR-021**: System MUST support an ignore column in the workbook so known false positives can be suppressed on later runs.
 - **FR-022**: System MUST support a configurable fine amount for `Nicht angetreten` workbook rows.
+- **FR-023**: System MUST detect a session-expiry login redirect mid-run, re-authenticate automatically using the same credentials, and resume processing from the current page/match. Resumption relies on already-approved matches showing a checkmark (skipped on resume), making it idempotent.
 
 ### Key Entities
 
@@ -170,10 +171,15 @@ As a Staffelleiter, I want skipped matches and `Nicht angetreten` cases to be ap
 - **SC-003**: Full run of ~284 matches completes in under 30 minutes
 - **SC-004**: Summary report accurately lists all skipped matches with correct reasons
 - **SC-005**: Tool handles session issues and network errors without crashing
-- **SC-006**: Workbook sync never creates duplicate fine rows for the same match and sanction reason
+- **SC-006**: Workbook sync never creates duplicate fine rows for the same identity (home team + guest team + match date + sanction reason)
 - **SC-007**: `Nicht angetreten` workbook rows are captured even if click-TT already shows the result as approved
 
 ## Clarifications
+
+### Session 2026-07-08
+
+- Q: How should the tool handle session expiry mid-run? → A: Detect login redirect, re-login automatically with the same credentials, and resume from the current page/match (idempotent — already-approved matches show a checkmark and are skipped).
+- Q: What fields define fine-workbook dedup identity? → A: Home team + guest team + match date + sanction reason (`Grund`). Do not rely on click-TT internal match number.
 
 ### Session 2026-04-10
 

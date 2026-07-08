@@ -1,6 +1,6 @@
 # Implementation Plan: Match Report Auto-Approval
 
-**Branch**: `main` | **Date**: 2026-04-11 | **Spec**: [spec.md](spec.md)
+**Branch**: `main` | **Date**: 2026-07-08 | **Spec**: [spec.md](spec.md)
 **Input**: Feature specification from `specs/001-match-auto-approval/spec.md`
 
 ## Summary
@@ -28,7 +28,7 @@ Build a Playwright-based CLI tool in TypeScript that automates the approval of t
 | I. Single-Purpose CLI Tool | PASS | Pure CLI automation, no webapp framework |
 | II. Safety-First Automation | PASS | 4 validation rules, skip on doubt, detailed report |
 | III. Credential Security | PASS | `.env` file, git-ignored, `.env.example` for docs |
-| IV. Idempotent & Resumable | PASS | Already-approved matches detected by checkmark, skipped matches tracked |
+| IV. Idempotent & Resumable | PASS | Already-approved matches detected by checkmark, skipped matches tracked; session-expiry redirect triggers auto re-login + resume (FR-023) — idempotent via checkmark skip |
 | V. Observable Output | PASS | Stdout summary + JSON report file + optional workbook sync summary |
 | VI. Quality Gates | PASS | TypeScript strict, ESLint, Prettier, validate.ps1 |
 
@@ -53,8 +53,8 @@ specs/001-match-auto-approval/
 src/
 ├── index.ts             # CLI entry point — parse args, orchestrate run
 ├── config.ts            # Load .env, CLI args, configuration
-├── auth.ts              # Login to click-TT
-├── navigation.ts        # Navigate to match list, handle pagination
+├── auth.ts              # Login to click-TT; re-login on session-expiry redirect (FR-023)
+├── navigation.ts        # Navigate to match list, handle pagination; detect login redirect + resume
 ├── match-list.ts        # Parse match list page, extract match entries
 ├── match-detail.ts      # Parse match detail page, extract validation data
 ├── validator.ts         # Apply 4 validation rules to match data
