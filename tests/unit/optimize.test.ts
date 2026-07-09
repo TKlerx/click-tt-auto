@@ -4,6 +4,19 @@ import { evaluate } from "../../src/raster/score/index.js";
 import type { SeasonModel } from "../../src/raster/types.js";
 
 describe("raster optimizer", () => {
+  function team(id: string, clubId = id): SeasonModel["teams"][number] {
+    return {
+      id,
+      clubId,
+      label: id.toUpperCase(),
+      group: { league: "L", name: "G" },
+      homeWeekday: "friday",
+      hall: "1",
+      rasterzahl: { kind: "assignable" },
+      confidence: "ok"
+    };
+  }
+
   it("does not return a worse assignment", () => {
     const model: SeasonModel = {
       clubs: [
@@ -57,5 +70,41 @@ describe("raster optimizer", () => {
     expect(evaluate(model, result).objective).toBeLessThanOrEqual(
       evaluate(model, start).objective
     );
+  });
+
+  it("prefers fixing hard violations over keeping the same objective", () => {
+    const teams = [
+      team("a", "club"),
+      team("b", "club"),
+      ...Array.from({ length: 10 }, (_, index) => team(`x${index}`))
+    ];
+    const model: SeasonModel = {
+      clubs: [
+        {
+          id: "club",
+          name: "Club",
+          venues: [{ hall: "1", name: "Hall", capacity: 99 }],
+          notes: ""
+        }
+      ],
+      teams,
+      groups: [
+        {
+          ref: { league: "L", name: "G" },
+          size: 12,
+          teamIds: teams.map((candidate) => candidate.id)
+        }
+      ],
+      wishes: [],
+      absoluteConstraints: [],
+      warnings: []
+    };
+    const start = Object.fromEntries(
+      teams.map((candidate, index) => [candidate.id, index + 1])
+    );
+    const result = optimize(model, start);
+
+    expect(evaluate(model, start).hardViolations).toHaveLength(1);
+    expect(evaluate(model, result).hardViolations).toHaveLength(0);
   });
 });

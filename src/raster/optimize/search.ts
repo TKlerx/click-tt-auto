@@ -1,5 +1,10 @@
 import { evaluate } from "../score/evaluate.js";
-import type { Assignment, SeasonModel, Weights } from "../types.js";
+import type {
+  Assignment,
+  EvaluationResult,
+  SeasonModel,
+  Weights
+} from "../types.js";
 import { defaultWeights } from "../types.js";
 
 function arrangements(values: number[], length: number): number[][] {
@@ -14,6 +19,17 @@ function arrangements(values: number[], length: number): number[][] {
 
 function factorial(value: number): number {
   return value <= 1 ? 1 : value * factorial(value - 1);
+}
+
+function betterThan(
+  candidate: EvaluationResult,
+  best: EvaluationResult
+): boolean {
+  return (
+    candidate.hardViolations.length < best.hardViolations.length ||
+    (candidate.hardViolations.length === best.hardViolations.length &&
+      candidate.objective < best.objective)
+  );
 }
 
 export function startingAssignment(model: SeasonModel): Assignment {
@@ -46,9 +62,10 @@ export function optimize(
   start: Assignment = startingAssignment(model),
   weights: Weights = defaultWeights
 ): Assignment {
+  const startResult = evaluate(model, start, weights);
   let best = {
     assignment: { ...start },
-    score: evaluate(model, start, weights).objective
+    result: startResult
   };
 
   for (const group of model.groups) {
@@ -62,19 +79,23 @@ export function optimize(
         .filter((teamId) => !variableTeams.includes(teamId))
         .map((teamId) => best.assignment[teamId])
     );
-    const available = Array.from({ length: group.size }, (_, index) => index + 1).filter(
-      (value) => !used.has(value)
-    );
+    const available = Array.from(
+      { length: group.size },
+      (_, index) => index + 1
+    ).filter((value) => !used.has(value));
 
-    if (available.length === variableTeams.length && factorial(available.length) <= 40_320) {
+    if (
+      available.length === variableTeams.length &&
+      factorial(available.length) <= 40_320
+    ) {
       for (const permutation of arrangements(available, variableTeams.length)) {
         const candidate = { ...best.assignment };
         for (const [index, teamId] of variableTeams.entries()) {
           candidate[teamId] = permutation[index]!;
         }
         const result = evaluate(model, candidate, weights);
-        if (result.objective < best.score) {
-          best = { assignment: candidate, score: result.objective };
+        if (betterThan(result, best.result)) {
+          best = { assignment: candidate, result };
         }
       }
       continue;
@@ -91,8 +112,8 @@ export function optimize(
           candidate[left] = candidate[right]!;
           candidate[right] = leftValue!;
           const result = evaluate(model, candidate, weights);
-          if (result.objective < best.score) {
-            best = { assignment: candidate, score: result.objective };
+          if (betterThan(result, best.result)) {
+            best = { assignment: candidate, result };
             improved = true;
           }
         }
