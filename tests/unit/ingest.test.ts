@@ -7,6 +7,7 @@ import {
   parseWishesPdf,
   parseWishesText
 } from "../../src/raster/ingest/index.js";
+import { splitIntoSupportedGroupSizes } from "../../src/raster/ingest/groups-pdf.js";
 import type { Team } from "../../src/raster/types.js";
 
 describe("wish free-text extraction", () => {
@@ -51,6 +52,13 @@ describe("wish free-text extraction", () => {
 });
 
 describe("assignment table ingestion", () => {
+  it("does not create impossible leftover groups during best-effort PDF grouping", () => {
+    const sizes = splitIntoSupportedGroupSizes(277);
+
+    expect(sizes.reduce((total, size) => total + size, 0)).toBe(277);
+    expect(sizes.every((size) => size >= 9 && size <= 14)).toBe(true);
+  });
+
   it("keeps fixed table rows fixed and maps current rows to internal ids", async () => {
     const rows = Array.from({ length: 12 }, (_, index) => ({
       group: "G",
