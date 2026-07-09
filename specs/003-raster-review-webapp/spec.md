@@ -1,163 +1,242 @@
-# Feature Specification: Raster Review Webapp
+# Feature Specification: Raster Generation & Review Webapp
 
 **Feature Branch**: `003-raster-review-webapp`  
 **Created**: 2026-07-08  
 **Status**: Draft  
-**Input**: User description: "Create a webapp based on ../webapp-template for different users to import optimizer snapshots and review Rasterzahl hall-capacity conflicts, overages, assignments, and capacity edits."
+**Input**: User description: "Create a webapp based on ../webapp-template where users upload the raw district inputs (club scheduling wishes, hall capacities, and fixed upper-league Rasterzahlen), let the app generate a Rasterzahl assignment via an optimizer run, and then review hall-capacity conflicts, assignments, and capacity edits. Importing a pre-computed external optimizer snapshot is an optional later path."
+
+## Context
+
+This webapp owns the **full Rasterzahl pipeline** for a district, not just the review of finished optimizer output:
+
+1. **Ingest** raw inputs — club scheduling wishes, hall capacities, and the already-fixed Rasterzahlen of upper leagues.
+2. **Generate** a Rasterzahl assignment by running an optimizer over those inputs (respecting the fixed upper-league Rasterzahlen and hall capacities as constraints).
+3. **Review** the result — hall-capacity conflicts, per-team assignments, and the capacity data behind them — and correct capacity/input data before re-running.
+
+Raw inputs arrive today mostly as PDFs; the app must accept structured versions too. Wishes PDFs share a fixed layout, so the app parses them **deterministically in-app** (reusing the existing `pdfjs-dist`-based parser) and presents the result for review — it runs **no** LLM itself. Only as a fallback (low-confidence parse or drifted layout) does it hand the user a ready-made prompt + JSON schema to run in their own LLM and paste back. Importing a pre-computed snapshot from the legacy external optimizer is a **later, optional** capability that reuses the same review layer.
+
+## Clarifications
+
+### Session 2026-07-09
+
+- Q: Is the webapp a review-only tool for external optimizer output, or does it generate the Rasterzahl itself? → A: It generates. Users upload raw inputs and the app runs the optimizer to produce assignments/conflicts. Importing a pre-computed external snapshot is an optional later path (not the primary flow).
+- Q: In what form do club wishes arrive, and how are PDFs parsed? → A: PDF today (structured JSON/CSV may come later); support both. The wishes PDFs always share the same fixed layout, so the primary path is the existing deterministic in-app parser (`src/raster/ingest/wishes-pdf.ts` using `pdfjs-dist` text extraction + known-layout patterns), which emits clubs/teams marked for review. The app runs NO LLM. An optional fallback, for when the parser is low-confidence or the layout drifts, is a ready-made prompt (embedding the PDF text + expected JSON schema) the user runs in their own LLM and pastes the JSON back for schema validation. The user reviews/corrects wishes before a run.
+- Q: How are concurrent capacity edits handled? → A: No locking. Few users edit capacity, roughly once a year, so last-write-wins is acceptable; the audit trail records who changed what and when.
+- Q: Are wishes PDFs text-based or scanned? → A: Assume digital/text-based PDFs for the first release (text extraction only). OCR for scanned PDFs is out of scope unless it turns out to be needed.
+- Q: In what form does hall capacity arrive? → A: CSV/Excel upload or manual form entry. A capacity value may start as an inferred/guessed default and be corrected later. The capacity list must be searchable.
+- Q: In what form do the fixed upper-league Rasterzahlen arrive? → A: PDF or manual entry (volume is small), structured import also acceptable. They are treated as hard constraints the optimizer must not violate.
+- Q: How does the app run the optimization? → A: Wrap the existing Rasterzahl optimizer as an asynchronous background job. The app prepares the reviewed input set, invokes the existing optimizer, and ingests its output into the snapshot model. It does not reimplement the solver.
+- Q: What data scale must the app handle? → A: ~100–1,000 assignments and up to a few hundred conflicts per district snapshot. The system may later hold county-wide data (~1,400 clubs/teams), but review views remain scoped to a selected district, so a single view stays at the hundreds scale.
 
 ## User Scenarios & Testing *(mandatory)*
 
-### User Story 1 - Review Hall Conflicts (Priority: P1)
+### User Story 1 - Generate a Rasterzahl Proposal From Inputs (Priority: P1)
 
-A district scheduler reviews an optimizer run and quickly understands which clubs, halls, weekdays, and match weeks exceed intended capacity.
+An admin/scheduler provides the district inputs (club wishes, hall capacities, fixed upper-league Rasterzahlen), starts a generation run, and receives a Rasterzahl assignment plus its hall-capacity conflicts.
 
-**Why this priority**: The main risk in the Rasterzahl assignment is placing too many home matches into the same hall at the same time. The webapp must make those conflicts visible before any broader workflow matters.
+**Why this priority**: This is the core purpose of the app. Without in-app generation there is nothing to review.
 
-**Independent Test**: Can be fully tested by loading a completed optimizer snapshot and verifying that the overview, club grouping, and conflict list show the same overages as the source review files.
+**Independent Test**: Provide a small but complete input set, start a run, and verify the app produces an assignment and a conflict list consistent with the inputs and the fixed upper-league Rasterzahlen.
 
 **Acceptance Scenarios**:
 
-1. **Given** an imported optimizer snapshot with hall overages, **When** a scheduler opens the conflict overview, **Then** they see total overages, maximum excess, affected clubs, and a prioritized list of conflicts.
+1. **Given** uploaded wishes, hall capacities, and fixed upper-league Rasterzahlen, **When** an admin starts a generation run, **Then** the app records the run as pending and processes it asynchronously without blocking other review.
+2. **Given** a digital, fixed-layout PDF of wishes, **When** the user uploads it, **Then** the app parses it deterministically in-app and presents the extracted clubs/teams marked for review, with no LLM involved.
+3. **Given** the deterministic parser is low-confidence or the layout has drifted, **When** the user opens the fallback helper, **Then** the app shows a ready-made prompt embedding the PDF text + expected JSON schema to run in an external LLM, and accepts and schema-validates the pasted JSON.
+4. **Given** structured wishes are available, **When** the user uploads them directly, **Then** the app uses them without any PDF-parsing or prompt step.
+5. **Given** a completed run with a proven optimum, **When** a scheduler opens the generated snapshot, **Then** it clearly states the assignment is optimal for the configured objective and constraints and never violates a fixed upper-league Rasterzahl.
+6. **Given** a run reaches its configured limit before proof, **When** a scheduler opens the snapshot, **Then** it clearly states the assignment is feasible but not proven optimal.
+7. **Given** no valid assignment exists under the hard constraints, **When** the run finishes, **Then** the app reports that no feasible solution was found and shows the relevant blocking constraints where available.
+
+---
+
+### User Story 2 - Review Hall Conflicts (Priority: P1)
+
+A district scheduler reviews a generated (or imported) snapshot and quickly understands which clubs, halls, weekdays, and match weeks exceed intended capacity.
+
+**Why this priority**: The main risk in the Rasterzahl assignment is placing too many home matches into the same hall at the same time. The app must make those conflicts visible.
+
+**Independent Test**: Open a snapshot with hall overages and verify that the overview, club grouping, and conflict list show the same overages as the underlying run output.
+
+**Acceptance Scenarios**:
+
+1. **Given** a snapshot with hall overages, **When** a scheduler opens the conflict overview, **Then** they see total overages, maximum excess, affected clubs, and a prioritized list of conflicts.
 2. **Given** a club with repeated conflicts, **When** a scheduler filters by that club, **Then** they see only that club's conflict weeks, hall, weekday, capacity, actual team count, excess, and involved teams.
 3. **Given** a snapshot with no overages, **When** a scheduler opens the conflict overview, **Then** the app shows that no hall-capacity conflicts were found and still allows assignment review.
 
 ---
 
-### User Story 2 - Review Team Raster Assignments (Priority: P2)
+### User Story 3 - Review Team Raster Assignments (Priority: P2)
 
 A scheduler reviews the proposed Rasterzahl assignment for every team and can verify which assignments are optimized, fixed, pinned, or still need attention.
 
-**Why this priority**: Conflict review only explains where the proposal hurts. Schedulers also need the concrete team-to-Rasterzahl output to judge whether the proposal can be used.
+**Why this priority**: Conflict review shows where the proposal hurts; schedulers also need the concrete team-to-Rasterzahl output to judge whether the proposal can be used.
 
-**Independent Test**: Can be fully tested by loading a snapshot and comparing the assignment table against the generated assignment review output.
+**Independent Test**: Open a snapshot and compare the assignment table against the run's assignment output.
 
 **Acceptance Scenarios**:
 
-1. **Given** an imported optimizer snapshot, **When** a scheduler opens the assignment view, **Then** they see league, group, club, team, Rasterzahl, assignment status, weekday, hall, start time, and week slot.
+1. **Given** a snapshot, **When** a scheduler opens the assignment view, **Then** they see league, group, club, team, Rasterzahl, assignment status, weekday, hall, start time, and week slot.
 2. **Given** many assignments, **When** a scheduler searches or filters by club, league, group, or assignment status, **Then** the table updates without losing the selected snapshot context.
 3. **Given** a team with a fixed or pinned Rasterzahl, **When** it appears in the assignment table, **Then** that status is visible and distinguishable from optimized assignments.
 
 ---
 
-### User Story 3 - Manage Hall Capacity Review (Priority: P3)
+### User Story 4 - Manage Hall Capacity (Priority: P2)
 
-An admin or scheduler reviews inferred hall capacity, records known real capacity for a club/hall/weekday, and sees which conflicts would require data correction or a new optimizer run.
+A scheduler or admin provides and maintains hall capacity — by CSV/Excel upload, manual form entry, or by correcting an inferred/guessed default — and can search capacity records.
 
-**Why this priority**: Many apparent conflicts are likely caused by missing real capacity data. The app must support review and correction without hiding the difference between inferred and known capacity.
+**Why this priority**: Many apparent conflicts are caused by missing or wrong capacity data. Good generation and review both depend on accurate, editable capacity.
 
-**Independent Test**: Can be fully tested by opening a club/day/hall capacity entry, changing its review value, and verifying that the app marks related conflicts as requiring a refreshed optimizer run.
+**Independent Test**: Upload a capacity CSV, edit one entry via the form, guess-then-correct another, search for a club/hall/weekday, and verify the values feed the next run and the review views.
 
 **Acceptance Scenarios**:
 
-1. **Given** a conflict caused by missing or inferred capacity, **When** a scheduler opens its capacity detail, **Then** they can see the current capacity basis and record a reviewed capacity value.
-2. **Given** a reviewed capacity value has been changed, **When** the scheduler returns to the conflict overview, **Then** affected conflicts are marked as stale until a new snapshot is imported.
-3. **Given** a user without capacity-edit permission, **When** they view capacity detail, **Then** they can read capacity information but cannot change it.
+1. **Given** a capacity CSV/Excel file, **When** an authorized user uploads it, **Then** the app records reviewed capacity for each club/hall/weekday it contains.
+2. **Given** a club/hall/weekday with no known capacity, **When** the user opens it, **Then** the app shows an inferred/guessed value that the user can accept or overwrite via a form.
+3. **Given** many capacity records, **When** the user searches by club, hall, or weekday, **Then** the matching records are shown.
+4. **Given** a reviewed capacity value changes after a snapshot import/generation, **When** the scheduler returns to the conflict overview, **Then** affected conflicts are marked stale until a newer snapshot is generated/imported.
+5. **Given** a user without capacity-edit permission, **When** they view capacity detail, **Then** they can read capacity information but cannot change it.
 
 ---
 
-### User Story 4 - Coordinate Review With Roles (Priority: P4)
+### User Story 5 - Coordinate Review With Roles (Priority: P3)
 
-Different users participate in the review with appropriate permissions: admins manage users and imports, schedulers review and edit capacity, and viewers inspect results read-only.
+Different users participate with appropriate permissions: admins manage users, inputs, and runs; schedulers review and edit capacity; viewers inspect results read-only.
 
-**Why this priority**: Multiple people may help review the district data, but not everyone should change capacity inputs or import new optimizer runs.
+**Why this priority**: Multiple people may help review, but not everyone should change inputs, edit capacity, or start runs.
 
-**Independent Test**: Can be fully tested by signing in as each role and verifying allowed and blocked actions across import, conflict review, capacity edit, and user administration.
+**Independent Test**: Sign in as each role and verify allowed and blocked actions across input upload, run start, conflict review, capacity edit, and user administration.
 
 **Acceptance Scenarios**:
 
-1. **Given** an admin user, **When** they access the app, **Then** they can import snapshots, manage users, edit capacity, and review conflicts.
-2. **Given** a scheduler user, **When** they access the app, **Then** they can review conflicts and edit capacity but cannot manage users.
-3. **Given** a viewer user, **When** they access the app, **Then** they can view snapshots, assignments, and conflicts but cannot import, edit, or approve.
+1. **Given** an admin user, **When** they access the app, **Then** they can upload inputs, start runs, manage users, edit capacity, and review all data.
+2. **Given** a scheduler user, **When** they access the app, **Then** they can review snapshots and edit capacity but cannot manage users.
+3. **Given** a viewer user, **When** they access the app, **Then** they can view snapshots, assignments, and conflicts but cannot upload, start runs, edit, or approve.
 
 ---
 
-### User Story 5 - Run Exact Optimization (Priority: P5)
+### User Story 6 - Import a Pre-Computed External Snapshot (Priority: P4)
 
-An admin starts an optimization run from reviewed input data and later sees whether the run found a proven optimal assignment, a feasible but not proven assignment, or no valid assignment.
+An admin imports a snapshot produced by the legacy external optimizer into the same review model, for comparison or when a run was done outside the app.
 
-**Why this priority**: Imported snapshots are enough for first review, but the app should ultimately close the loop by running the optimizer after users correct hall capacities and input data.
+**Why this priority**: Optional convenience once in-app generation exists; it reuses the review layer with only an import adapter.
 
-**Independent Test**: Can be fully tested by submitting a reviewed model for optimization, waiting for completion, and verifying that the resulting snapshot includes assignment output, conflict output, objective value, and solver status.
+**Independent Test**: Import a pre-computed snapshot and verify it appears in the snapshot list and review screens identically to a generated one.
 
 **Acceptance Scenarios**:
 
-1. **Given** reviewed input data, **When** an admin starts an optimization run, **Then** the app records the run as pending and shows progress/status without blocking review of other snapshots.
-2. **Given** an optimization run finishes with a proven optimum, **When** a scheduler opens the generated snapshot, **Then** the snapshot clearly states that the assignment is optimal for the configured objective and constraints.
-3. **Given** an optimization run reaches its configured limit before proof of optimality, **When** a scheduler opens the generated snapshot, **Then** the snapshot clearly states that the assignment is feasible but not proven optimal.
-4. **Given** no valid assignment exists under the hard constraints, **When** the run finishes, **Then** the app reports that no feasible solution was found and shows the relevant blocking constraints where available.
+1. **Given** a pre-computed external snapshot in the supported format, **When** an admin imports it, **Then** it becomes a review snapshot with assignments, conflicts, and summary metrics.
+2. **Given** imported files that disagree on run identity or row counts, **When** an admin imports them, **Then** the app warns about the mismatch before creating the snapshot.
 
 ### Edge Cases
 
-- Import data is incomplete, malformed, or belongs to a different optimizer run than the selected snapshot.
-- A club name differs between assignment, conflict, and capacity inputs.
-- A snapshot has assignments but no conflict file.
-- A conflict references a team that is missing from the assignment table.
+- Uploaded input is incomplete, malformed, or internally inconsistent (e.g., a club in wishes with no hall capacity).
+- A wishes PDF is scanned/image-only, so text extraction yields little or nothing — the app must tell the user extraction failed (OCR out of scope) and let them paste JSON or upload a structured file instead.
+- Pasted wishes JSON (produced by the user's external LLM) does not match the expected schema or is incomplete — the app must report the validation errors and let the user fix it before a run.
+- Wishes conflict with a fixed upper-league Rasterzahl (the fixed value must win).
+- A club name differs between wishes, capacity, and assignment inputs.
+- Hall capacity is only a guessed/inferred default when a run starts.
 - A capacity edit would reduce capacity below the actual number of teams in an already reviewed conflict.
-- Two users review the same snapshot while one changes capacity data.
-- A new snapshot is imported after users already reviewed an older snapshot.
-- An optimization run is still pending, fails, times out, or returns a feasible assignment without proof of optimality.
+- Two users edit the same club/hall/weekday capacity at once → last-write-wins (no locking); the audit trail records each change. (Rare: few users, ~annual editing.)
+- A new snapshot is generated/imported after users already reviewed an older one.
+- An optimization run is still pending, fails, times out, is cancelled, or returns a feasible assignment without proof of optimality.
+- (Import path) A snapshot has assignments but no conflict file, or a conflict references a team missing from the assignment table.
 
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
-- **FR-001**: The system MUST allow authorized users to import a complete optimizer review snapshot containing assignments, conflict rows, per-club excess summaries, and evaluation summary data.
-- **FR-002**: The system MUST retain imported snapshots as separate review versions so users can compare or revisit past optimizer runs.
-- **FR-003**: The system MUST show a conflict overview with total conflicts, total excess, maximum excess, affected club count, and the highest-impact clubs.
-- **FR-004**: Users MUST be able to filter conflicts by club, weekday, hall, match week, and excess severity.
-- **FR-005**: Each conflict MUST show match week, club, weekday, hall, capacity, actual home-match count, excess, involved teams, and the source snapshot.
-- **FR-006**: The system MUST show a per-club conflict summary with overage count and total excess for each affected club.
-- **FR-007**: The system MUST show a team assignment view with league, group, club, team, Rasterzahl, assignment status, weekday, hall, start time, and week slot.
-- **FR-008**: Users MUST be able to search and filter assignments by club, league, group, team, Rasterzahl, and assignment status.
-- **FR-009**: The system MUST distinguish optimized, fixed, pinned, and missing assignment states wherever assignments are displayed.
-- **FR-010**: Authorized users MUST be able to record reviewed hall capacity for a club, hall, and weekday.
-- **FR-011**: The system MUST distinguish reviewed capacity from inferred or missing capacity.
-- **FR-012**: When capacity data changes after a snapshot import, the system MUST mark affected conflict and summary views as stale until a newer snapshot is imported.
-- **FR-013**: The system MUST support at least three user permission levels: admin, scheduler, and viewer.
-- **FR-014**: Admin users MUST be able to import snapshots, manage users, edit capacity, and review all data.
-- **FR-015**: Scheduler users MUST be able to review snapshots and edit capacity but MUST NOT be able to manage users.
-- **FR-016**: Viewer users MUST be able to inspect snapshots, assignments, and conflicts but MUST NOT be able to import or edit review data.
-- **FR-017**: The system MUST keep an audit trail of snapshot imports, capacity edits, and review status changes, including who performed the action and when.
-- **FR-018**: Users MUST be able to mark a conflict or club summary as reviewed, needs data correction, or accepted as unavoidable.
-- **FR-019**: The system MUST prevent accidental mixing of files from different optimizer runs by warning users when imported files disagree on snapshot identity or row counts.
-- **FR-020**: The system MUST provide clear empty and error states for missing snapshots, no conflicts, import failures, and permission-denied actions.
-- **FR-021**: Admin users MUST be able to start an optimization run from reviewed input data.
-- **FR-022**: The system MUST process optimization runs asynchronously so users can continue reviewing existing snapshots while a run is pending.
-- **FR-023**: Each completed optimization run MUST report one of these outcomes: proven optimal, feasible but not proven optimal, infeasible, failed, or cancelled.
-- **FR-024**: For proven optimal and feasible runs, the system MUST create a review snapshot containing assignment output, conflict output, objective value, solver status, and run settings.
-- **FR-025**: The system MUST clearly distinguish proven optimal assignments from heuristic or feasible-only assignments in all snapshot and assignment views.
+#### Input Ingestion
+
+- **FR-001**: Authorized users MUST be able to provide club scheduling wishes either as a structured upload (JSON/CSV) or as a PDF.
+- **FR-002**: For PDF wishes, the system MUST parse the known fixed-layout wishes PDF deterministically in-app (text extraction via `pdfjs-dist` + layout patterns, per the existing `src/raster/ingest/wishes-pdf.ts`), producing structured clubs/teams marked for user review. The system MUST NOT run an LLM itself. (First release assumes digital/text-based PDFs; OCR for scanned PDFs is out of scope.)
+- **FR-002a**: As an optional fallback when the deterministic parser is low-confidence or the PDF layout has drifted, the system MUST offer a ready-made, copyable prompt embedding the extracted PDF text plus the expected JSON schema and instructions, and MUST accept and schema-validate the JSON the user pastes back after running it in an external LLM.
+- **FR-003**: The system MUST let a user review and correct wishes — whether parsed from PDF, pasted as JSON, or uploaded structured — before they are used in a generation run, and MUST clearly report schema-validation errors on pasted JSON.
+- **FR-004**: Authorized users MUST be able to provide hall capacity via CSV/Excel upload or manual form entry.
+- **FR-005**: The system MUST allow a hall capacity value to start as an inferred/guessed default and be corrected later, and MUST distinguish reviewed capacity from inferred/guessed or missing capacity.
+- **FR-006**: The system MUST provide search over hall-capacity records by club, hall, and weekday.
+- **FR-007**: Authorized users MUST be able to provide the fixed upper-league Rasterzahlen as a PDF, manual entry, or structured upload, and the system MUST treat them as hard constraints that generated assignments never violate.
+- **FR-008**: The system MUST validate an input set for completeness and schema before a run and surface clear errors for missing or malformed inputs.
+
+#### Generation / Optimization
+
+- **FR-009**: Admin users MUST be able to start an optimization run from a reviewed input set.
+- **FR-010**: The system MUST process optimization runs asynchronously — by invoking the existing Rasterzahl optimizer as a background job (not a reimplemented solver) — so users can continue reviewing existing snapshots while a run is pending. The app prepares the optimizer's input from the reviewed input set and ingests its output into the snapshot model.
+- **FR-011**: Each completed run MUST report one of these outcomes: proven optimal, feasible but not proven optimal, infeasible, failed, or cancelled.
+- **FR-012**: For proven-optimal and feasible runs, the system MUST create a review snapshot containing assignment output, conflict output, objective value, solver status, run settings, and a reference to the input set used.
+- **FR-013**: The system MUST clearly distinguish proven-optimal assignments from feasible-only or imported heuristic assignments in all snapshot and assignment views.
+
+#### Snapshots & Review
+
+- **FR-014**: The system MUST retain snapshots as separate review versions so users can compare or revisit past runs.
+- **FR-015**: The system MUST show a conflict overview with total conflicts, total excess, maximum excess, affected club count, and the highest-impact clubs.
+- **FR-016**: Users MUST be able to filter conflicts by club, weekday, hall, match week, and excess severity.
+- **FR-017**: Each conflict MUST show match week, club, weekday, hall, capacity, actual home-match count, excess, involved teams, and the source snapshot.
+- **FR-018**: The system MUST show a per-club conflict summary with overage count and total excess for each affected club.
+- **FR-019**: The system MUST show a team assignment view with league, group, club, team, Rasterzahl, assignment status, weekday, hall, start time, and week slot.
+- **FR-020**: Users MUST be able to search and filter assignments by club, league, group, team, Rasterzahl, and assignment status.
+- **FR-021**: The system MUST distinguish optimized, fixed, pinned, and missing assignment states wherever assignments are displayed.
+- **FR-022**: When capacity or input data changes after a snapshot was produced, the system MUST mark affected conflict and summary views as stale until a newer snapshot is generated/imported.
+- **FR-023**: Users MUST be able to mark a conflict or club summary as reviewed, needs data correction, or accepted as unavoidable.
+- **FR-024**: The system MUST provide clear empty and error states for missing snapshots, no conflicts, run/import failures, and permission-denied actions.
+- **FR-025**: The system MUST let users scope review to a selected district so that a single conflict/assignment/capacity view stays at district scale (hundreds of rows) even when the underlying data spans multiple districts (up to county-wide, ~1,400 clubs/teams).
+
+#### Roles, Audit & Import
+
+- **FR-026**: The system MUST support at least three permission levels: admin, scheduler, and viewer.
+- **FR-027**: Admin users MUST be able to upload inputs, start runs, manage users, edit capacity, and review all data.
+- **FR-028**: Scheduler users MUST be able to review snapshots and edit capacity but MUST NOT be able to manage users or start runs.
+- **FR-029**: Viewer users MUST be able to inspect snapshots, assignments, and conflicts but MUST NOT be able to upload inputs, start runs, or edit review data.
+- **FR-030**: The system MUST keep an audit trail of input uploads, run starts, capacity edits, and review-status changes, including who performed the action and when.
+- **FR-031**: The system MAY (later phase) import a pre-computed external optimizer snapshot into the same review model, warning users when imported files disagree on snapshot identity or row counts.
 
 ### Key Entities *(include if feature involves data)*
 
-- **User**: A person who signs into the review app and has one or more permissions through a role.
-- **Role**: A permission level that determines whether a user can import snapshots, edit capacity, review conflicts, or only view data.
-- **Optimizer Snapshot**: A saved review version of one optimizer run, including summary metrics and imported review artifacts.
-- **Optimization Run**: A requested calculation from reviewed input data with status, settings, objective value, and final outcome.
+- **User**: A person who signs into the app, with permissions via a role.
+- **Role**: A permission level (admin, scheduler, viewer) governing upload, run, capacity edit, review, and user management.
+- **Input Set**: A named collection of the wishes, hall capacities, and fixed upper-league Rasterzahlen used for one generation run.
+- **Wish**: A club's scheduling preference/constraint for its teams (uploaded structured or extracted from PDF, reviewable/correctable).
+- **Fixed Rasterzahl (Upper League)**: A pre-set, immovable Rasterzahl an upper-league team already holds; a hard constraint on generation.
+- **Hall Capacity**: The reviewed, inferred/guessed, or missing maximum number of parallel home matches for one club, hall, and weekday.
+- **Optimization Run**: A requested calculation from an input set, with status, settings, objective value, and final outcome.
+- **Optimizer Snapshot**: A saved review version of one run (generated or imported), including summary metrics, assignment output, and conflict output.
 - **Conflict**: A hall-capacity overage for one club, hall, weekday, and match week.
-- **Assignment**: A team-to-Rasterzahl result with context such as league, group, club, weekday, hall, and assignment status.
-- **Hall Capacity**: The reviewed or inferred maximum number of parallel home matches for one club, hall, and weekday.
+- **Assignment**: A team-to-Rasterzahl result with context (league, group, club, weekday, hall, assignment status).
 - **Review Decision**: A user-entered status and optional note for a conflict or club summary.
-- **Audit Event**: A record of a significant user action during import, review, or capacity editing.
+- **Audit Event**: A record of a significant user action during upload, run, review, or capacity editing.
 
 ## Success Criteria *(mandatory)*
 
 ### Measurable Outcomes
 
-- **SC-001**: A scheduler can identify the top 10 clubs by total excess within 30 seconds of opening a snapshot.
-- **SC-002**: A scheduler can drill from a club summary to the exact match weeks and teams causing its conflicts in under 3 clicks.
-- **SC-003**: At least 95% of imported conflict rows are visible with their club, hall, weekday, match week, capacity, actual count, excess, and teams.
-- **SC-004**: A scheduler can find a specific team's Rasterzahl assignment within 15 seconds using search or filters.
-- **SC-005**: Role checks prevent 100% of non-authorized capacity edits, snapshot imports, and user-management actions during acceptance testing.
-- **SC-006**: After a capacity edit, all affected snapshot views visibly indicate stale review data before the user can treat the old conflicts as final.
-- **SC-007**: Import validation identifies mismatched or incomplete snapshot inputs before users begin review.
-- **SC-008**: At least 95% of completed optimization runs display their final outcome, objective value, and generated snapshot link without manual log inspection.
-- **SC-009**: Users can distinguish proven optimal, feasible-only, and imported heuristic snapshots within 5 seconds of opening a snapshot.
+- **SC-001**: An admin can go from a complete input set to a started generation run in under 2 minutes, without editing files by hand.
+- **SC-002**: Every wish from pasted JSON (or a structured upload) is shown for review and can be corrected before it is used in a run (100% reviewable), and invalid pasted JSON is rejected with a clear schema error.
+- **SC-003**: A generated assignment never violates a fixed upper-league Rasterzahl (0 violations in acceptance testing).
+- **SC-004**: A scheduler can identify the top 10 clubs by total excess within 30 seconds of opening a snapshot.
+- **SC-005**: A scheduler can drill from a club summary to the exact match weeks and teams causing its conflicts in under 3 clicks.
+- **SC-006**: At least 95% of conflict rows are visible with their club, hall, weekday, match week, capacity, actual count, excess, and teams.
+- **SC-007**: A scheduler can find a specific team's Rasterzahl assignment within 15 seconds using search or filters.
+- **SC-008**: A user can find a specific club/hall/weekday capacity record within 15 seconds using search.
+- **SC-009**: Role checks prevent 100% of non-authorized capacity edits, input uploads, run starts, and user-management actions during acceptance testing.
+- **SC-010**: After a capacity or input edit, all affected snapshot views visibly indicate stale review data before the user can treat the old conflicts as final.
+- **SC-011**: Input validation identifies mismatched or incomplete input sets before a run starts.
+- **SC-012**: At least 95% of completed runs display their final outcome, objective value, and generated snapshot link without manual log inspection.
+- **SC-013**: Users can distinguish proven-optimal, feasible-only, and imported heuristic snapshots within 5 seconds of opening a snapshot.
 
 ## Assumptions
 
-- The first usable release may start as a review tool for completed optimizer outputs, but the target workflow includes starting exact optimization runs from the app.
-- User login, user administration, and basic role management are provided by the existing internal application baseline.
-- The first supported snapshot inputs are the generated assignment review, conflict report, per-club overage summary, and evaluation summary currently produced by the Rasterzahl workflow.
-- Reviewed capacity values are maintained separately from imported snapshots so old snapshots remain historically understandable.
-- Mobile access is useful but desktop/tablet review is the primary workflow for the first release.
-- A new optimizer snapshot is required after capacity edits before conflict counts can be considered final.
+- The app owns the full pipeline: upload raw inputs → generate → review. Importing a pre-computed external snapshot is an optional later path that reuses the review layer.
+- Raw inputs arrive today mostly as PDFs (wishes, fixed upper-league Rasterzahlen). Structured versions may become available; the app supports both. Wishes PDFs share a fixed layout, so the app parses them deterministically in-app (existing `pdfjs-dist`-based `src/raster/ingest/wishes-pdf.ts`); an external-LLM prompt/paste path is only an optional fallback. The app runs no LLM server-side.
+- Wishes PDFs are digital/text-based and fixed-layout for the first release; OCR of scanned PDFs is out of scope until a real need appears.
+- Capacity editing is infrequent (few users, roughly annual), so last-write-wins with an audit trail is sufficient; no locking or merge workflow is needed.
+- Hall capacity volume is manageable via CSV/Excel or forms; guessed defaults are acceptable as a starting point and are later corrected.
+- Fixed upper-league Rasterzahlen are few and may be entered manually.
+- The existing Rasterzahl optimizer is reused as a background job; the app is responsible for input preparation, job orchestration, and output ingestion, not for the solver itself.
+- User login, user administration, and basic role management are provided by the existing internal application baseline (webapp-template).
+- Reviewed capacity and input data are maintained separately from snapshots so old snapshots remain historically understandable.
+- First release targets district scale (hundreds of assignments/conflicts per snapshot). The data model should not preclude later county-wide scale (~1,400 clubs/teams) with district-scoped views.
+- Desktop/tablet review is the primary workflow for the first release; mobile is useful but secondary.
+- A new snapshot is required after capacity/input edits before conflict counts can be considered final.
+</content>
+</invoke>
