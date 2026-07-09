@@ -27,14 +27,14 @@ Constitution v2.0.0 (`.specify/memory/constitution.md`).
 
 | Principle | Status | Notes |
 |-----------|--------|-------|
-| I. Focused CLI Toolkit ("It is NOT a webapp… No UI frameworks") | ❌ **CONFLICT (CRITICAL)** | This feature **is** a webapp with a UI framework (Next.js/React). Directly contradicts Principle I. Requires a constitution amendment (v3.0.0) adding a third capability — the Rasterzahl Review Webapp — and permitting web-scoped deps within `webapp/`. See Complexity Tracking. |
+| I. Focused click-TT Administration Suite | ✅ PASS (resolved by v3.0.0) | Constitution amended to v3.0.0 (2026-07-10): added the Rasterzahl Review Webapp as a third capability and permitted the web stack scoped to `webapp/`. The earlier "NOT a webapp" prohibition is removed. |
 | II. Safety-First Automation | ✅ PASS | App is read-only toward click-TT; it produces proposals a human reviews (FR-023), never auto-writing to click-TT. Uncertain PDF parses are flagged `confidence: "review"` (existing behavior). |
 | III. Credential Security | ✅ PASS | Secrets via `.env`; auth via better-auth baseline. No hardcoded credentials. |
 | IV. Idempotent & Resumable | ✅ PASS (reframed) | Runs are discrete, tracked jobs with explicit outcomes (FR-011); re-running does not corrupt prior snapshots; capacity/input edits mark dependent snapshots stale (FR-022) rather than mutating them. |
 | V. Observable Output | ✅ PASS | Run outcome + objective + solver status per snapshot (FR-012); audit trail of uploads/runs/edits (FR-030); clear empty/error states (FR-024). |
 | VI. Quality Gates | ⚠️ PASS w/ amendment | TS strict, ESLint, Prettier, `validate.ps1` all present in `webapp/` and root. Principle VI's literal "No production dependencies beyond Playwright" is already superseded by the v2.0.0 Tech-Stack clause allowing justified deps; the v3.0.0 amendment must explicitly cover the web stack. |
 
-**Gate result**: FAILS on Principle I until the constitution is amended. Recommended resolution documented in Complexity Tracking; a separate constitution update (v3.0.0) should land before/with implementation. All other principles pass.
+**Gate result**: PASSES. The Principle I conflict was resolved by the v3.0.0 constitution amendment (2026-07-10). All principles pass.
 
 ## Project Structure
 
