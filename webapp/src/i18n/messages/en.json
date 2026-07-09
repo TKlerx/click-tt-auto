@@ -1,0 +1,378 @@
+{
+  "common": {
+    "appName": "Business App Starter",
+    "signOut": "Sign out",
+    "save": "Save",
+    "cancel": "Cancel",
+    "loading": "Loading...",
+    "error": "An error occurred",
+    "darkMode": "Dark mode",
+    "lightMode": "Light mode",
+    "saving": "Saving..."
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "backgroundJobs": "Background Jobs",
+    "users": "User Management",
+    "auditTrail": "Audit Trail",
+    "notifications": "Notifications",
+    "tokens": "Tokens",
+    "apiDocs": "API Docs",
+    "adminTokens": "Admin Tokens",
+    "teamsIntegrations": "Teams",
+    "opsHealth": "Ops Health"
+  },
+  "auth": {
+    "signIn": "Sign in",
+    "signInAzure": "Sign in with Azure",
+    "localAccount": "Local account",
+    "email": "Email",
+    "password": "Password",
+    "signingIn": "Signing in...",
+    "loginFailed": "Login failed. Please try again.",
+    "description": "Use Azure SSO or a local account created by an administrator.",
+    "ssoRevoked": "Your SSO access has been revoked. Please contact an administrator.",
+    "ssoNotConfigured": "Azure SSO is not configured yet. Set the Azure AD env vars and try again.",
+    "authFailed": "Authentication failed. Please try again.",
+    "changePassword": "Change your password",
+    "changePasswordDescription": "Local accounts must set a new password before entering the dashboard.",
+    "currentPassword": "Current password",
+    "newPassword": "New password",
+    "saving": "Saving...",
+    "saveNewPassword": "Save new password",
+    "passwordChanged": "Password changed successfully",
+    "couldNotUpdatePassword": "Could not update password",
+    "firstLogin": "First login"
+  },
+  "pending": {
+    "title": "Your account is pending administrator approval.",
+    "description": "You can sign in now, but you will not reach the application until an administrator approves your access.",
+    "label": "Pending approval"
+  },
+  "dashboard": {
+    "label": "Dashboard",
+    "welcomeBack": "Welcome back, {name}.",
+    "role": "Role",
+    "status": "Status",
+    "theme": "Theme",
+    "email": "Email"
+  },
+  "users": {
+    "title": "Users",
+    "createUser": "Create local user",
+    "emailPlaceholder": "Email",
+    "namePlaceholder": "Name",
+    "temporaryPassword": "Temporary password",
+    "createButton": "Create user",
+    "userCreated": "User created",
+    "couldNotCreate": "Could not create user",
+    "notAuthorized": "You are not authorized to access this page.",
+    "name": "Name",
+    "email": "Email",
+    "role": "Role",
+    "statusLabel": "Status",
+    "auth": "Auth",
+    "actions": "Actions",
+    "approve": "Approve",
+    "deactivate": "Deactivate",
+    "reactivate": "Reactivate",
+    "userApproved": "User approved",
+    "userDeactivated": "User deactivated",
+    "userReactivated": "User reactivated",
+    "roleUpdated": "Role updated to {role}",
+    "lastAdminDeactivateError": "Cannot deactivate the last Admin user",
+    "lastAdminRoleError": "Cannot change role of the last Admin user",
+    "couldNotUpdate": "Could not update user",
+    "roles": {
+      "PLATFORM_ADMIN": "Platform Admin",
+      "SCOPE_ADMIN": "Scoped Admin",
+      "SCOPE_USER": "Scoped User"
+    },
+    "statuses": {
+      "ACTIVE": "Active",
+      "INACTIVE": "Inactive",
+      "PENDING_APPROVAL": "Pending approval"
+    }
+  },
+  "theme": {
+    "switchedTo": "Theme switched to {theme} mode"
+  },
+  "audit": {
+    "title": "Audit Trail",
+    "action": "Action",
+    "actor": "Actor",
+    "entity": "Entity",
+    "details": "Details",
+    "date": "Date",
+    "scope": "Scope",
+    "filters": "Filters",
+    "exportCsv": "Export CSV",
+    "exportPdf": "Export PDF",
+    "exportTruncated": "Export limited to {count} entries. Narrow filters for full dataset.",
+    "empty": "No audit entries match your filters."
+  },
+  "backgroundJobs": {
+    "eyebrow": "Worker Queue",
+    "title": "Background Jobs",
+    "description": "Recent worker jobs across the application. Use this page to watch queue activity, failures, and job payloads.",
+    "showingRecent": "Showing the latest {count} jobs",
+    "retryScheduled": "Retry {attempt} at {time}",
+    "empty": "No background jobs have been queued yet.",
+    "notAssigned": "Not assigned",
+    "system": "System",
+    "none": "None",
+    "summary": {
+      "pending": "Pending",
+      "inProgress": "In Progress",
+      "completed": "Completed",
+      "failed": "Failed"
+    },
+    "fields": {
+      "createdAt": "Created",
+      "updatedAt": "Updated",
+      "attempts": "Attempts",
+      "worker": "Worker",
+      "createdBy": "Created by",
+      "availableAt": "Available",
+      "payload": "Payload",
+      "result": "Result",
+      "error": "Error"
+    }
+  },
+  "opsHealth": {
+    "eyebrow": "Operations",
+    "title": "Ops Health",
+    "description": "Identify the running build, inspect health checks, and copy a safe diagnostic summary.",
+    "overall": "Overall status",
+    "capturedAt": "Captured: {value}",
+    "checkedAt": "Checked: {value}",
+    "refresh": "Refresh",
+    "refreshing": "Refreshing...",
+    "refreshFailed": "Could not refresh the health snapshot.",
+    "status": {
+      "healthy": "Healthy",
+      "degraded": "Degraded",
+      "unknown": "Unknown",
+      "unavailable": "Unavailable"
+    },
+    "environment": {
+      "title": "Environment identity",
+      "environment": "Environment",
+      "version": "Version",
+      "revision": "Revision",
+      "buildId": "Build ID",
+      "builtAt": "Built at"
+    },
+    "checks": {
+      "runtime": "Runtime",
+      "database": "Database",
+      "configuration": "Configuration",
+      "worker": "Worker",
+      "deploySmoke": "Deploy smoke"
+    },
+    "summary": {
+      "title": "Diagnostic summary",
+      "description": "Copy this non-secret text into issues or incident notes."
+    },
+    "copy": {
+      "button": "Copy summary",
+      "success": "Diagnostic summary copied",
+      "error": "Could not copy diagnostic summary"
+    }
+  },
+  "tokens": {
+    "eyebrow": "API Access",
+    "title": "Personal access tokens",
+    "description": "Create, review, and manage API tokens for scripts, integrations, and CLI use.",
+    "create": "Create token",
+    "creating": "Creating...",
+    "createTitle": "Create token",
+    "createDescription": "Choose a memorable name and expiration. The token value is shown only once.",
+    "nameLabel": "Token name",
+    "namePlaceholder": "my-script",
+    "expiryLabel": "Expiration",
+    "expiryOptions": {
+      "7": "7 days",
+      "30": "30 days",
+      "60": "60 days",
+      "90": "90 days",
+      "180": "180 days",
+      "365": "1 year"
+    },
+    "cancel": "Cancel",
+    "created": "Token created",
+    "createFailed": "Could not create token",
+    "loadFailed": "Could not load tokens",
+    "updateFailed": "Could not update token",
+    "copied": "Token copied to clipboard",
+    "copy": "Copy token",
+    "done": "Done",
+    "tokenValueTitle": "Save {name}",
+    "tokenValueWarning": "This token will not be shown again. Copy it somewhere secure now.",
+    "tableTitle": "Token inventory",
+    "tableDescription": "Active tokens stay visible by default. Older revoked or expired tokens can be revealed when needed.",
+    "empty": "No personal access tokens yet.",
+    "showAll": "Show tokens older than 90 days",
+    "nameColumn": "Name",
+    "prefixColumn": "Prefix",
+    "typeColumn": "Type",
+    "statusColumn": "Status",
+    "expiresColumn": "Expires",
+    "lastUsedColumn": "Last used",
+    "createdColumn": "Created",
+    "actionsColumn": "Actions",
+    "renew": "Renew",
+    "revoke": "Revoke",
+    "delete": "Delete",
+    "renewed": "Token renewed",
+    "revoked": "Token revoked",
+    "deleted": "Token deleted",
+    "renewConfirm": "Renew this token? The previous value will stop working immediately.",
+    "revokeConfirm": "Revoke this token now?",
+    "deleteConfirm": "Delete this token permanently?",
+    "statusExpired": "Expired",
+    "status": {
+      "ACTIVE": "Active",
+      "REVOKED": "Revoked"
+    },
+    "loading": "Refreshing tokens..."
+  },
+  "adminTokens": {
+    "title": "Admin tokens",
+    "tableTitle": "All user tokens",
+    "tableDescription": "Review and manage tokens issued across the workspace.",
+    "user": "User",
+    "filterByUser": "Filter by user",
+    "allUsers": "All users"
+  },
+  "notifications": {
+    "eyebrow": "Mail Ops",
+    "title": "Notifications",
+    "description": "Manage notification event switches and inspect recent outbound delivery attempts.",
+    "settingsTitle": "Notification settings",
+    "settingsDescription": "Enable or disable notification delivery for each supported application event.",
+    "logTitle": "Notification log",
+    "logDescription": "Recent outbound notification deliveries across the application.",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "enabledSaved": "Notification type enabled",
+    "disabledSaved": "Notification type disabled",
+    "saveFailed": "Could not save notification setting",
+    "loadFailed": "Could not load notifications",
+    "updatedAt": "Updated {value}",
+    "allEvents": "All events",
+    "eventFilter": "Filter by event",
+    "allStatuses": "All statuses",
+    "statusFilter": "Filter by status",
+    "summaryQueued": "Queued",
+    "summarySent": "Sent",
+    "summaryFailed": "Failed",
+    "empty": "No notifications match the selected filters.",
+    "createdAtLabel": "Created",
+    "eventLabel": "Event",
+    "recipientLabel": "Recipient",
+    "statusLabel": "Status",
+    "subjectLabel": "Subject",
+    "detailsLabel": "Details",
+    "localeValue": "Locale: {locale}",
+    "sentAtValue": "Sent: {value}",
+    "notSentYet": "Not sent yet",
+    "retryCountValue": "Retries: {count}",
+    "eventTypes": {
+      "USER_CREATED": "User created",
+      "ROLE_CHANGED": "Role changed",
+      "USER_STATUS_CHANGED": "User status changed",
+      "SCOPE_ASSIGNMENT_CHANGED": "Scope assignment changed"
+    },
+    "statuses": {
+      "QUEUED": "Queued",
+      "SENDING": "Sending",
+      "RETRYING": "Retrying",
+      "SENT": "Sent",
+      "FAILED": "Failed",
+      "BOUNCED": "Bounced"
+    },
+    "loading": "Refreshing notifications..."
+  },
+  "apiDocs": {
+    "title": "API reference",
+    "description": "Browse the current OpenAPI specification with interactive Swagger UI."
+  },
+  "cliLogin": {
+    "successTitle": "Browser login approved",
+    "errorTitle": "CLI login failed",
+    "redirecting": "Returning to your CLI callback now...",
+    "errorMessage": "This CLI login request is missing or has already expired.",
+    "confirmTitle": "Approve CLI login",
+    "confirmMessage": "Approve the CLI login request from {callback}.",
+    "approve": "Approve login"
+  },
+  "teams": {
+    "eyebrow": "Teams Ops",
+    "title": "Teams Integration",
+    "description": "Configure Microsoft Teams delivery targets, intake subscriptions, and health controls.",
+    "toggles": {
+      "title": "Integration toggles",
+      "sendEnabled": "Enable outbound Teams delivery",
+      "intakeEnabled": "Enable inbound Teams intake"
+    },
+    "targets": {
+      "title": "Delivery targets",
+      "name": "Target name",
+      "teamId": "Team ID",
+      "channelId": "Channel ID",
+      "teamName": "Team name (optional)",
+      "channelName": "Channel name (optional)",
+      "add": "Add target"
+    },
+    "subscriptions": {
+      "title": "Intake subscriptions",
+      "teamId": "Team ID",
+      "channelId": "Channel ID",
+      "teamName": "Team name (optional)",
+      "channelName": "Channel name (optional)",
+      "add": "Add subscription",
+      "lastPolled": "Last polled"
+    },
+    "health": {
+      "title": "Integration health",
+      "sendFailures": "Send failures (24h)",
+      "intakeFailures": "Intake failures (24h)",
+      "lastSend": "Last successful send",
+      "lastIntake": "Last successful intake"
+    },
+    "common": {
+      "active": "Active",
+      "inactive": "Inactive",
+      "delete": "Delete"
+    },
+    "messages": {
+      "saved": "Settings saved",
+      "saveFailed": "Could not save settings",
+      "targetCreated": "Target created",
+      "targetCreateFailed": "Could not create target",
+      "targetUpdateFailed": "Could not update target",
+      "targetDeleteFailed": "Could not delete target",
+      "subscriptionCreated": "Subscription created",
+      "subscriptionCreateFailed": "Could not create subscription",
+      "subscriptionUpdateFailed": "Could not update subscription",
+      "subscriptionDeleteFailed": "Could not delete subscription",
+      "archivedChannelWarning": "Recent Teams send failures indicate a channel is archived or posting-restricted. Use an active channel for delivery."
+    },
+    "consent": {
+      "title": "Delegated send consent",
+      "connected": "Connected for delegated channel sending",
+      "notConnected": "Not connected. Outbound channel sends may fail without delegated consent.",
+      "connectButton": "Connect Teams consent",
+      "expiresAt": "Token expires: {value}",
+      "noExpiry": "No token expiry information available."
+    },
+    "linkParser": {
+      "label": "Paste Teams channel link (optional)",
+      "placeholder": "https://teams.microsoft.com/l/channel/...",
+      "apply": "Parse link",
+      "invalid": "Could not parse Teams channel link. Please check the URL format.",
+      "applied": "Channel link parsed."
+    }
+  }
+}

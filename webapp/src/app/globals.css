@@ -1,0 +1,93 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: light dark;
+  --background: #f7f8f5;
+  --foreground: #17201b;
+  --panel: #ffffff;
+  --panel-foreground: #17201b;
+  --accent: #2f6f4e;
+  --accent-foreground: #ffffff;
+  --muted: #d8ddd5;
+  --sidebar-width: 16rem;
+  --card: var(--panel);
+  --card-foreground: var(--panel-foreground);
+  --popover: var(--panel);
+  --popover-foreground: var(--panel-foreground);
+  --primary: var(--accent);
+  --primary-foreground: var(--accent-foreground);
+  --secondary: #e7ebe4;
+  --secondary-foreground: #243228;
+  --muted-foreground: #657064;
+  --accent-soft: #dce9df;
+  --accent-soft-foreground: #224a35;
+  --destructive: #b42318;
+  --destructive-foreground: #ffffff;
+  --border: #d8ddd5;
+  --input: #d8ddd5;
+  --ring: #2f6f4e;
+  --radius: 0.75rem;
+}
+
+[data-theme="dark"] {
+  --background: #101411;
+  --foreground: #eef2eb;
+  --panel: #171d19;
+  --panel-foreground: #eef2eb;
+  --accent: #7ab18d;
+  --accent-foreground: #ffffff;
+  --muted: #3a433c;
+  --card: var(--panel);
+  --card-foreground: var(--panel-foreground);
+  --popover: #151b17;
+  --popover-foreground: #eef2eb;
+  --primary: var(--accent);
+  --primary-foreground: var(--accent-foreground);
+  --secondary: #202820;
+  --secondary-foreground: #eef2eb;
+  --muted-foreground: #a5afa4;
+  --accent-soft: #233b2c;
+  --accent-soft-foreground: #d8eadc;
+  --destructive: #f97066;
+  --destructive-foreground: #ffffff;
+  --border: #303a33;
+  --input: #303a33;
+  --ring: #7ab18d;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  min-height: 100dvh;
+  font-family:
+    var(--font-geist-sans),
+    "Geist",
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+a {
+  color: inherit;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  touch-action: manipulation;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+}

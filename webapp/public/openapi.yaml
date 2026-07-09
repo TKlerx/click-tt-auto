@@ -1,0 +1,216 @@
+openapi: 3.1.0
+info:
+  title: Business App Starter API
+  version: 1.0.0
+  description: OpenAPI definition for authentication, user management, audit, background jobs, PATs, and CLI login.
+servers:
+  - url: __BASE_PATH__
+tags:
+  - name: Auth
+  - name: Users
+  - name: Audit
+  - name: Background Jobs
+  - name: Tokens
+  - name: Admin Tokens
+  - name: CLI Auth
+  - name: System
+paths:
+  /api/health:
+    get:
+      tags: [System]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Sign in with email and password
+      responses:
+        "200":
+          description: Authenticated
+  /api/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Sign out current user
+      responses:
+        "200":
+          description: Signed out
+  /api/auth/session:
+    get:
+      tags: [Auth]
+      summary: Get current session
+      responses:
+        "200":
+          description: Current session
+  /api/users:
+    get:
+      tags: [Users]
+      summary: List users
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      responses:
+        "200":
+          description: User list
+    post:
+      tags: [Users]
+      summary: Create local user
+      responses:
+        "201":
+          description: User created
+  /api/audit:
+    get:
+      tags: [Audit]
+      summary: List audit entries
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      responses:
+        "200":
+          description: Audit entries
+  /api/audit/export:
+    get:
+      tags: [Audit]
+      summary: Export audit trail
+      description: Returns bounded export data and sets `X-Audit-Export-Truncated` when results are capped.
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      responses:
+        "200":
+          description: Audit export
+  /api/background-jobs:
+    get:
+      tags: [Background Jobs]
+      summary: List background jobs visible to the current user
+      description: Sensitive payload, result, and error token-like fields are redacted in responses.
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      responses:
+        "200":
+          description: Job list
+    post:
+      tags: [Background Jobs]
+      summary: Queue a background job
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      responses:
+        "201":
+          description: Job created
+  /api/locale:
+    post:
+      tags: [System]
+      summary: Update active locale
+      responses:
+        "200":
+          description: Locale updated
+  /api/tokens:
+    get:
+      tags: [Tokens]
+      summary: List the authenticated user's personal access tokens
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      responses:
+        "200":
+          description: Token list
+    post:
+      tags: [Tokens]
+      summary: Create a personal access token
+      responses:
+        "201":
+          description: Token created
+  /api/tokens/{id}/revoke:
+    post:
+      tags: [Tokens]
+      summary: Revoke a personal access token
+      responses:
+        "200":
+          description: Token revoked
+  /api/tokens/{id}/renew:
+    post:
+      tags: [Tokens]
+      summary: Renew a personal access token
+      responses:
+        "200":
+          description: Token renewed
+  /api/tokens/{id}:
+    delete:
+      tags: [Tokens]
+      summary: Delete a personal access token
+      responses:
+        "204":
+          description: Token deleted
+  /api/admin/tokens:
+    get:
+      tags: [Admin Tokens]
+      summary: List tokens across all users
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      responses:
+        "200":
+          description: Admin token list
+  /api/admin/tokens/{id}/revoke:
+    post:
+      tags: [Admin Tokens]
+      summary: Revoke a token as an admin
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      responses:
+        "200":
+          description: Token revoked
+  /api/admin/tokens/{id}:
+    delete:
+      tags: [Admin Tokens]
+      summary: Delete a token as an admin
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      responses:
+        "204":
+          description: Token deleted
+  /api/cli-auth/authorize:
+    get:
+      tags: [CLI Auth]
+      summary: Begin CLI browser login
+      responses:
+        "302":
+          description: Redirect to login
+  /api/cli-auth/approve:
+    post:
+      tags: [CLI Auth]
+      summary: Approve a CLI browser login request
+      responses:
+        "302":
+          description: Redirect to the local CLI callback
+  /api/cli-auth/token:
+    post:
+      tags: [CLI Auth]
+      summary: Exchange a CLI auth code for a token
+      responses:
+        "200":
+          description: CLI token issued
+  /api/openapi:
+    get:
+      tags: [System]
+      summary: Serve this OpenAPI document
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      responses:
+        "200":
+          description: YAML document
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key

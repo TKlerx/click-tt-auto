@@ -70,4 +70,28 @@ describe("raster scoring", () => {
     unlimited.clubs[0]!.venues = [{ hall: "1", name: "Hall" }];
     expect(evaluate(unlimited, { a: 6, b: 7 }).overUsages).toHaveLength(0);
   });
+
+  it("infers hall-day capacity from Spielwoche wishes", () => {
+    const inferred = model();
+    inferred.clubs[0]!.venues = [{ hall: "1", name: "Hall" }];
+    inferred.teams.push({
+      id: "c",
+      clubId: "club",
+      label: "Erwachsene III",
+      group: { league: "L", name: "G" },
+      homeWeekday: "friday",
+      hall: "1",
+      rasterzahl: { kind: "assignable" },
+      confidence: "ok"
+    });
+    inferred.groups[0]!.teamIds.push("c");
+    inferred.teams[0]!.spielwochePref = "A";
+    inferred.teams[1]!.spielwochePref = "A";
+
+    const result = evaluate(inferred, { a: 1, b: 4, c: 5 });
+
+    expect(result.overUsages).toContainEqual(
+      expect.objectContaining({ week: 1, capacity: 2, excess: 1 })
+    );
+  });
 });

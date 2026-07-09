@@ -37,8 +37,8 @@ Search for a minimal-penalty assignment.
 
 ## Config / defaults
 
-- Default weights (tunable): `{ overUsage: 10, wechsel: 5, zeitgleich: 5, spielwoche: 1 }` — over-usage dominates; a broken alternating-week preference is the lightest. Documented and overridable per FR-018 (exact defaults confirmed during implementation).
-- Hall capacity default: `1` per hall per slot; note applied defaults in the report.
+- Default weights (tunable): `{ overUsage: 10, overUsageFairness: 1, wechsel: 5, zeitgleich: 5, spielwoche: 0 }` — Spielwoche A/B mismatches are reported by default, but only explicit relational wishes and hall over-usage drive optimization. `overUsageFairness` penalizes putting the remaining excess repeatedly on the same club.
+- Hall capacity default: unlimited when no capacity row is supplied. Add `club,hall,weekday,capacity` rows only for constrained halls.
 - Rulebook is built-in; no flag.
 
 ## Exit codes

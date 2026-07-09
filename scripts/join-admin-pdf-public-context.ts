@@ -40,7 +40,12 @@ async function readCsv<T>(filePath: string): Promise<T[]> {
 
 function normalize(value: string): string {
   return value
+    .replace(/\btischtennisverein\b/gi, "ttv")
+    .replace(/\bsportverein\b/gi, "sv")
+    .replace(/rot[\s-]*weiß/gi, "rw")
+    .replace(/blau[\s-]*weiß/gi, "bw")
     .replace(/\be\.?\s*v\.?\b/gi, "")
+    .replace(/\b(19|20)\d{2}\b/g, "")
     .replace(/[^a-z0-9äöüß]+/gi, " ")
     .trim()
     .toLowerCase();
@@ -64,7 +69,7 @@ function publicDivision(row: PublicRow): string {
 function publicTeamLabel(row: PublicRow): string {
   const division = publicDivision(row);
   const suffix = splitTeam(row.team).suffix;
-  return suffix && /^(Erwachsene|Damen)$/i.test(division) ? `${division} ${suffix}` : division;
+  return suffix ? `${division} ${suffix}` : division;
 }
 
 function key(club: string, division: string, teamLabel: string): string {
@@ -84,7 +89,7 @@ const fixedByTeam = new Map(
   fixedRows.map((row) => {
     const team = splitTeam(row.team);
     const division = row.division ?? publicDivision({ group: row.group, team: row.team, sourceUrl: "" });
-    const teamLabel = team.suffix && /^(Erwachsene|Damen)$/i.test(division) ? `${division} ${team.suffix}` : division;
+    const teamLabel = team.suffix ? `${division} ${team.suffix}` : division;
     return [key(team.club, division, teamLabel), row];
   })
 );

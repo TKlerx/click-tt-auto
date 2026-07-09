@@ -106,6 +106,7 @@ export type Assignment = Record<string, Rasterzahl>;
 
 export interface Weights {
   overUsage: number;
+  overUsageFairness: number;
   wechsel: number;
   zeitgleich: number;
   spielwoche: number;
@@ -118,10 +119,11 @@ export interface OverUsage {
   week: number;
   teams: string[];
   capacity: number;
+  excess: number;
 }
 
 export interface HardViolation {
-  kind: "permutation" | "fixed-altered" | "derby-late";
+  kind: "permutation" | "fixed-altered" | "derby-late" | "capacity-overflow";
   detail: string;
 }
 
@@ -143,7 +145,8 @@ export interface EvaluationResult {
 
 export const defaultWeights: Weights = {
   overUsage: 10,
+  overUsageFairness: 1,
   wechsel: 5,
   zeitgleich: 5,
-  spielwoche: 1
+  spielwoche: 0
 };

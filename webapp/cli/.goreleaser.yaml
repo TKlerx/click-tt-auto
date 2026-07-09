@@ -1,0 +1,24 @@
+project_name: starterctl
+
+builds:
+  - binary: starterctl
+    main: .
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X github.com/TKlerx/webapp-template/cli/cmd.version={{.Version}}
+
+archives:
+  - formats: ["tar.gz"]
+    ids: [default]
+    format_overrides:
+      - goos: windows
+        formats: ["zip"]
+
+checksum:
+  name_template: checksums.txt

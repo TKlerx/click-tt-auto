@@ -5,6 +5,7 @@ import type {
   Assignment,
   EvaluationResult,
   HardViolation,
+  OverUsage,
   SeasonModel,
   Weights
 } from "../types.js";
@@ -21,6 +22,17 @@ export function completeAssignment(
     }
   }
   return full;
+}
+
+export function overUsageFairnessCost(overUsages: OverUsage[]): number {
+  const excessByClub = new Map<string, number>();
+  for (const usage of overUsages) {
+    excessByClub.set(
+      usage.clubId,
+      (excessByClub.get(usage.clubId) ?? 0) + usage.excess
+    );
+  }
+  return [...excessByClub.values()].reduce((sum, excess) => sum + excess ** 2, 0);
 }
 
 export function evaluate(
@@ -96,6 +108,12 @@ export function evaluate(
   }
 
   const overUsages = findOverUsages(model, assignment);
+  for (const usage of overUsages.filter((usage) => usage.excess > 1)) {
+    hardViolations.push({
+      kind: "capacity-overflow",
+      detail: `${usage.clubId}/${usage.weekday}/hall ${usage.hall}/week ${usage.week} has ${usage.teams.length} teams, capacity ${usage.capacity}`
+    });
+  }
   const wishResults = evaluateWishes(model, assignment);
   const spielwocheMisses = model.teams.flatMap((team) => {
     if (!team.spielwochePref) return [];
@@ -118,7 +136,8 @@ export function evaluate(
       result.status === "unfulfilled" && result.wish.relation === "zeitgleich"
   ).length;
   const objective =
-    overUsages.length * weights.overUsage +
+    overUsages.reduce((sum, usage) => sum + usage.excess ** 2, 0) * weights.overUsage +
+    overUsageFairnessCost(overUsages) * weights.overUsageFairness +
     brokenWechsel * weights.wechsel +
     brokenZeitgleich * weights.zeitgleich +
     spielwocheMisses.length * weights.spielwoche;

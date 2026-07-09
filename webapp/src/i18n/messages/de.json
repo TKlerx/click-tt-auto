@@ -1,0 +1,378 @@
+{
+  "common": {
+    "appName": "Business App Starter",
+    "signOut": "Abmelden",
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "loading": "Laden...",
+    "error": "Ein Fehler ist aufgetreten",
+    "darkMode": "Dunkelmodus",
+    "lightMode": "Hellmodus",
+    "saving": "Speichern..."
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "backgroundJobs": "Hintergrundjobs",
+    "users": "Benutzerverwaltung",
+    "auditTrail": "Audit Trail",
+    "notifications": "Benachrichtigungen",
+    "tokens": "Tokens",
+    "apiDocs": "API Docs",
+    "adminTokens": "Admin Tokens",
+    "teamsIntegrations": "Teams",
+    "opsHealth": "Ops Health"
+  },
+  "auth": {
+    "signIn": "Anmelden",
+    "signInAzure": "Mit Azure anmelden",
+    "localAccount": "Lokales Konto",
+    "email": "E-Mail",
+    "password": "Passwort",
+    "signingIn": "Anmeldung...",
+    "loginFailed": "Anmeldung fehlgeschlagen. Bitte erneut versuchen.",
+    "description": "Verwenden Sie Azure SSO oder ein lokales Konto, das von einem Administrator erstellt wurde.",
+    "ssoRevoked": "Ihr SSO-Zugang wurde widerrufen. Bitte kontaktieren Sie einen Administrator.",
+    "ssoNotConfigured": "Azure SSO ist noch nicht konfiguriert. Setzen Sie die Azure-AD-Umgebungsvariablen und versuchen Sie es erneut.",
+    "authFailed": "Authentifizierung fehlgeschlagen. Bitte erneut versuchen.",
+    "changePassword": "Passwort andern",
+    "changePasswordDescription": "Lokale Konten mussen ein neues Passwort festlegen, bevor sie das Dashboard betreten konnen.",
+    "currentPassword": "Aktuelles Passwort",
+    "newPassword": "Neues Passwort",
+    "saving": "Speichern...",
+    "saveNewPassword": "Neues Passwort speichern",
+    "passwordChanged": "Passwort erfolgreich geandert",
+    "couldNotUpdatePassword": "Passwort konnte nicht aktualisiert werden",
+    "firstLogin": "Erstanmeldung"
+  },
+  "pending": {
+    "title": "Ihr Konto wartet auf die Freigabe durch einen Administrator.",
+    "description": "Sie konnen sich jetzt anmelden, erhalten aber erst nach der Freigabe durch einen Administrator Zugriff auf die Anwendung.",
+    "label": "Genehmigung ausstehend"
+  },
+  "dashboard": {
+    "label": "Dashboard",
+    "welcomeBack": "Willkommen zuruck, {name}.",
+    "role": "Rolle",
+    "status": "Status",
+    "theme": "Design",
+    "email": "E-Mail"
+  },
+  "users": {
+    "title": "Benutzer",
+    "createUser": "Lokalen Benutzer erstellen",
+    "emailPlaceholder": "E-Mail",
+    "namePlaceholder": "Name",
+    "temporaryPassword": "Temporeres Passwort",
+    "createButton": "Benutzer erstellen",
+    "userCreated": "Benutzer erstellt",
+    "couldNotCreate": "Benutzer konnte nicht erstellt werden",
+    "notAuthorized": "Sie sind nicht berechtigt, auf diese Seite zuzugreifen.",
+    "name": "Name",
+    "email": "E-Mail",
+    "role": "Rolle",
+    "statusLabel": "Status",
+    "auth": "Auth",
+    "actions": "Aktionen",
+    "approve": "Genehmigen",
+    "deactivate": "Deaktivieren",
+    "reactivate": "Reaktivieren",
+    "userApproved": "Benutzer genehmigt",
+    "userDeactivated": "Benutzer deaktiviert",
+    "userReactivated": "Benutzer reaktiviert",
+    "roleUpdated": "Rolle aktualisiert auf {role}",
+    "lastAdminDeactivateError": "Der letzte Admin-Benutzer kann nicht deaktiviert werden",
+    "lastAdminRoleError": "Die Rolle des letzten Admin-Benutzers kann nicht geandert werden",
+    "couldNotUpdate": "Benutzer konnte nicht aktualisiert werden",
+    "roles": {
+      "PLATFORM_ADMIN": "Plattform-Admin",
+      "SCOPE_ADMIN": "Bereichs-Admin",
+      "SCOPE_USER": "Bereichsbenutzer"
+    },
+    "statuses": {
+      "ACTIVE": "Aktiv",
+      "INACTIVE": "Inaktiv",
+      "PENDING_APPROVAL": "Genehmigung ausstehend"
+    }
+  },
+  "theme": {
+    "switchedTo": "Design auf {theme}-Modus umgeschaltet"
+  },
+  "audit": {
+    "title": "Prufprotokoll",
+    "action": "Aktion",
+    "actor": "Akteur",
+    "entity": "Entitat",
+    "details": "Details",
+    "date": "Datum",
+    "scope": "Scope",
+    "filters": "Filter",
+    "exportCsv": "CSV exportieren",
+    "exportPdf": "PDF exportieren",
+    "exportTruncated": "Export auf {count} Eintrage begrenzt. Bitte Filter weiter einschranken.",
+    "empty": "Keine Audit-Eintrage fur diese Filter."
+  },
+  "backgroundJobs": {
+    "eyebrow": "Worker-Warteschlange",
+    "title": "Hintergrundjobs",
+    "description": "Letzte Worker-Jobs der Anwendung. Diese Seite zeigt Warteschlange, Fehler und Jobdaten.",
+    "showingRecent": "Zeigt die letzten {count} Jobs",
+    "retryScheduled": "Wiederholung {attempt} um {time}",
+    "empty": "Es wurden noch keine Hintergrundjobs erstellt.",
+    "notAssigned": "Nicht zugewiesen",
+    "system": "System",
+    "none": "Keine",
+    "summary": {
+      "pending": "Ausstehend",
+      "inProgress": "In Bearbeitung",
+      "completed": "Abgeschlossen",
+      "failed": "Fehlgeschlagen"
+    },
+    "fields": {
+      "createdAt": "Erstellt",
+      "updatedAt": "Aktualisiert",
+      "attempts": "Versuche",
+      "worker": "Worker",
+      "createdBy": "Erstellt von",
+      "availableAt": "Verfugbar",
+      "payload": "Payload",
+      "result": "Ergebnis",
+      "error": "Fehler"
+    }
+  },
+  "opsHealth": {
+    "eyebrow": "Betrieb",
+    "title": "Ops Health",
+    "description": "Erkenne den laufenden Build, prüfe Health Checks und kopiere eine sichere Diagnosezusammenfassung.",
+    "overall": "Gesamtstatus",
+    "capturedAt": "Erfasst: {value}",
+    "checkedAt": "Geprüft: {value}",
+    "refresh": "Aktualisieren",
+    "refreshing": "Aktualisiere...",
+    "refreshFailed": "Der Health-Snapshot konnte nicht aktualisiert werden.",
+    "status": {
+      "healthy": "Gesund",
+      "degraded": "Beeinträchtigt",
+      "unknown": "Unbekannt",
+      "unavailable": "Nicht verfügbar"
+    },
+    "environment": {
+      "title": "Umgebungsidentität",
+      "environment": "Umgebung",
+      "version": "Version",
+      "revision": "Revision",
+      "buildId": "Build-ID",
+      "builtAt": "Build-Zeit"
+    },
+    "checks": {
+      "runtime": "Runtime",
+      "database": "Datenbank",
+      "configuration": "Konfiguration",
+      "worker": "Worker",
+      "deploySmoke": "Deploy-Smoke"
+    },
+    "summary": {
+      "title": "Diagnosezusammenfassung",
+      "description": "Kopiere diesen nicht geheimen Text in Issues oder Incident-Notizen."
+    },
+    "copy": {
+      "button": "Zusammenfassung kopieren",
+      "success": "Diagnosezusammenfassung kopiert",
+      "error": "Diagnosezusammenfassung konnte nicht kopiert werden"
+    }
+  },
+  "tokens": {
+    "eyebrow": "API Access",
+    "title": "Personal access tokens",
+    "description": "Create, review, and manage API tokens for scripts, integrations, and CLI use.",
+    "create": "Create token",
+    "creating": "Creating...",
+    "createTitle": "Create token",
+    "createDescription": "Choose a memorable name and expiration. The token value is shown only once.",
+    "nameLabel": "Token name",
+    "namePlaceholder": "my-script",
+    "expiryLabel": "Expiration",
+    "expiryOptions": {
+      "7": "7 days",
+      "30": "30 days",
+      "60": "60 days",
+      "90": "90 days",
+      "180": "180 days",
+      "365": "1 year"
+    },
+    "cancel": "Cancel",
+    "created": "Token created",
+    "createFailed": "Could not create token",
+    "loadFailed": "Could not load tokens",
+    "updateFailed": "Could not update token",
+    "copied": "Token copied to clipboard",
+    "copy": "Copy token",
+    "done": "Done",
+    "tokenValueTitle": "Save {name}",
+    "tokenValueWarning": "This token will not be shown again. Copy it somewhere secure now.",
+    "tableTitle": "Token inventory",
+    "tableDescription": "Active tokens stay visible by default. Older revoked or expired tokens can be revealed when needed.",
+    "empty": "No personal access tokens yet.",
+    "showAll": "Show tokens older than 90 days",
+    "nameColumn": "Name",
+    "prefixColumn": "Prefix",
+    "typeColumn": "Type",
+    "statusColumn": "Status",
+    "expiresColumn": "Expires",
+    "lastUsedColumn": "Last used",
+    "createdColumn": "Created",
+    "actionsColumn": "Actions",
+    "renew": "Renew",
+    "revoke": "Revoke",
+    "delete": "Delete",
+    "renewed": "Token renewed",
+    "revoked": "Token revoked",
+    "deleted": "Token deleted",
+    "renewConfirm": "Renew this token? The previous value will stop working immediately.",
+    "revokeConfirm": "Revoke this token now?",
+    "deleteConfirm": "Delete this token permanently?",
+    "statusExpired": "Expired",
+    "status": {
+      "ACTIVE": "Active",
+      "REVOKED": "Revoked"
+    },
+    "loading": "Refreshing tokens..."
+  },
+  "adminTokens": {
+    "title": "Admin tokens",
+    "tableTitle": "All user tokens",
+    "tableDescription": "Review and manage tokens issued across the workspace.",
+    "user": "User",
+    "filterByUser": "Filter by user",
+    "allUsers": "All users"
+  },
+  "notifications": {
+    "eyebrow": "Mail Ops",
+    "title": "Benachrichtigungen",
+    "description": "Verwalten Sie Benachrichtigungs-Schalter und prufen Sie aktuelle ausgehende Zustellversuche.",
+    "settingsTitle": "Benachrichtigungseinstellungen",
+    "settingsDescription": "Aktivieren oder deaktivieren Sie die Zustellung fur jede unterstutzte Anwendungsaktion.",
+    "logTitle": "Benachrichtigungsprotokoll",
+    "logDescription": "Letzte ausgehende Benachrichtigungen der Anwendung.",
+    "enabled": "Aktiv",
+    "disabled": "Deaktiviert",
+    "enabledSaved": "Benachrichtigungstyp aktiviert",
+    "disabledSaved": "Benachrichtigungstyp deaktiviert",
+    "saveFailed": "Benachrichtigungseinstellung konnte nicht gespeichert werden",
+    "loadFailed": "Benachrichtigungen konnten nicht geladen werden",
+    "updatedAt": "Aktualisiert {value}",
+    "allEvents": "Alle Ereignisse",
+    "eventFilter": "Nach Ereignis filtern",
+    "allStatuses": "Alle Status",
+    "statusFilter": "Nach Status filtern",
+    "summaryQueued": "Wartend",
+    "summarySent": "Gesendet",
+    "summaryFailed": "Fehlgeschlagen",
+    "empty": "Keine Benachrichtigungen passen zu den ausgewahlten Filtern.",
+    "createdAtLabel": "Erstellt",
+    "eventLabel": "Ereignis",
+    "recipientLabel": "Empfanger",
+    "statusLabel": "Status",
+    "subjectLabel": "Betreff",
+    "detailsLabel": "Details",
+    "localeValue": "Sprache: {locale}",
+    "sentAtValue": "Gesendet: {value}",
+    "notSentYet": "Noch nicht gesendet",
+    "retryCountValue": "Wiederholungen: {count}",
+    "eventTypes": {
+      "USER_CREATED": "Benutzer erstellt",
+      "ROLE_CHANGED": "Rolle geandert",
+      "USER_STATUS_CHANGED": "Benutzerstatus geandert",
+      "SCOPE_ASSIGNMENT_CHANGED": "Scope-Zuweisung geandert"
+    },
+    "statuses": {
+      "QUEUED": "Wartend",
+      "SENDING": "Wird gesendet",
+      "RETRYING": "Wiederholung",
+      "SENT": "Gesendet",
+      "FAILED": "Fehlgeschlagen",
+      "BOUNCED": "Zuruckgewiesen"
+    },
+    "loading": "Benachrichtigungen werden aktualisiert..."
+  },
+  "apiDocs": {
+    "title": "API reference",
+    "description": "Browse the current OpenAPI specification with interactive Swagger UI."
+  },
+  "cliLogin": {
+    "successTitle": "Browser login approved",
+    "errorTitle": "CLI login failed",
+    "redirecting": "Returning to your CLI callback now...",
+    "errorMessage": "This CLI login request is missing or has already expired.",
+    "confirmTitle": "Approve CLI login",
+    "confirmMessage": "Approve the CLI login request from {callback}.",
+    "approve": "Approve login"
+  },
+  "teams": {
+    "eyebrow": "Teams Ops",
+    "title": "Teams Integration",
+    "description": "Configure Microsoft Teams delivery targets, intake subscriptions, and health controls.",
+    "toggles": {
+      "title": "Integration toggles",
+      "sendEnabled": "Enable outbound Teams delivery",
+      "intakeEnabled": "Enable inbound Teams intake"
+    },
+    "targets": {
+      "title": "Delivery targets",
+      "name": "Target name",
+      "teamId": "Team ID",
+      "channelId": "Channel ID",
+      "teamName": "Team name (optional)",
+      "channelName": "Channel name (optional)",
+      "add": "Add target"
+    },
+    "subscriptions": {
+      "title": "Intake subscriptions",
+      "teamId": "Team ID",
+      "channelId": "Channel ID",
+      "teamName": "Team name (optional)",
+      "channelName": "Channel name (optional)",
+      "add": "Add subscription",
+      "lastPolled": "Last polled"
+    },
+    "health": {
+      "title": "Integration health",
+      "sendFailures": "Send failures (24h)",
+      "intakeFailures": "Intake failures (24h)",
+      "lastSend": "Last successful send",
+      "lastIntake": "Last successful intake"
+    },
+    "common": {
+      "active": "Active",
+      "inactive": "Inactive",
+      "delete": "Delete"
+    },
+    "messages": {
+      "saved": "Settings saved",
+      "saveFailed": "Could not save settings",
+      "targetCreated": "Target created",
+      "targetCreateFailed": "Could not create target",
+      "targetUpdateFailed": "Could not update target",
+      "targetDeleteFailed": "Could not delete target",
+      "subscriptionCreated": "Subscription created",
+      "subscriptionCreateFailed": "Could not create subscription",
+      "subscriptionUpdateFailed": "Could not update subscription",
+      "subscriptionDeleteFailed": "Could not delete subscription",
+      "archivedChannelWarning": "Recent Teams send failures indicate a channel is archived or posting-restricted. Use an active channel for delivery."
+    },
+    "consent": {
+      "title": "Delegated send consent",
+      "connected": "Connected for delegated channel sending",
+      "notConnected": "Not connected. Outbound channel sends may fail without delegated consent.",
+      "connectButton": "Connect Teams consent",
+      "expiresAt": "Token expires: {value}",
+      "noExpiry": "No token expiry information available."
+    },
+    "linkParser": {
+      "label": "Paste Teams channel link (optional)",
+      "placeholder": "https://teams.microsoft.com/l/channel/...",
+      "apply": "Parse link",
+      "invalid": "Could not parse Teams channel link. Please check the URL format.",
+      "applied": "Channel link parsed."
+    }
+  }
+}

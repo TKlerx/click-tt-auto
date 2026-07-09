@@ -1,0 +1,85 @@
+# Project-specific Semgrep rules for resource-planning-codex.
+# Community rulesets are applied via --config auto in the npm script.
+
+rules:
+  # ── Prisma: flag unsafe raw queries ──────────────────────────────
+  - id: prisma-query-raw-unsafe
+    patterns:
+      - pattern-either:
+          - pattern: $PRISMA.$queryRawUnsafe(...)
+          - pattern: $PRISMA.$executeRawUnsafe(...)
+    message: >
+      $queryRawUnsafe / $executeRawUnsafe bypasses Prisma parameterisation.
+      Prefer $queryRaw tagged templates or the query builder. If unavoidable,
+      ensure all dynamic fragments are static strings, never user input.
+    languages: [typescript, javascript]
+    severity: WARNING
+    metadata:
+      cwe: "CWE-89: SQL Injection"
+
+  # ── Next.js: secrets must not leak to the client bundle ──────────
+  - id: next-public-env-secret
+    pattern: process.env.NEXT_PUBLIC_$KEY
+    metavariable-regex:
+      metavariable: $KEY
+      regex: ".*(SECRET|KEY|TOKEN|PASSWORD|CREDENTIAL|HAWK).*"
+    message: >
+      NEXT_PUBLIC_ variables are embedded in the client JS bundle.
+      Never expose secrets this way — use a server-only env var instead.
+    languages: [typescript, javascript]
+    severity: ERROR
+    metadata:
+      cwe: "CWE-200: Exposure of Sensitive Information"
+
+  # ── Auth: hardcoded fallback secrets ─────────────────────────────
+  - id: hardcoded-fallback-secret
+    patterns:
+      - pattern: $X || "..."
+      - metavariable-regex:
+          metavariable: $X
+          regex: "process\\.env\\.(.*SECRET.*|.*KEY.*|.*TOKEN.*)"
+    message: >
+      Hardcoded fallback for a secret env var. If the env var is unset,
+      the app silently uses a weak default. Fail loudly instead.
+    languages: [typescript, javascript]
+    severity: WARNING
+    metadata:
+      cwe: "CWE-798: Use of Hard-coded Credentials"
+
+  # ── React: no dangerouslySetInnerHTML ────────────────────────────
+  - id: no-dangerously-set-inner-html
+    pattern: dangerouslySetInnerHTML={...}
+    message: >
+      dangerouslySetInnerHTML can lead to XSS. Use a sanitisation library
+      (e.g. DOMPurify) or render content as text instead.
+    languages: [typescript, javascript]
+    severity: ERROR
+    metadata:
+      cwe: "CWE-79: Cross-site Scripting (XSS)"
+
+  # ── No eval or Function constructor ──────────────────────────────
+  - id: no-eval
+    pattern-either:
+      - pattern: eval(...)
+      - pattern: new Function(...)
+    message: >
+      eval() and new Function() execute arbitrary code. Find a safer
+      alternative (JSON.parse, a lookup table, etc.).
+    languages: [typescript, javascript]
+    severity: ERROR
+    metadata:
+      cwe: "CWE-95: Eval Injection"
+
+  # ── Node: prefer shell:false in spawn/exec ───────────────────────
+  - id: spawn-shell-true
+    pattern-either:
+      - pattern: "spawn($CMD, $ARGS, {shell: true})"
+      - pattern: "spawnSync($CMD, $ARGS, {shell: true})"
+      - pattern: "execSync($CMD, {shell: true})"
+    message: >
+      shell:true passes args through a shell, enabling command injection.
+      Use shell:false and pass args as an array instead.
+    languages: [typescript, javascript]
+    severity: WARNING
+    metadata:
+      cwe: "CWE-78: OS Command Injection"

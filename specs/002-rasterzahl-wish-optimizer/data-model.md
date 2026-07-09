@@ -86,7 +86,7 @@ AbsoluteConstraint { teamId: string; kind: "kalenderwoche"|"spieltage"; detail: 
 ```
 Assignment = Map<TeamId, Rasterzahl>          // decision variable
 
-Weights { overUsage: number; wechsel: number; zeitgleich: number; spielwoche: number }
+Weights { overUsage: number; overUsageFairness: number; wechsel: number; zeitgleich: number; spielwoche: number }
 
 EvaluationResult {
   assignment: Assignment

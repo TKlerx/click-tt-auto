@@ -4,8 +4,19 @@
 
 ```powershell
 pnpm raster:assignment
+pnpm raster:public-context
+pnpm raster:join-review reports/raster/public-team-context.csv reports/raster/admin-pdf-teams.csv data/upper-fixed.csv
 pnpm raster -- ingest --from-clicktt --out reports/raster/model.json --current reports/raster/current.json --review reports/raster/review-input.csv
 pnpm raster -- optimize --model reports/raster/model.json --start reports/raster/current.json --out reports/raster/proposal.json --report reports/raster/proposal-eval.json --csv reports/raster/optimized-assignment.csv --unmet reports/raster/unmet-wishes.csv
+```
+
+For a proven-optimal solution, use the OR-Tools CP-SAT solver. It writes an assignment JSON plus solver metadata with `OPTIMAL`, `FEASIBLE`, or infeasible status:
+
+```powershell
+pnpm raster:optimize-cpsat --model reports/raster/review-model.json --out reports/raster/review-proposal-cpsat.json --metadata reports/raster/review-proposal-cpsat-metadata.json --time-limit 300 --workers 8
+pnpm raster -- score --model reports/raster/review-model.json --assignment reports/raster/review-proposal-cpsat.json --report reports/raster/review-proposal-cpsat-eval.json --unmet reports/raster/review-unmet-wishes-cpsat.csv
+pnpm raster:spielwoche-overages reports/raster/review-model.json reports/raster/review-proposal-cpsat.json reports/raster/spielwoche-overages-cpsat.csv
+pnpm raster:optimized-review reports/raster/review-model.json reports/raster/review-proposal-cpsat.json reports/raster/optimized-raster-review-cpsat.csv
 ```
 
 To add every team from clubs that appear in your groups, pass the public click-TT league index. The scraper reads the mytischtennis `gruppe/<id>` links from that page and rewrites them to public click-TT `groupPage?...&group=<id>` URLs:

@@ -1,0 +1,184 @@
+x-app-image: &app-image
+  image: ${APP_IMAGE_NAME:-business-app-starter}:latest
+  build:
+    context: .
+    dockerfile: Dockerfile.app
+    target: runner
+    args:
+      BASE_PATH: ${BASE_PATH}
+      APP_VERSION: ${APP_VERSION:-local}
+      APP_REVISION: ${APP_REVISION:-unknown}
+      APP_BUILD_ID: ${APP_BUILD_ID:-docker-compose}
+      APP_BUILT_AT: ${APP_BUILT_AT:-unknown}
+
+x-migrate-image: &migrate-image
+  image: ${MIGRATE_IMAGE_NAME:-business-app-starter-migrate}:latest
+  build:
+    context: .
+    dockerfile: Dockerfile.app
+    target: migrate-runner
+    args:
+      BASE_PATH: ${BASE_PATH}
+      APP_VERSION: ${APP_VERSION:-local}
+      APP_REVISION: ${APP_REVISION:-unknown}
+      APP_BUILD_ID: ${APP_BUILD_ID:-docker-compose}
+      APP_BUILT_AT: ${APP_BUILT_AT:-unknown}
+
+x-common-env: &common-env
+  AUTH_BASE_URL: ${AUTH_BASE_URL:-http://localhost:3270}
+  APP_BUILD_ID: ${APP_BUILD_ID:-docker-compose}
+  APP_BUILT_AT: ${APP_BUILT_AT:-unknown}
+  APP_ENVIRONMENT: ${APP_ENVIRONMENT:-local}
+  APP_REVISION: ${APP_REVISION:-unknown}
+  APP_VERSION: ${APP_VERSION:-local}
+  BASE_PATH: ${BASE_PATH:-}
+  ENABLE_REQUEST_LOGGING: ${ENABLE_REQUEST_LOGGING:-true}
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  TRUST_PROXY_HEADERS: ${TRUST_PROXY_HEADERS:-0}
+  TRUST_PROXY_HEADER_SECRET: ${TRUST_PROXY_HEADER_SECRET:-}
+
+x-app-env: &app-env
+  <<: *common-env
+  APP_DATABASE_URL: ${APP_DATABASE_URL:-${DATABASE_URL:?Set APP_DATABASE_URL or DATABASE_URL in .env.docker or .env}}
+  DATABASE_URL: ${APP_DATABASE_URL:-${DATABASE_URL:?Set APP_DATABASE_URL or DATABASE_URL in .env.docker or .env}}
+  AZURE_AD_CLIENT_ID: ${AZURE_AD_CLIENT_ID:-}
+  AZURE_AD_CLIENT_SECRET: ${AZURE_AD_CLIENT_SECRET:-}
+  AZURE_AD_TENANT_ID: ${AZURE_AD_TENANT_ID:-}
+  BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET in .env.docker or .env}
+  CLI_TOKEN_DEFAULT_EXPIRY_DAYS: ${CLI_TOKEN_DEFAULT_EXPIRY_DAYS:-30}
+  CLI_RELEASES_DIR: ${CLI_RELEASES_DIR:-/app/cli-releases}
+  PAT_DEFAULT_EXPIRY_DAYS: ${PAT_DEFAULT_EXPIRY_DAYS:-90}
+  PAT_MAX_ACTIVE_PER_USER: ${PAT_MAX_ACTIVE_PER_USER:-10}
+  PAT_TOKEN_PREFIX: ${PAT_TOKEN_PREFIX:-starter_pat}
+  TEAMS_ENABLED: ${TEAMS_ENABLED:-false}
+
+x-migration-env: &migration-env
+  <<: *common-env
+  DATABASE_URL: ${MIGRATION_DATABASE_URL:-${DATABASE_URL:?Set MIGRATION_DATABASE_URL or DATABASE_URL in .env.docker or .env}}
+  MIGRATION_DATABASE_URL: ${MIGRATION_DATABASE_URL:-${DATABASE_URL:?Set MIGRATION_DATABASE_URL or DATABASE_URL in .env.docker or .env}}
+  INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL:-admin@example.com}
+  INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:?Set INITIAL_ADMIN_PASSWORD in .env.docker}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.docker or .env}
+
+x-worker-env: &worker-env
+  <<: *common-env
+  DATABASE_URL: ${WORKER_DATABASE_URL:-${DATABASE_URL:?Set WORKER_DATABASE_URL or DATABASE_URL in .env.docker or .env}}
+  WORKER_DATABASE_URL: ${WORKER_DATABASE_URL:-${DATABASE_URL:?Set WORKER_DATABASE_URL or DATABASE_URL in .env.docker or .env}}
+  AZURE_AD_CLIENT_ID: ${AZURE_AD_CLIENT_ID:-}
+  AZURE_AD_CLIENT_SECRET: ${AZURE_AD_CLIENT_SECRET:-}
+  AZURE_AD_TENANT_ID: ${AZURE_AD_TENANT_ID:-}
+  GRAPH_CLIENT_ID: ${GRAPH_CLIENT_ID:-}
+  GRAPH_CLIENT_SECRET: ${GRAPH_CLIENT_SECRET:-}
+  GRAPH_TENANT_ID: ${GRAPH_TENANT_ID:-}
+  MAIL_DEFAULT_MAILBOX: ${MAIL_DEFAULT_MAILBOX:-}
+  MAIL_PROVIDER: ${MAIL_PROVIDER:-graph}
+  TEAMS_ENABLED: ${TEAMS_ENABLED:-false}
+  TEAMS_POLL_INTERVAL_SECONDS: ${TEAMS_POLL_INTERVAL_SECONDS:-60}
+  WORKER_MAX_ATTEMPTS: ${WORKER_MAX_ATTEMPTS:-3}
+  WORKER_POLL_INTERVAL_SECONDS: ${WORKER_POLL_INTERVAL_SECONDS:-3}
+  WORKER_RETRY_BACKOFF_SECONDS: ${WORKER_RETRY_BACKOFF_SECONDS:-15}
+  WORKER_STALE_LOCK_SECONDS: ${WORKER_STALE_LOCK_SECONDS:-300}
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-business_app_starter}
+      POSTGRES_USER: ${POSTGRES_USER:-starter}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.docker or .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [internal]
+    restart: unless-stopped
+
+  migrate:
+    <<: *migrate-image
+    # Intentional: migrations may need root to prepare mounted paths before the app starts.
+    user: "0:0"
+    environment:
+      <<: *migration-env
+      NODE_ENV: "production"
+      PORT: "3270"
+      PRISMA_CONFIG_PATH: "prisma.config.postgres.ts"
+    networks: [internal]
+    volumes:
+      - uploads_data:/app/uploads
+      - ${CLI_RELEASES_HOST_DIR:-./data/cli-releases}:${CLI_RELEASES_DIR:-/app/cli-releases}:ro
+    command: >
+      sh -c "case \"$$MIGRATION_DATABASE_URL\" in
+      file:*) echo 'Docker Compose requires a PostgreSQL MIGRATION_DATABASE_URL in .env.docker or .env. SQLite file URLs are not allowed here.' >&2; exit 1 ;;
+      '') echo 'Docker Compose requires MIGRATION_DATABASE_URL to be set in .env.docker or .env.' >&2; exit 1 ;;
+      esac
+      && case \"$$POSTGRES_PASSWORD\" in
+      ''|starter) echo 'Docker Compose production flow requires POSTGRES_PASSWORD in .env.docker or .env to be set to a non-default secret.' >&2; exit 1 ;;
+      esac
+      && node scripts/prisma-predeploy-check.js
+      && ./node_modules/.bin/prisma migrate deploy --config prisma.config.postgres.ts
+      && node scripts/seed-initial-admin.mjs"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  app:
+    <<: *app-image
+    environment:
+      <<: *app-env
+      NODE_ENV: "production"
+      PORT: "3270"
+    networks: [internal]
+    volumes:
+      - uploads_data:/app/uploads
+    ports:
+      - "${PORT:-3270}:3270"
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    command: >
+      sh -c "case \"$$APP_DATABASE_URL\" in
+      file:*) echo 'Docker Compose requires a PostgreSQL APP_DATABASE_URL in .env.docker or .env. SQLite file URLs are not allowed here.' >&2; exit 1 ;;
+      '') echo 'Docker Compose requires APP_DATABASE_URL to be set in .env.docker or .env.' >&2; exit 1 ;;
+      esac
+      && node server.js"
+
+  worker:
+    image: ${WORKER_IMAGE_NAME:-business-app-starter-worker}:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+      args:
+        APP_VERSION: ${APP_VERSION:-local}
+        APP_REVISION: ${APP_REVISION:-unknown}
+        APP_BUILD_ID: ${APP_BUILD_ID:-docker-compose}
+        APP_BUILT_AT: ${APP_BUILT_AT:-unknown}
+    environment:
+      <<: *worker-env
+    networks: [internal]
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    command: >
+      sh -c "case \"$$WORKER_DATABASE_URL\" in
+      file:*) echo 'Docker Compose requires a PostgreSQL WORKER_DATABASE_URL in .env.docker or .env. SQLite file URLs are not allowed here.' >&2; exit 1 ;;
+      '') echo 'Docker Compose requires WORKER_DATABASE_URL to be set in .env.docker or .env.' >&2; exit 1 ;;
+      esac
+      && .venv/bin/starter-worker"
+
+networks:
+  internal:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  uploads_data:

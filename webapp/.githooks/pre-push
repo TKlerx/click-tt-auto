@@ -1,0 +1,10 @@
+#!/usr/bin/env sh
+set -eu
+
+hook_dir=${0%/*}
+
+if [ "${RUN_FULL_VALIDATION_ON_PUSH:-0}" = "1" ]; then
+  exec "$hook_dir/run-validate.sh" full
+fi
+
+exec "$hook_dir/run-validate.sh" prepush
