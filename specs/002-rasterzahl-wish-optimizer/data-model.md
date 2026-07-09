@@ -86,7 +86,7 @@ AbsoluteConstraint { teamId: string; kind: "kalenderwoche"|"spieltage"; detail: 
 ```
 Assignment = Map<TeamId, Rasterzahl>          // decision variable
 
-Weights { overUsage: number; overUsageFairness: number; wechsel: number; zeitgleich: number; spielwoche: number }
+Weights { overUsage: number; overUsageFairness: number; wechsel: number; zeitgleich: number; sameClubDerbySt4: number; spielwoche: number }
 
 EvaluationResult {
   assignment: Assignment
@@ -99,7 +99,7 @@ EvaluationResult {
 }
 OverUsage   { clubId; hall; weekday: Weekday; week: number; teams: TeamId[]; capacity: number }
             // week = shared district calendar week (Spielwochen-aligned), comparable across raster sizes
-HardViolation { kind: "permutation"|"fixed-altered"|"derby-late"; detail: string }
+HardViolation { kind: "permutation"|"fixed-altered"|"derby-late"|"capacity-overflow"; detail: string }
 WishResult { wish: RelationalWish; status: "fulfilled"|"unfulfilled"|"unfulfillable"|"unknown"; reason?: string }
 ```
 

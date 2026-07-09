@@ -29,6 +29,7 @@ DEFAULT_WEIGHTS = {
     "overUsageFairness": 1,
     "wechsel": 5,
     "zeitgleich": 5,
+    "sameClubDerbySt4": 1000,
     "spielwoche": 0,
 }
 
@@ -201,6 +202,8 @@ def main() -> None:
                 model.add(var == int(team["rasterzahl"]["value"]))
         model.add_all_different(group_vars)
 
+    objective_terms: list[cp_model.LinearExpr] = []
+
     for group in season["groups"]:
         ids = group["teamIds"]
         for left_index, left_id in enumerate(ids):
@@ -210,14 +213,16 @@ def main() -> None:
                 if left["clubId"] != right["clubId"]:
                     continue
                 allowed = []
+                is_st4 = model.new_bool_var(f"same_club_st4_{left_id}_{right_id}")
                 for a in range(1, int(group["size"]) + 1):
                     for b in range(1, int(group["size"]) + 1):
                         if a == b:
                             continue
                         day = derby_spieltag(int(group["size"]), a, b)
                         if day is None or day <= 4:
-                            allowed.append((a, b))
-                model.add_allowed_assignments([rz[left_id], rz[right_id]], allowed)
+                            allowed.append((a, b, int(day == 4)))
+                model.add_allowed_assignments([rz[left_id], rz[right_id], is_st4], allowed)
+                objective_terms.append(is_st4 * int(weights["sameClubDerbySt4"]))
 
     home_bool: dict[tuple[str, int], cp_model.IntVar] = {}
     for team_id, team in teams.items():
@@ -231,7 +236,6 @@ def main() -> None:
             model.add_allowed_assignments([rz[team_id], var], table)
             home_bool[(team_id, week)] = var
 
-    objective_terms: list[cp_model.LinearExpr] = []
     excess_by_club: dict[str, list[cp_model.IntVar]] = {}
     slot_keys = sorted(
         {

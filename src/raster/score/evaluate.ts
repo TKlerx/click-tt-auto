@@ -43,6 +43,7 @@ export function evaluate(
   const assignment = completeAssignment(model, partialAssignment);
   const hardViolations: HardViolation[] = [];
   const perGroup: EvaluationResult["perGroup"] = [];
+  let sameClubDerbySt4 = 0;
 
   for (const group of model.groups) {
     const rasterSize = rasterSizeForGroupSize(group.size);
@@ -67,15 +68,6 @@ export function evaluate(
       valid
     });
 
-    if (
-      !group.teamIds.some(
-        (teamId) =>
-          model.teams.find((team) => team.id === teamId)?.rasterzahl.kind === "assignable"
-      )
-    ) {
-      continue;
-    }
-
     for (const [leftIndex, leftId] of group.teamIds.entries()) {
       const left = model.teams.find((team) => team.id === leftId);
       const leftRz = assignment[leftId];
@@ -91,6 +83,7 @@ export function evaluate(
             kind: "derby-late",
             detail: `${left.id}/${right.id} meet on Spieltag ${spieltag}`
           });
+        if (spieltag === 4) sameClubDerbySt4++;
       }
     }
   }
@@ -140,6 +133,7 @@ export function evaluate(
     overUsageFairnessCost(overUsages) * weights.overUsageFairness +
     brokenWechsel * weights.wechsel +
     brokenZeitgleich * weights.zeitgleich +
+    sameClubDerbySt4 * weights.sameClubDerbySt4 +
     spielwocheMisses.length * weights.spielwoche;
 
   return {

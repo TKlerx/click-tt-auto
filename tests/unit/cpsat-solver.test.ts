@@ -132,6 +132,36 @@ const knownAssignment = {
   "target-10": 6
 };
 
+function fixedSt4DerbyModel(): SeasonModel {
+  return {
+    clubs: [{ id: "elsen", name: "TuRa Elsen", venues: [], notes: "" }],
+    teams: [
+      {
+        id: "elsen-1",
+        clubId: "elsen",
+        label: "TuRa Elsen I",
+        homeWeekday: "friday",
+        hall: "1",
+        rasterzahl: { kind: "fixed", value: 3 },
+        confidence: "ok"
+      },
+      {
+        id: "elsen-2",
+        clubId: "elsen",
+        label: "TuRa Elsen II",
+        homeWeekday: "friday",
+        hall: "1",
+        rasterzahl: { kind: "fixed", value: 4 },
+        confidence: "ok"
+      }
+    ],
+    groups: [{ ref: { league: "L", name: "G12" }, size: 12, teamIds: ["elsen-1", "elsen-2"] }],
+    wishes: [],
+    absoluteConstraints: [],
+    warnings: []
+  };
+}
+
 describe("CP-SAT raster solver", () => {
   it("finds a known optimum across multiple groups and hall constraints", async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "raster-cpsat-"));
@@ -167,6 +197,45 @@ describe("CP-SAT raster solver", () => {
       expect(metadata.status).toBe("OPTIMAL");
       expect(assignment).toEqual(knownAssignment);
       expect(evaluate(model, assignment).objective).toBe(0);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }, 120_000);
+
+  it("charges the ST4 fallback penalty for same-club derbies", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "raster-cpsat-"));
+    try {
+      const model = fixedSt4DerbyModel();
+      const modelPath = path.join(dir, "model.json");
+      const outPath = path.join(dir, "assignment.json");
+      const metadataPath = path.join(dir, "metadata.json");
+      await writeFile(modelPath, JSON.stringify(model), "utf8");
+
+      await execFileAsync(
+        "uv",
+        [
+          "run",
+          "--python",
+          "3.12",
+          "scripts/solve-raster-cpsat.py",
+          "--model",
+          modelPath,
+          "--out",
+          outPath,
+          "--metadata",
+          metadataPath,
+          "--time-limit",
+          "30"
+        ],
+        { cwd: process.cwd(), timeout: 120_000 }
+      );
+
+      const assignment = JSON.parse(await readFile(outPath, "utf8")) as Assignment;
+      const metadata = JSON.parse(await readFile(metadataPath, "utf8")) as { objective: number; status: string };
+
+      expect(metadata.status).toBe("OPTIMAL");
+      expect(metadata.objective).toBe(1000);
+      expect(evaluate(model, assignment).objective).toBe(1000);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

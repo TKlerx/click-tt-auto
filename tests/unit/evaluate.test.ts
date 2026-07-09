@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import fixture from "../fixtures/raster/reference-group.json" with { type: "json" };
 import { evaluate, overUsageFairnessCost } from "../../src/raster/score/index.js";
-import type { Assignment, OverUsage, SeasonModel } from "../../src/raster/types.js";
+import { defaultWeights, type Assignment, type OverUsage, type SeasonModel } from "../../src/raster/types.js";
 
 describe("raster evaluation", () => {
   it("matches the hand reference fixture", () => {
@@ -46,6 +46,45 @@ describe("raster evaluation", () => {
 
     expect(overUsageFairnessCost([usage("a"), usage("a")])).toBeGreaterThan(
       overUsageFairnessCost([usage("a"), usage("b")])
+    );
+  });
+
+  it("penalizes ST4 same-club derbies and rejects later derbies", () => {
+    const model: SeasonModel = {
+      clubs: [{ id: "elsen", name: "TuRa Elsen", venues: [], notes: "" }],
+      teams: [
+        {
+          id: "elsen-1",
+          clubId: "elsen",
+          label: "TuRa Elsen I",
+          homeWeekday: "friday",
+          hall: "1",
+          rasterzahl: { kind: "assignable" },
+          confidence: "ok"
+        },
+        {
+          id: "elsen-2",
+          clubId: "elsen",
+          label: "TuRa Elsen II",
+          homeWeekday: "friday",
+          hall: "1",
+          rasterzahl: { kind: "assignable" },
+          confidence: "ok"
+        }
+      ],
+      groups: [{ ref: { league: "L", name: "G12" }, size: 12, teamIds: ["elsen-1", "elsen-2"] }],
+      wishes: [],
+      absoluteConstraints: [],
+      warnings: []
+    };
+
+    const fallback = evaluate(model, { "elsen-1": 3, "elsen-2": 4 });
+    expect(fallback.hardViolations).toHaveLength(0);
+    expect(fallback.objective).toBe(defaultWeights.sameClubDerbySt4);
+
+    const late = evaluate(model, { "elsen-1": 1, "elsen-2": 7 });
+    expect(late.hardViolations).toContainEqual(
+      expect.objectContaining({ kind: "derby-late" })
     );
   });
 });

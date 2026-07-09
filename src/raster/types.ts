@@ -109,6 +109,7 @@ export interface Weights {
   overUsageFairness: number;
   wechsel: number;
   zeitgleich: number;
+  sameClubDerbySt4: number;
   spielwoche: number;
 }
 
@@ -148,5 +149,6 @@ export const defaultWeights: Weights = {
   overUsageFairness: 1,
   wechsel: 5,
   zeitgleich: 5,
+  sameClubDerbySt4: 1000,
   spielwoche: 0
 };
