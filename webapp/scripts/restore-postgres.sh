@@ -77,7 +77,7 @@ step "Prisma pre-deploy verification"
 docker compose -f "$COMPOSE_FILE" run --rm --entrypoint sh migrate -lc "node scripts/prisma-predeploy-check.js"
 
 step "Prisma migrate deploy"
-docker compose -f "$COMPOSE_FILE" run --rm --entrypoint sh migrate -lc "pnpm exec prisma migrate deploy --config prisma.config.postgres.ts"
+docker compose -f "$COMPOSE_FILE" run --rm --entrypoint sh migrate -lc "pnpm exec prisma migrate deploy"
 
 step "Seed initial admin if needed"
 docker compose -f "$COMPOSE_FILE" run --rm --entrypoint sh migrate -lc "node scripts/seed-initial-admin.mjs"

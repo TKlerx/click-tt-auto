@@ -102,31 +102,118 @@ enum TeamsInboundStatus {
   IGNORED
 }
 
+enum RasterWeekday {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+enum InputSetStatus {
+  DRAFT
+  READY
+}
+
+enum RasterWishSource {
+  PDF_PARSED
+  LLM_PASTED
+  STRUCTURED
+}
+
+enum RasterConfidence {
+  OK
+  REVIEW
+}
+
+enum HallCapacityBasis {
+  REVIEWED
+  INFERRED
+  MISSING
+}
+
+enum FixedRasterzahlSource {
+  PDF
+  MANUAL
+  STRUCTURED
+}
+
+enum OptimizationRunStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum OptimizationRunOutcome {
+  PROVEN_OPTIMAL
+  FEASIBLE
+  INFEASIBLE
+  FAILED
+  CANCELLED
+}
+
+enum SnapshotOrigin {
+  GENERATED
+  IMPORTED
+}
+
+enum SnapshotOptimality {
+  PROVEN_OPTIMAL
+  FEASIBLE
+  IMPORTED_HEURISTIC
+}
+
+enum AssignmentStatus {
+  OPTIMIZED
+  FIXED
+  PINNED
+  MISSING
+}
+
+enum ReviewTargetType {
+  CONFLICT
+  CLUB_SUMMARY
+}
+
+enum ReviewDecisionStatus {
+  REVIEWED
+  NEEDS_CORRECTION
+  ACCEPTED_UNAVOIDABLE
+}
+
 model User {
-  id                 String                  @id @default(cuid())
-  email              String                  @unique
-  emailVerified      Boolean                 @default(false)
-  name               String
-  image              String?
-  role               Role                    @default(SCOPE_USER)
-  status             UserStatus              @default(PENDING_APPROVAL)
-  authMethod         AuthMethod
-  mustChangePassword Boolean                 @default(true)
-  themePreference    ThemePreference         @default(LIGHT)
-  locale             String                  @default("en")
-  createdAt          DateTime                @default(now())
-  updatedAt          DateTime                @updatedAt
-  accounts           Account[]
-  sessions           Session[]
-  scopeAssignments   UserScopeAssignment[]
-  auditEntries       AuditEntry[]            @relation("AuditActor")
-  backgroundJobs     BackgroundJob[]         @relation("BackgroundJobCreator")
-  personalAccessTokens PersonalAccessToken[]
-  cliAuthCodes       CliAuthCode[]
-  teamsIntegrationConfigUpdates TeamsIntegrationConfig[] @relation("TeamsIntegrationUpdatedBy")
-  teamsDeliveryTargets TeamsDeliveryTarget[]             @relation("TeamsDeliveryTargetCreator")
-  teamsIntakeSubscriptions TeamsIntakeSubscription[]     @relation("TeamsIntakeSubscriptionCreator")
-  teamsDelegatedGrant TeamsDelegatedGrant?
+  id                            String                    @id @default(cuid())
+  email                         String                    @unique
+  emailVerified                 Boolean                   @default(false)
+  name                          String
+  image                         String?
+  role                          Role                      @default(SCOPE_USER)
+  status                        UserStatus                @default(PENDING_APPROVAL)
+  authMethod                    AuthMethod
+  mustChangePassword            Boolean                   @default(true)
+  themePreference               ThemePreference           @default(LIGHT)
+  locale                        String                    @default("en")
+  createdAt                     DateTime                  @default(now())
+  updatedAt                     DateTime                  @updatedAt
+  accounts                      Account[]
+  sessions                      Session[]
+  scopeAssignments              UserScopeAssignment[]
+  auditEntries                  AuditEntry[]              @relation("AuditActor")
+  backgroundJobs                BackgroundJob[]           @relation("BackgroundJobCreator")
+  personalAccessTokens          PersonalAccessToken[]
+  cliAuthCodes                  CliAuthCode[]
+  teamsIntegrationConfigUpdates TeamsIntegrationConfig[]  @relation("TeamsIntegrationUpdatedBy")
+  teamsDeliveryTargets          TeamsDeliveryTarget[]     @relation("TeamsDeliveryTargetCreator")
+  teamsIntakeSubscriptions      TeamsIntakeSubscription[] @relation("TeamsIntakeSubscriptionCreator")
+  teamsDelegatedGrant           TeamsDelegatedGrant?
+  rasterInputSets               RasterInputSet[]          @relation("RasterInputSetCreator")
+  rasterRuns                    RasterOptimizationRun[]   @relation("RasterRunStarter")
+  rasterCapacityUpdates         RasterHallCapacity[]      @relation("RasterCapacityUpdater")
+  rasterReviewDecisions         RasterReviewDecision[]    @relation("RasterReviewDecider")
 }
 
 model Session {
@@ -175,11 +262,11 @@ model Verification {
 }
 
 model Scope {
-  id              String                  @id @default(cuid())
-  name            String                  @unique
-  code            String                  @unique
-  createdAt       DateTime                @default(now())
-  updatedAt       DateTime                @updatedAt
+  id              String                @id @default(cuid())
+  name            String                @unique
+  code            String                @unique
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
   userAssignments UserScopeAssignment[]
   auditEntries    AuditEntry[]
 }
@@ -276,13 +363,13 @@ model BackgroundJob {
 }
 
 model NotificationEvent {
-  id             String                @id @default(cuid())
-  eventType      NotificationEventType
-  actorId        String?
-  affectedUserId String?
-  payload        String                @default("{}")
-  createdAt      DateTime              @default(now())
-  notifications  Notification[]
+  id                    String                 @id @default(cuid())
+  eventType             NotificationEventType
+  actorId               String?
+  affectedUserId        String?
+  payload               String                 @default("{}")
+  createdAt             DateTime               @default(now())
+  notifications         Notification[]
   teamsOutboundMessages TeamsOutboundMessage[]
 
   @@index([eventType, createdAt])
@@ -299,22 +386,22 @@ model NotificationTypeConfiguration {
 }
 
 model Notification {
-  id               String             @id @default(cuid())
-  eventId          String
-  recipientEmail   String
-  recipientUserId  String?
-  locale           String             @default("en")
-  subject          String
-  bodyText         String
-  bodyHtml         String?
-  status           NotificationStatus @default(QUEUED)
-  retryCount       Int                @default(0)
+  id                String             @id @default(cuid())
+  eventId           String
+  recipientEmail    String
+  recipientUserId   String?
+  locale            String             @default("en")
+  subject           String
+  bodyText          String
+  bodyHtml          String?
+  status            NotificationStatus @default(QUEUED)
+  retryCount        Int                @default(0)
   providerMessageId String?
-  lastError        String?
-  sentAt           DateTime?
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
-  event            NotificationEvent  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  lastError         String?
+  sentAt            DateTime?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  event             NotificationEvent  @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
   @@index([eventId])
   @@index([status, createdAt])
@@ -323,27 +410,27 @@ model Notification {
 }
 
 model InboundEmail {
-  id                     String             @id @default(cuid())
-  providerMessageId      String             @unique
-  mailbox                String
-  internetMessageId      String?
-  conversationId         String?
-  senderEmail            String?
-  senderName             String?
-  subject                String
-  bodyPreview            String?
-  bodyText               String?
-  bodyHtml               String?
-  inReplyTo              String?
-  referenceIds           String             @default("[]")
-  receivedAt             DateTime
-  processingStatus       InboundEmailStatus @default(RECEIVED)
-  processingNotes        String?
+  id                       String             @id @default(cuid())
+  providerMessageId        String             @unique
+  mailbox                  String
+  internetMessageId        String?
+  conversationId           String?
+  senderEmail              String?
+  senderName               String?
+  subject                  String
+  bodyPreview              String?
+  bodyText                 String?
+  bodyHtml                 String?
+  inReplyTo                String?
+  referenceIds             String             @default("[]")
+  receivedAt               DateTime
+  processingStatus         InboundEmailStatus @default(RECEIVED)
+  processingNotes          String?
   correlatedNotificationId String?
-  linkedEntityType       String?
-  linkedEntityId         String?
-  createdAt              DateTime           @default(now())
-  updatedAt              DateTime           @updatedAt
+  linkedEntityType         String?
+  linkedEntityId           String?
+  createdAt                DateTime           @default(now())
+  updatedAt                DateTime           @updatedAt
 
   @@index([processingStatus, receivedAt])
   @@index([mailbox, receivedAt])
@@ -362,17 +449,17 @@ model TeamsIntegrationConfig {
 }
 
 model TeamsDeliveryTarget {
-  id              String                @id @default(cuid())
-  name            String
-  teamId          String
-  channelId       String
-  teamName        String?
-  channelName     String?
-  active          Boolean               @default(true)
-  createdByUserId String
-  createdAt       DateTime              @default(now())
-  updatedAt       DateTime              @updatedAt
-  createdBy       User                  @relation("TeamsDeliveryTargetCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  id               String                 @id @default(cuid())
+  name             String
+  teamId           String
+  channelId        String
+  teamName         String?
+  channelName      String?
+  active           Boolean                @default(true)
+  createdByUserId  String
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+  createdBy        User                   @relation("TeamsDeliveryTargetCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
   outboundMessages TeamsOutboundMessage[]
 
   @@unique([teamId, channelId])
@@ -380,22 +467,22 @@ model TeamsDeliveryTarget {
 }
 
 model TeamsOutboundMessage {
-  id              String             @id @default(cuid())
-  targetId        String
-  eventType       NotificationEventType
-  eventId         String?
-  content         String
-  contentType     String             @default("html")
-  truncated       Boolean            @default(false)
-  status          TeamsMessageStatus @default(QUEUED)
-  graphMessageId  String?
-  attemptCount    Int                @default(0)
-  lastError       String?
-  sentAt          DateTime?
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
-  target          TeamsDeliveryTarget @relation(fields: [targetId], references: [id], onDelete: Restrict)
-  event           NotificationEvent?  @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  id             String                @id @default(cuid())
+  targetId       String
+  eventType      NotificationEventType
+  eventId        String?
+  content        String
+  contentType    String                @default("html")
+  truncated      Boolean               @default(false)
+  status         TeamsMessageStatus    @default(QUEUED)
+  graphMessageId String?
+  attemptCount   Int                   @default(0)
+  lastError      String?
+  sentAt         DateTime?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  target         TeamsDeliveryTarget   @relation(fields: [targetId], references: [id], onDelete: Restrict)
+  event          NotificationEvent?    @relation(fields: [eventId], references: [id], onDelete: SetNull)
 
   @@index([targetId, createdAt])
   @@index([status, createdAt])
@@ -403,18 +490,18 @@ model TeamsOutboundMessage {
 }
 
 model TeamsIntakeSubscription {
-  id              String               @id @default(cuid())
+  id              String                @id @default(cuid())
   teamId          String
   channelId       String
   teamName        String?
   channelName     String?
-  active          Boolean              @default(true)
+  active          Boolean               @default(true)
   deltaToken      String?
   lastPolledAt    DateTime?
   createdByUserId String
-  createdAt       DateTime             @default(now())
-  updatedAt       DateTime             @updatedAt
-  createdBy       User                 @relation("TeamsIntakeSubscriptionCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  createdBy       User                  @relation("TeamsIntakeSubscriptionCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
   inboundMessages TeamsInboundMessage[]
 
   @@unique([teamId, channelId])
@@ -422,22 +509,22 @@ model TeamsIntakeSubscription {
 }
 
 model TeamsInboundMessage {
-  id               String             @id @default(cuid())
-  subscriptionId   String
-  providerMessageId String            @unique
-  teamId           String
-  channelId        String
+  id                String                  @id @default(cuid())
+  subscriptionId    String
+  providerMessageId String                  @unique
+  teamId            String
+  channelId         String
   senderDisplayName String?
-  senderUserId     String?
-  content          String?
-  contentType      String?
-  truncated        Boolean            @default(false)
-  processingStatus TeamsInboundStatus @default(RECEIVED)
-  processingNotes  String?
-  messageCreatedAt DateTime
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
-  subscription     TeamsIntakeSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  senderUserId      String?
+  content           String?
+  contentType       String?
+  truncated         Boolean                 @default(false)
+  processingStatus  TeamsInboundStatus      @default(RECEIVED)
+  processingNotes   String?
+  messageCreatedAt  DateTime
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  subscription      TeamsIntakeSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
 
   @@index([subscriptionId, createdAt])
   @@index([processingStatus, createdAt])
@@ -445,15 +532,179 @@ model TeamsInboundMessage {
 }
 
 model TeamsDelegatedGrant {
-  id           String   @id @default(cuid())
-  userId       String   @unique
+  id           String    @id @default(cuid())
+  userId       String    @unique
   scope        String
   accessToken  String
   refreshToken String?
   expiresAt    DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([expiresAt])
+}
+
+model RasterInputSet {
+  id                String                  @id @default(cuid())
+  name              String
+  district          String
+  createdById       String
+  createdAt         DateTime                @default(now())
+  status            InputSetStatus          @default(DRAFT)
+  createdBy         User                    @relation("RasterInputSetCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  wishes            RasterWish[]
+  fixedRasterzahlen RasterFixedRasterzahl[]
+  runs              RasterOptimizationRun[]
+
+  @@index([district, createdAt])
+  @@index([createdById])
+}
+
+model RasterWish {
+  id                  String           @id @default(cuid())
+  inputSetId          String
+  clubId              String
+  clubName            String
+  teamLabel           String?
+  homeWeekday         RasterWeekday
+  hall                String?
+  startTime           String?
+  spielwochePref      String?
+  requestedRasterzahl String?
+  notes               String?
+  source              RasterWishSource
+  confidence          RasterConfidence @default(REVIEW)
+  inputSet            RasterInputSet   @relation(fields: [inputSetId], references: [id], onDelete: Cascade)
+
+  @@index([inputSetId])
+  @@index([clubId])
+}
+
+model RasterHallCapacity {
+  id          String            @id @default(cuid())
+  district    String
+  clubId      String
+  hall        String
+  weekday     RasterWeekday
+  capacity    Int
+  basis       HallCapacityBasis @default(MISSING)
+  updatedById String?
+  updatedAt   DateTime          @updatedAt
+  updatedBy   User?             @relation("RasterCapacityUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@unique([district, clubId, hall, weekday])
+  @@index([district, clubId])
+  @@index([updatedById])
+}
+
+model RasterFixedRasterzahl {
+  id         String                @id @default(cuid())
+  inputSetId String
+  clubId     String
+  teamLabel  String
+  rasterzahl Int
+  source     FixedRasterzahlSource
+  inputSet   RasterInputSet        @relation(fields: [inputSetId], references: [id], onDelete: Cascade)
+
+  @@index([inputSetId])
+  @@index([clubId])
+}
+
+model RasterOptimizationRun {
+  id                 String                  @id @default(cuid())
+  inputSetId         String
+  startedById        String
+  jobId              String?
+  status             OptimizationRunStatus   @default(PENDING)
+  outcome            OptimizationRunOutcome?
+  objectiveValue     Float?
+  objectiveBreakdown String?
+  solverStatus       String?
+  settings           String                  @default("{}")
+  createdAt          DateTime                @default(now())
+  finishedAt         DateTime?
+  inputSet           RasterInputSet          @relation(fields: [inputSetId], references: [id], onDelete: Restrict)
+  startedBy          User                    @relation("RasterRunStarter", fields: [startedById], references: [id], onDelete: Restrict)
+  snapshot           RasterSnapshot?
+
+  @@index([inputSetId, createdAt])
+  @@index([startedById])
+  @@index([status, createdAt])
+}
+
+model RasterSnapshot {
+  id                 String                 @id @default(cuid())
+  runId              String?                @unique
+  district           String
+  origin             SnapshotOrigin
+  optimality         SnapshotOptimality
+  stale              Boolean                @default(false)
+  totalConflicts     Int                    @default(0)
+  totalExcess        Int                    @default(0)
+  maxExcess          Int                    @default(0)
+  affectedClubs      Int                    @default(0)
+  objectiveBreakdown String                 @default("{}")
+  createdAt          DateTime               @default(now())
+  run                RasterOptimizationRun? @relation(fields: [runId], references: [id], onDelete: SetNull)
+  assignments        RasterAssignment[]
+  conflicts          RasterConflict[]
+  reviewDecisions    RasterReviewDecision[]
+
+  @@index([district, createdAt])
+  @@index([stale])
+}
+
+model RasterAssignment {
+  id         String           @id @default(cuid())
+  snapshotId String
+  league     String
+  group      String
+  clubId     String
+  clubName   String
+  team       String
+  rasterzahl Int
+  status     AssignmentStatus
+  weekday    RasterWeekday
+  hall       String
+  startTime  String?
+  weekSlot   String?
+  snapshot   RasterSnapshot   @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+
+  @@index([snapshotId, clubId])
+  @@index([snapshotId, league, group])
+}
+
+model RasterConflict {
+  id          String         @id @default(cuid())
+  snapshotId  String
+  matchWeek   Int
+  clubId      String
+  clubName    String
+  weekday     RasterWeekday
+  hall        String
+  capacity    Int
+  actualCount Int
+  excess      Int
+  teams       String
+  snapshot    RasterSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+
+  @@index([snapshotId, clubId])
+  @@index([snapshotId, excess])
+}
+
+model RasterReviewDecision {
+  id          String               @id @default(cuid())
+  snapshotId  String
+  targetType  ReviewTargetType
+  targetId    String
+  status      ReviewDecisionStatus
+  note        String?
+  decidedById String
+  decidedAt   DateTime             @default(now())
+  snapshot    RasterSnapshot       @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  decidedBy   User                 @relation("RasterReviewDecider", fields: [decidedById], references: [id], onDelete: Restrict)
+
+  @@index([snapshotId, targetType, targetId])
+  @@index([decidedById])
 }

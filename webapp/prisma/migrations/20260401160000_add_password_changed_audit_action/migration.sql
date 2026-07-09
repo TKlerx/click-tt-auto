@@ -1,2 +1,0 @@
--- SQLite stores Prisma enums as text, so no physical schema change is required.
--- This migration records the introduction of AUTH_PASSWORD_CHANGED in the Prisma schema.

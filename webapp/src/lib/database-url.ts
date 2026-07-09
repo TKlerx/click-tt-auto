@@ -1,4 +1,3 @@
-const LOCAL_DATABASE_URL = "file:./dev.db";
 type DatabaseUrlEnv = Record<string, string | undefined>;
 
 function firstConfiguredValue(values: Array<string | undefined>) {
@@ -9,7 +8,7 @@ function firstConfiguredValue(values: Array<string | undefined>) {
     }
   }
 
-  return LOCAL_DATABASE_URL;
+  throw new Error("APP_DATABASE_URL or DATABASE_URL must be set.");
 }
 
 export function resolveAppDatabaseUrl(env: DatabaseUrlEnv = process.env) {
@@ -20,6 +19,15 @@ export function resolveMigrationDatabaseUrl(env: DatabaseUrlEnv = process.env) {
   return firstConfiguredValue([env.MIGRATION_DATABASE_URL, env.DATABASE_URL]);
 }
 
-export function getDatabaseProviderForUrl(databaseUrl: string) {
-  return databaseUrl.startsWith("file:") ? "sqlite" : "postgresql";
+export function getDatabaseProviderForUrl(
+  databaseUrl: string,
+): "postgresql" {
+  if (
+    !databaseUrl.startsWith("postgresql://") &&
+    !databaseUrl.startsWith("postgres://")
+  ) {
+    throw new Error("Only PostgreSQL database URLs are supported.");
+  }
+
+  return "postgresql";
 }

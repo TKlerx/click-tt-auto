@@ -78,7 +78,7 @@ else
 fi
 
 step "Prisma migrate deploy"
-docker compose -f "$COMPOSE_FILE" run --rm --entrypoint sh migrate -lc "pnpm exec prisma migrate deploy --config prisma.config.postgres.ts"
+docker compose -f "$COMPOSE_FILE" run --rm --entrypoint sh migrate -lc "pnpm exec prisma migrate deploy"
 
 step "Rebuild and restart app + worker"
 docker compose -f "$COMPOSE_FILE" up -d --build app worker

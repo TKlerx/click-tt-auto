@@ -1,7 +1,5 @@
 import "dotenv/config";
-import { createRequire } from "node:module";
 import { PrismaPg } from "@prisma/adapter-pg";
-import type { SqlDriverAdapterFactory } from "@prisma/client/runtime/client";
 import bcrypt from "bcryptjs";
 import { PrismaClient } from "../generated/prisma/client";
 import {
@@ -11,22 +9,11 @@ import {
   UserStatus,
 } from "../generated/prisma/enums";
 import { validatePasswordComplexity } from "../src/lib/auth";
+import { getDatabaseProviderForUrl } from "../src/lib/database-url";
 import { normalizeInitialAdminEmail } from "./seed-utils";
 
-const require = createRequire(import.meta.url);
-
 function createAdapter(connectionString: string) {
-  if (connectionString.startsWith("file:")) {
-    const { PrismaBetterSqlite3 } =
-      require("@prisma/adapter-better-sqlite3") as {
-        PrismaBetterSqlite3: new (options: {
-          url: string;
-        }) => SqlDriverAdapterFactory;
-      };
-
-    return new PrismaBetterSqlite3({ url: connectionString });
-  }
-
+  getDatabaseProviderForUrl(connectionString);
   return new PrismaPg(
     { connectionString },
     { schema: getPostgresSchema(connectionString) },
@@ -39,8 +26,10 @@ function getPostgresSchema(connectionString: string) {
 
 const connectionString =
   process.env.MIGRATION_DATABASE_URL ??
-  process.env.DATABASE_URL ??
-  "file:./dev.db";
+  process.env.DATABASE_URL;
+if (!connectionString) {
+  throw new Error("MIGRATION_DATABASE_URL or DATABASE_URL must be set");
+}
 const adapter = createAdapter(connectionString);
 const prisma = new PrismaClient({ adapter });
 

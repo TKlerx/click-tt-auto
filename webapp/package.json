@@ -40,9 +40,8 @@
     "validate:full": "pnpm run validate && pnpm run test:e2e",
     "template:stamp": "node scripts/stamp-template-origin.mjs",
     "prisma:generate": "prisma generate",
-    "prisma:generate:postgres": "prisma generate --config prisma.config.postgres.ts",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:migrate:postgres": "prisma migrate deploy --config prisma.config.postgres.ts",
+    "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:seed": "tsx prisma/seed.ts"
   },
   "keywords": [],
@@ -65,10 +64,6 @@
     "react-dom": "^19.2.5",
     "tailwind-merge": "^3.5.0",
     "zod": "^4.3.6"
-  },
-  "optionalDependencies": {
-    "@prisma/adapter-better-sqlite3": "^7.7.0",
-    "better-sqlite3": "^12.9.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.5",

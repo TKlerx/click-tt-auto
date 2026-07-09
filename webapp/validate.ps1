@@ -1247,9 +1247,7 @@ if ($Phase -in "all", "full", "test", "commit") {
             $env:DATABASE_URL = "postgresql://starter:starter_e2e_password@localhost:55432/business_app_starter_e2e_test"
         }
 
-        $effectiveDatabaseUrl = if (-not [string]::IsNullOrWhiteSpace($env:APP_DATABASE_URL)) { $env:APP_DATABASE_URL } else { $env:DATABASE_URL }
-        $generateCommand = if ($effectiveDatabaseUrl -like "file:*") { "pnpm run prisma:generate" } else { "pnpm run prisma:generate:postgres" }
-        $generateResult = Invoke-NativeCommandCaptured $generateCommand
+        $generateResult = Invoke-NativeCommandCaptured "pnpm run prisma:generate"
         if ($generateResult.ExitCode -ne 0) {
             $generateResult.Output | Out-Host
             throw "prisma generate failed"

@@ -23,8 +23,7 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   webServer: {
-    command:
-      "pnpm run prisma:generate:postgres && pnpm run build && pnpm run start",
+    command: "pnpm run prisma:generate && pnpm run build && pnpm run start",
     env: {
       ...process.env,
       PORT: String(port),

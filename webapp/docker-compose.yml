@@ -104,7 +104,6 @@ services:
       <<: *migration-env
       NODE_ENV: "production"
       PORT: "3270"
-      PRISMA_CONFIG_PATH: "prisma.config.postgres.ts"
     networks: [internal]
     volumes:
       - uploads_data:/app/uploads
@@ -118,7 +117,7 @@ services:
       ''|starter) echo 'Docker Compose production flow requires POSTGRES_PASSWORD in .env.docker or .env to be set to a non-default secret.' >&2; exit 1 ;;
       esac
       && node scripts/prisma-predeploy-check.js
-      && ./node_modules/.bin/prisma migrate deploy --config prisma.config.postgres.ts
+      && ./node_modules/.bin/prisma migrate deploy
       && node scripts/seed-initial-admin.mjs"
     depends_on:
       postgres:

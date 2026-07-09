@@ -138,7 +138,7 @@ describe("ops health snapshot helpers", () => {
     process.env.APP_REVISION = "abcdef1234567890";
     process.env.APP_BUILD_ID = "123.2";
     process.env.APP_BUILT_AT = "2026-06-11T09:20:17Z";
-    process.env.APP_DATABASE_URL = "file:./dev.db";
+    process.env.APP_DATABASE_URL = "postgresql://app:test@example/db";
     checkDatabaseHealth.mockResolvedValue({ status: "ok" });
     getProcessHealth.mockReturnValue({
       status: "ok",
@@ -163,7 +163,7 @@ describe("ops health snapshot helpers", () => {
       "deploySmoke",
     ]);
     expect(snapshot.diagnosticSummary.text).toContain("Version: staging-42");
-    expect(snapshot.diagnosticSummary.text).not.toContain("file:./dev.db");
+    expect(snapshot.diagnosticSummary.text).not.toContain("postgresql://");
   });
 
   it("creates an allowlisted diagnostic summary", () => {

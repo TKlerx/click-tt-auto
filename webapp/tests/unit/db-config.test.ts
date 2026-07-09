@@ -17,13 +17,17 @@ describe("database URL resolution", () => {
   });
 
   it("falls back to DATABASE_URL for local app runtime", () => {
-    expect(resolveAppDatabaseUrl({ DATABASE_URL: "file:./dev.db" })).toBe(
-      "file:./dev.db",
-    );
+    expect(
+      resolveAppDatabaseUrl({
+        DATABASE_URL: "postgresql://local:test@localhost:5432/app",
+      }),
+    ).toBe("postgresql://local:test@localhost:5432/app");
   });
 
-  it("defaults to local SQLite when no app database URL is configured", () => {
-    expect(resolveAppDatabaseUrl({})).toBe("file:./dev.db");
+  it("requires an app database URL", () => {
+    expect(() => resolveAppDatabaseUrl({})).toThrow(
+      /APP_DATABASE_URL or DATABASE_URL/,
+    );
   });
 
   it("prefers MIGRATION_DATABASE_URL for migration runtime", () => {
@@ -36,9 +40,11 @@ describe("database URL resolution", () => {
   });
 
   it("detects Prisma provider from the selected URL", () => {
-    expect(getDatabaseProviderForUrl("file:./dev.db")).toBe("sqlite");
     expect(getDatabaseProviderForUrl("postgresql://app:test@db:5432/app")).toBe(
       "postgresql",
+    );
+    expect(() => getDatabaseProviderForUrl("file:./dev.db")).toThrow(
+      /Only PostgreSQL/,
     );
   });
 });

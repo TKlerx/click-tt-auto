@@ -17,7 +17,7 @@
 ## Phase 1: Setup (Shared Infrastructure)
 
 - [X] T001 Amend constitution to v3.0.0 in `.specify/memory/constitution.md` — added the Rasterzahl Review Webapp as a third capability and permitted web-scoped deps in `webapp/` (resolves the plan's Constitution Check CONFLICT on Principle I).
-- [ ] T002 [P] Add raster models to `webapp/prisma/schema.prisma` and `webapp/prisma/schema.postgres.prisma` (InputSet, Wish, HallCapacity, FixedRasterzahl, OptimizationRun, Snapshot, Assignment, Conflict, ReviewDecision per data-model.md)
+- [X] T002 [P] Add raster models to `webapp/prisma/schema.postgres.prisma` (InputSet, Wish, HallCapacity, FixedRasterzahl, OptimizationRun, Snapshot, Assignment, Conflict, ReviewDecision per data-model.md)
 - [ ] T003 Create Prisma migration for the raster models (SQLite + `migrations-postgres`) and run `prisma:generate`
 - [ ] T004 [P] Define shared zod schemas in `webapp/src/lib/raster/schemas.ts` (Wish JSON schema, capacity CSV row, fixed-Rasterzahl, run settings)
 - [ ] T005 [P] Add district-scope + role-gate helpers in `webapp/src/lib/raster/access.ts` (assert admin/scheduler/viewer; scope queries by `district`)

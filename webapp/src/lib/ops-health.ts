@@ -217,7 +217,7 @@ async function mapDatabaseHealth(
         : "Database connectivity check failed",
     detail:
       database.status === "ok"
-        ? `Provider: ${resolveAppDatabaseUrl().startsWith("file:") ? "sqlite" : "postgresql"}.`
+        ? "Provider: postgresql."
         : database.message,
     checkedAt: capturedAt,
   };

@@ -6,24 +6,11 @@ const DEFAULT_E2E_DATABASE_URL =
 const databaseUrl =
   process.env.DATABASE_URL?.trim() || DEFAULT_E2E_DATABASE_URL;
 
-if (databaseUrl.startsWith("file:")) {
-  runStep(
-    "Provision local SQLite E2E database",
-    "node scripts/ensure-local-db.mjs",
-    {
-      DATABASE_URL: databaseUrl,
-    },
-  );
-  process.exit(0);
-}
-
 if (
   !databaseUrl.startsWith("postgresql://") &&
   !databaseUrl.startsWith("postgres://")
 ) {
-  throw new Error(
-    "E2E DATABASE_URL must be a PostgreSQL URL or an explicit file: SQLite URL.",
-  );
+  throw new Error("E2E DATABASE_URL must be a PostgreSQL URL.");
 }
 
 const parsed = new URL(databaseUrl);
@@ -45,19 +32,10 @@ const env = {
   MIGRATION_DATABASE_URL: databaseUrl,
   INITIAL_ADMIN_EMAIL: process.env.INITIAL_ADMIN_EMAIL ?? "admin@example.com",
   INITIAL_ADMIN_PASSWORD: process.env.INITIAL_ADMIN_PASSWORD ?? "ChangeMe123!",
-  PRISMA_CONFIG_PATH: "prisma.config.postgres.ts",
 };
 
-runStep(
-  "Generate PostgreSQL Prisma client",
-  "pnpm exec prisma generate --config prisma.config.postgres.ts",
-  env,
-);
-runStep(
-  "Reset PostgreSQL E2E schema",
-  "pnpm exec prisma migrate reset --force --config prisma.config.postgres.ts",
-  env,
-);
+runStep("Generate PostgreSQL Prisma client", "pnpm exec prisma generate", env);
+runStep("Reset PostgreSQL E2E schema", "pnpm exec prisma migrate reset --force", env);
 runStep("Seed PostgreSQL E2E data", "pnpm exec tsx prisma/seed.ts", env);
 
 function ensureDockerPostgres() {
