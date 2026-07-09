@@ -1,5 +1,50 @@
 # click-tt-automation
 
+## Rasterzahl planner
+
+```powershell
+pnpm raster:assignment
+pnpm raster -- ingest --from-clicktt --out reports/raster/model.json --current reports/raster/current.json --review reports/raster/review-input.csv
+pnpm raster -- optimize --model reports/raster/model.json --start reports/raster/current.json --out reports/raster/proposal.json --report reports/raster/proposal-eval.json --csv reports/raster/optimized-assignment.csv --unmet reports/raster/unmet-wishes.csv
+```
+
+To add every team from clubs that appear in your groups, pass the public click-TT league index. The scraper reads the mytischtennis `gruppe/<id>` links from that page and rewrites them to public click-TT `groupPage?...&group=<id>` URLs:
+
+```powershell
+pnpm raster -- ingest --from-clicktt --public-league "https://wttv.click-tt.de/cgi-bin/WebObjects/nuLigaTTDE.woa/wa/leaguePage?championship=Ostwestfalen/Lippe%2026/27" --out reports/raster/model.json --current reports/raster/current.json --review reports/raster/review-input.csv
+```
+
+To keep already assigned upper-district Rasterzahlen fixed, pass a CSV/JSON table with `group,rasterzahl,team` columns:
+
+```powershell
+pnpm raster -- ingest --from-clicktt --fixed data/upper-district-raster.csv --out reports/raster/model.json --current reports/raster/current.json
+pnpm raster -- optimize --model reports/raster/model.json --start reports/raster/current.json --csv reports/raster/optimized-assignment.csv
+```
+
+See `docs/raster-fixed-assignments.md` for the fixed-assignment CSV/JSON schema, including optional `league` matching.
+
+Hall capacity is optional. Missing capacity means unlimited capacity. To constrain capacity, pass a CSV with `club,hall,weekday,capacity`; leave `hall` or `weekday` blank to make the row broader:
+
+```csv
+club,hall,weekday,capacity
+TTV Höxter,2,friday,1
+SC GW Paderborn,,friday,2
+```
+
+```powershell
+pnpm raster -- ingest --from-clicktt --capacity data/hall-capacity.csv --out reports/raster/model.json --current reports/raster/current.json
+```
+
+The click-TT path clicks through `SpielbetriebOrganisation`, reads each group table, downloads the row-level `Terminwünsche (pdf)` files, then computes the remaining assignable Rasterzahlen. The older PDF-only flow still works:
+
+```powershell
+pnpm run raster -- ingest --wishes data/Terminmeldung_gesamt_bol.pdf --groups data/Gruppen-und-Raster-2026.pdf --out reports/raster/model.json
+pnpm run raster -- score --model reports/raster/model.json --assignment reports/raster/current.json --report reports/raster/score.json
+pnpm run raster -- optimize --model reports/raster/model.json --start reports/raster/current.json --out reports/raster/proposal.json
+```
+
+Review `reports/raster/model.json` before scoring. PDF extraction is best-effort and flags review fields instead of silently trusting uncertain rows. Tune penalties with `specs/002-rasterzahl-wish-optimizer/weights.example.json`.
+
 Playwright-based CLI automation for click-TT administration.
 
 It is used to:
@@ -25,8 +70,8 @@ The automation is intentionally conservative. If a page does not look like the e
 ## Setup
 
 ```bash
-npm install
-npx playwright install chromium
+pnpm install
+pnpm exec playwright install chromium
 ```
 
 Create or update `.env` with your credentials:

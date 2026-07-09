@@ -86,7 +86,7 @@ $failures = @()
 if ($Phase -in "all", "quick", "quality") {
     Write-Step "Typecheck (tsc --noEmit)"
     try {
-        $exitCode = Invoke-NativeCommand "npm run typecheck"
+        $exitCode = Invoke-NativeCommand "pnpm run typecheck"
         if ($exitCode -ne 0) { throw "typecheck failed" }
         Write-Pass "typecheck passed"
     } catch {
@@ -98,7 +98,7 @@ if ($Phase -in "all", "quick", "quality") {
 if ($Phase -in "all", "quality") {
     Write-Step "Lint (eslint)"
     try {
-        $exitCode = Invoke-NativeCommand "npm run lint"
+        $exitCode = Invoke-NativeCommand "pnpm run lint"
         if ($exitCode -ne 0) { throw "lint failed" }
         Write-Pass "lint passed"
     } catch {
@@ -110,7 +110,7 @@ if ($Phase -in "all", "quality") {
 if ($Phase -in "all", "test") {
     Write-Step "Tests (vitest)"
     try {
-        $result = Invoke-NativeCommandCaptured "npm test"
+        $result = Invoke-NativeCommandCaptured "pnpm test"
         if ($result.ExitCode -ne 0) {
             $result.Output | Out-Host
             throw "tests failed"

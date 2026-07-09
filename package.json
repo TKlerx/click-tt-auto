@@ -3,9 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@11.7.0",
   "description": "CLI automation for approving click-TT match reports.",
   "scripts": {
     "approve": "tsx src/index.ts",
+    "raster": "tsx src/raster-index.ts",
+    "raster:assignment": "tsx scripts/export-raster-assignment.ts",
+    "raster:join-review": "tsx scripts/join-admin-pdf-public-context.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
@@ -18,6 +22,7 @@
     "dotenv": "^17.2.3",
     "exceljs": "^4.4.0",
     "minimist": "^1.2.8",
+    "pdfjs-dist": "^6.1.200",
     "playwright": "^1.56.1"
   },
   "devDependencies": {
