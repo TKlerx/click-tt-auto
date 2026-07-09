@@ -33,7 +33,7 @@ Editing capacity marks dependent snapshots `stale=true` (FR-022).
 | GET | `/api/raster/runs/{id}` | any | Run status/outcome (FR-011) |
 | POST | `/api/raster/runs/{id}/cancel` | admin | Cancel a pending/running job |
 | GET | `/api/raster/snapshots?district=` | any | List snapshots (versions, FR-014) |
-| GET | `/api/raster/snapshots/{id}` | any | Snapshot overview metrics + optimality + stale flag (FR-013/015/022) |
+| GET | `/api/raster/snapshots/{id}` | any | Snapshot overview metrics + optimality + stale flag + objective breakdown, including ST4 same-club derby fallback count (FR-013/013a/015/022) |
 | GET | `/api/raster/snapshots/{id}/conflicts?club=&weekday=&hall=&week=&minExcess=` | any | Conflict list, filtered (FR-016/017) |
 | GET | `/api/raster/snapshots/{id}/conflicts/summary` | any | Per-club conflict summary (FR-018) |
 | GET | `/api/raster/snapshots/{id}/assignments?club=&league=&group=&team=&status=` | any | Assignment view, filtered (FR-019/020/021) |
@@ -50,14 +50,14 @@ Handler in `webapp/worker/`. Input: `{ runId }`.
 2. Spawn `uv run --python 3.12 scripts/solve-raster-cpsat.py --input <in> --output <out> --settings <json>` as a subprocess.
 3. On exit: parse solver output; map CP-SAT status → `outcome` (`OPTIMAL`→`proven_optimal`, `FEASIBLE`→`feasible`, `INFEASIBLE`→`infeasible`, non-zero/timeout→`failed`/`cancelled`).
 4. Run `src/raster/report` + `src/raster/score` to derive conflicts/assignments/metrics.
-5. On success: create Snapshot (+ Assignment, Conflict rows), set optimality; write objectiveValue/solverStatus onto the run.
+5. On success: create Snapshot (+ Assignment, Conflict rows), set optimality; write objectiveValue/objectiveBreakdown/solverStatus onto the run.
 6. Update run status; emit audit + notification.
 
-**Invariant**: the solver input encodes FixedRasterzahl as hard constraints; a produced assignment never violates them (SC-003). If the solver returns a violation, the job fails rather than persisting a bad snapshot.
+**Invariant**: the solver input encodes FixedRasterzahl as hard constraints and treats same-club derbies after Spieltag 4 as invalid; Spieltag 4 is allowed only as a high-penalty objective component. If the solver returns a fixed-Rasterzahl violation or Spieltag-5+ same-club derby, the job fails rather than persisting a bad snapshot.
 
 ## Solver I/O contract (worker ↔ Python)
 
 - **Input**: JSON file — teams (with club, weekday, hall, requested/fixed Rasterzahl), hall capacities, rulebook/spielwochen config.
-- **Output**: JSON file — per-team assigned Rasterzahl + status, solver status, objective value.
+- **Output**: JSON file — per-team assigned Rasterzahl + status, solver status, objective value, objective breakdown.
 - Exact schema pinned during implementation in `webapp/src/lib/raster/solver-io.ts` (zod) mirrored on the Python side.
 </content>

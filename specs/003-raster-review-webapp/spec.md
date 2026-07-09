@@ -47,6 +47,7 @@ An admin/scheduler provides the district inputs (club wishes, hall capacities, f
 5. **Given** a completed run with a proven optimum, **When** a scheduler opens the generated snapshot, **Then** it clearly states the assignment is optimal for the configured objective and constraints and never violates a fixed upper-league Rasterzahl.
 6. **Given** a run reaches its configured limit before proof, **When** a scheduler opens the snapshot, **Then** it clearly states the assignment is feasible but not proven optimal.
 7. **Given** no valid assignment exists under the hard constraints, **When** the run finishes, **Then** the app reports that no feasible solution was found and shows the relevant blocking constraints where available.
+8. **Given** two same-club teams share one group, **When** a generated assignment uses the Spieltag-4 derby fallback, **Then** the snapshot shows that fallback in the objective breakdown; Spieltag 5 or later is treated as infeasible/invalid and is never persisted as a valid generated assignment.
 
 ---
 
@@ -135,6 +136,7 @@ An admin imports a snapshot produced by the legacy external optimizer into the s
 - A wishes PDF is scanned/image-only, so text extraction yields little or nothing — the app must tell the user extraction failed (OCR out of scope) and let them paste JSON or upload a structured file instead.
 - Pasted wishes JSON (produced by the user's external LLM) does not match the expected schema or is incomplete — the app must report the validation errors and let the user fix it before a run.
 - Wishes conflict with a fixed upper-league Rasterzahl (the fixed value must win).
+- Same-club teams in one group cannot all meet by Spieltag 3 without worsening hall usage; Spieltag 4 is allowed with a high optimizer penalty and must be visible in the run breakdown, while Spieltag 5+ remains invalid.
 - A club name differs between wishes, capacity, and assignment inputs.
 - Hall capacity is only a guessed/inferred default when a run starts.
 - A capacity edit would reduce capacity below the actual number of teams in an already reviewed conflict.
@@ -166,6 +168,7 @@ An admin imports a snapshot produced by the legacy external optimizer into the s
 - **FR-011**: Each completed run MUST report one of these outcomes: proven optimal, feasible but not proven optimal, infeasible, failed, or cancelled.
 - **FR-012**: For proven-optimal and feasible runs, the system MUST create a review snapshot containing assignment output, conflict output, objective value, solver status, run settings, and a reference to the input set used.
 - **FR-013**: The system MUST clearly distinguish proven-optimal assignments from feasible-only or imported heuristic assignments in all snapshot and assignment views.
+- **FR-013a**: The system MUST preserve and display the optimizer objective breakdown, including hall overages, fairness, broken relational wishes, Spielwoche misses, and Spieltag-4 same-club derby fallback count. Same-club derbies on Spieltag 5 or later MUST be treated as hard invalid results and must not be persisted as valid generated snapshots.
 
 #### Snapshots & Review
 
@@ -200,7 +203,7 @@ An admin imports a snapshot produced by the legacy external optimizer into the s
 - **Fixed Rasterzahl (Upper League)**: A pre-set, immovable Rasterzahl an upper-league team already holds; a hard constraint on generation.
 - **Hall Capacity**: The reviewed, inferred/guessed, or missing maximum number of parallel home matches for one club, hall, and weekday.
 - **Optimization Run**: A requested calculation from an input set, with status, settings, objective value, and final outcome.
-- **Optimizer Snapshot**: A saved review version of one run (generated or imported), including summary metrics, assignment output, and conflict output.
+- **Optimizer Snapshot**: A saved review version of one run (generated or imported), including summary metrics, objective breakdown, assignment output, and conflict output.
 - **Conflict**: A hall-capacity overage for one club, hall, weekday, and match week.
 - **Assignment**: A team-to-Rasterzahl result with context (league, group, club, weekday, hall, assignment status).
 - **Review Decision**: A user-entered status and optional note for a conflict or club summary.
@@ -223,6 +226,7 @@ An admin imports a snapshot produced by the legacy external optimizer into the s
 - **SC-011**: Input validation identifies mismatched or incomplete input sets before a run starts.
 - **SC-012**: At least 95% of completed runs display their final outcome, objective value, and generated snapshot link without manual log inspection.
 - **SC-013**: Users can distinguish proven-optimal, feasible-only, and imported heuristic snapshots within 5 seconds of opening a snapshot.
+- **SC-014**: If a generated snapshot uses any Spieltag-4 same-club derby fallback, a scheduler can see the count and affected objective component within 5 seconds of opening the snapshot; no Spieltag-5-or-later same-club derby is stored as a valid generated snapshot.
 
 ## Assumptions
 

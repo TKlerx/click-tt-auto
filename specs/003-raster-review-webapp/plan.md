@@ -5,7 +5,7 @@
 
 ## Summary
 
-Build the Raster Generation & Review feature inside the existing `webapp/` baseline (a fully scaffolded Next.js 16 + React 19 + Prisma 7 + better-auth application copied from `../webapp-template`). Users upload raw district inputs (club wishes, hall capacities, fixed upper-league Rasterzahlen), the app generates a Rasterzahl assignment by running the **existing** optimizer as an asynchronous background job, and users review hall-capacity conflicts, assignments, and capacity data. The core pipeline already exists at repo root under `src/raster/` (ingest, optimize, report, score, rulebook) plus a Python CP-SAT exact solver (`scripts/solve-raster-cpsat.py`); this feature wraps that pipeline behind webapp data models, API routes, dashboard pages, and the baseline's background-job/worker system. Importing a pre-computed external snapshot is a later, optional path that reuses the same review layer.
+Build the Raster Generation & Review feature inside the existing `webapp/` baseline (a fully scaffolded Next.js 16 + React 19 + Prisma 7 + better-auth application copied from `../webapp-template`). Users upload raw district inputs (club wishes, hall capacities, fixed upper-league Rasterzahlen), the app generates a Rasterzahl assignment by running the **existing** optimizer as an asynchronous background job, and users review hall-capacity conflicts, assignments, objective breakdown, and capacity data. The core pipeline already exists at repo root under `src/raster/` (ingest, optimize, report, score, rulebook) plus a Python CP-SAT exact solver (`scripts/solve-raster-cpsat.py`); this feature wraps that pipeline behind webapp data models, API routes, dashboard pages, and the baseline's background-job/worker system. Importing a pre-computed external snapshot is a later, optional path that reuses the same review layer.
 
 ## Technical Context
 
@@ -16,7 +16,7 @@ Build the Raster Generation & Review feature inside the existing `webapp/` basel
 **Target Platform**: Containerized web (Dockerfile.app + Dockerfile.worker already present); desktop/tablet browsers primary
 **Project Type**: Web application (Next.js app + background worker) on top of an existing pipeline library
 **Performance Goals**: District-scoped views render hundreds of rows without virtualization; SC-004 top-10 clubs < 30s, SC-007 find assignment < 15s, SC-008 find capacity < 15s
-**Constraints**: Generated assignments MUST NOT violate fixed upper-league Rasterzahlen (hard constraint, SC-003); optimizer runs async so review is never blocked (FR-010); no server-side LLM (FR-002 deterministic parse; LLM prompt/paste is user-side fallback)
+**Constraints**: Generated assignments MUST NOT violate fixed upper-league Rasterzahlen (hard constraint, SC-003) or same-club derbies after Spieltag 4; same-club derby Spieltag 4 is legal only as a high-penalty objective component shown in the snapshot breakdown; optimizer runs async so review is never blocked (FR-010); no server-side LLM (FR-002 deterministic parse; LLM prompt/paste is user-side fallback)
 **Scale/Scope**: Hundreds of assignments/conflicts per district snapshot now; data model must not preclude county-wide (~1,400 clubs/teams) with district-scoped views (FR-025)
 
 ## Constitution Check

@@ -81,6 +81,7 @@ A requested calculation from an InputSet.
 | status | enum(`pending`,`running`,`succeeded`,`failed`,`cancelled`) | FR-010 |
 | outcome | enum(`proven_optimal`,`feasible`,`infeasible`,`failed`,`cancelled`)? | FR-011 |
 | objectiveValue | float? | |
+| objectiveBreakdown | json? | Penalty components, including ST4 same-club derby fallback count |
 | solverStatus | string? | Raw CP-SAT status |
 | settings | json | Run limits/parameters |
 | createdAt / finishedAt | datetime | |
@@ -100,6 +101,7 @@ A saved review version of one run (generated or imported). Versioned (FR-014).
 | optimality | enum(`proven_optimal`,`feasible`,`imported_heuristic`) | Distinguished in UI (FR-013) |
 | stale | boolean | Set true when inputs/capacity change (FR-022) |
 | totalConflicts / totalExcess / maxExcess / affectedClubs | int/float | Overview metrics (FR-015) |
+| objectiveBreakdown | json | Penalty components shown in overview, including `sameClubDerbySt4` |
 | createdAt | datetime | |
 
 Relations: has many Assignment, Conflict, ReviewDecision.

@@ -30,7 +30,7 @@
 **CRITICAL**: No user story work begins until this phase is complete.
 
 - [ ] T007 Add pipeline glue in `webapp/src/lib/raster/pipeline.ts` re-exporting root `src/raster` ingest/optimize/report/score entrypoints for webapp use (add named exports to `src/raster/*/index.ts` where missing)
-- [ ] T008 Define the solver I/O contract in `webapp/src/lib/raster/solver-io.ts` (zod input/output mirroring `scripts/solve-raster-cpsat.py`)
+- [ ] T008 Define the solver I/O contract in `webapp/src/lib/raster/solver-io.ts` (zod input/output mirroring `scripts/solve-raster-cpsat.py`, including objective breakdown and `sameClubDerbySt4`)
 - [ ] T009 Scaffold the `raster-run` background job handler in `webapp/worker/raster-run.ts` registered with the existing job system (no solve logic yet — status transitions only)
 - [ ] T049 Provision the worker runtime: ensure `Dockerfile.worker` includes Python 3.12 + `uv` + OR-Tools so the job can spawn `scripts/solve-raster-cpsat.py`; add a smoke test that the worker can invoke the solver (FR-010)
 - [ ] T010 Add the raster service layer skeleton in `webapp/src/services/raster/` (inputSets, capacity, runs, snapshots) with typed function stubs
@@ -49,8 +49,8 @@
 ### Tests for User Story 1
 
 - [ ] T012 [P] [US1] Unit test for wishes JSON schema validation in `webapp/tests/unit/wishes-schema.test.ts` (valid, invalid, incomplete)
-- [ ] T013 [P] [US1] Unit test for the `raster-run` outcome mapping (CP-SAT status → outcome) in `webapp/tests/unit/run-outcome.test.ts`
-- [ ] T014 [P] [US1] Unit test asserting the fixed-Rasterzahl hard-constraint invariant (job fails rather than persisting a violating snapshot) in `webapp/tests/unit/fixed-constraint.test.ts`
+- [ ] T013 [P] [US1] Unit test for the `raster-run` outcome mapping (CP-SAT status → outcome) and objective-breakdown persistence in `webapp/tests/unit/run-outcome.test.ts`
+- [ ] T014 [P] [US1] Unit test asserting hard-constraint invariants (fixed Rasterzahl and same-club derby after Spieltag 4 fail rather than persisting a violating snapshot) in `webapp/tests/unit/fixed-constraint.test.ts`
 
 ### Implementation for User Story 1
 
@@ -61,8 +61,8 @@
 - [ ] T019 [P] [US1] Fixed upper-league Rasterzahlen input (PDF/manual/structured): `POST .../fixed-rasterzahlen`
 - [ ] T020 [US1] InputSet validation: `POST .../validate` (completeness/schema → `ready`) (FR-008)
 - [ ] T021 [US1] Run start: `POST .../runs` enqueues `raster-run` job; 409 if not `ready` (FR-009)
-- [ ] T022 [US1] Complete `raster-run` handler: build solver input, spawn `uv run ... solve-raster-cpsat.py`, ingest output, run report/score, create Snapshot + Assignment + Conflict, set optimality/objective/solverStatus (FR-010–013)
-- [ ] T023 [US1] Run status UI + `GET /api/raster/runs/{id}` and cancel; snapshot optimality badge component (FR-013)
+- [ ] T022 [US1] Complete `raster-run` handler: build solver input, spawn `uv run ... solve-raster-cpsat.py`, ingest output, run report/score, create Snapshot + Assignment + Conflict, set optimality/objective/objectiveBreakdown/solverStatus (FR-010–013a)
+- [ ] T023 [US1] Run status UI + `GET /api/raster/runs/{id}` and cancel; snapshot optimality badge + objective-breakdown component including ST4 derby fallback count (FR-013/013a)
 
 **Checkpoint**: End-to-end generation works; snapshot respects fixed Rasterzahlen.
 
