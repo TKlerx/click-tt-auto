@@ -16,6 +16,17 @@ Next.js App Router route handlers under `webapp/src/app/api/raster/`. All routes
 | PUT | `/api/raster/input-sets/{id}/groups/{groupId}` | admin | Review/correct group metadata, including six-team normal 6er vs 6er Doppelrunde mode (FR-008a) |
 | POST | `/api/raster/input-sets/{id}/validate` | admin | Validate completeness/schema; returns errors or `ready` (FR-008) |
 
+## Source hierarchy and caches
+
+| Method | Path | Role | Purpose |
+|--------|------|------|---------|
+| GET | `/api/raster/sources?district=&sourceType=` | any | List source documents/links/caches visible to a district, including ancestor scope sources (e.g. OWL + WTTV + DE) |
+| POST | `/api/raster/sources` | admin | Register or update a source for a scope (`scopeCode`, `sourceType`, `sourceRef`, `displayName`, optional `contentHash`, optional `parsedJson`) |
+| POST | `/api/raster/sources/upload` | admin | Upload a replacement source file for a scope and register it as a `RasterSource` |
+| POST | `/api/raster/sources/{id}/refresh` | admin | Explicitly parse/refresh a stored source cache for supported source types such as `GROUP_ASSIGNMENT` and `WISHES_PDF` |
+
+Source records belong to the hierarchy level where the source is valid. For example, a WTTV-wide group PDF is stored under WTTV and inherited by OWL flows. Registering a source does not reparse it; parse/cache refresh happens only when explicitly requested by a parser/upload flow.
+
 ## Hall capacity
 
 | Method | Path | Role | Purpose |

@@ -1,16 +1,16 @@
 import {
   derbySpieltag,
   rasterSizeForGroupSize,
-} from "../../../../src/raster/rulebook/index.js";
+} from "../../../../src/raster/rulebook/rulebook.ts";
 import {
   evaluate,
   overUsageFairnessCost,
-} from "../../../../src/raster/score/index.js";
+} from "../../../../src/raster/score/index.ts";
 import {
   defaultWeights,
   type Assignment,
   type SeasonModel,
-} from "../../../../src/raster/types.js";
+} from "../../../../src/raster/types.ts";
 import {
   OptimizationRunOutcome,
   SnapshotOptimality,

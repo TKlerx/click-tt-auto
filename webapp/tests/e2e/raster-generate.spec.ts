@@ -7,10 +7,61 @@ import {
   expectOnDashboard,
   loginWithPassword,
 } from "./helpers/auth";
-import { assignUserToScope, seedLocalUser } from "./helpers/db";
+import {
+  assignUserToScope,
+  seedLocalUser,
+  seedRasterScopeHierarchy,
+  seedRasterSource,
+} from "./helpers/db";
 
 const district = "OWL";
 const scope = { code: district, name: "Ostwestfalen-Lippe" };
+
+test("OWL raster page shows inherited WTTV sources without refreshing them on reload", async ({
+  page,
+}) => {
+  const suffix = Date.now();
+  const email = `e2e-raster-source-${suffix}@example.com`;
+  const password = "RasterSource123";
+  const sourceName = `E2E WTTV assignment ${suffix}`;
+
+  await seedRasterScopeHierarchy();
+  await seedLocalUser({
+    email,
+    name: "E2E Raster Source Viewer",
+    role: Role.SCOPE_USER,
+    password,
+    mustChangePassword: false,
+  });
+  await assignUserToScope(email, scope);
+  await seedRasterSource({
+    scopeCode: "WTTV",
+    sourceType: "GROUP_ASSIGNMENT",
+    sourceRef: `e2e://wttv-assignment-${suffix}`,
+    displayName: sourceName,
+    contentHash: `hash-${suffix}`,
+    parsedJson: { groups: [] },
+  });
+
+  const refreshRequests: string[] = [];
+  page.on("request", (request) => {
+    const url = request.url();
+    if (url.includes("/api/raster/sources/") && url.endsWith("/refresh")) {
+      refreshRequests.push(url);
+    }
+  });
+
+  await loginWithPassword(page, email, password);
+  await expectOnDashboard(page);
+
+  await page.goto(`${appBasePath}/raster?district=${district}`);
+  await expect(page.getByText(sourceName)).toBeVisible();
+  expect(refreshRequests).toEqual([]);
+
+  await page.reload();
+  await expect(page.getByText(sourceName)).toBeVisible();
+  expect(refreshRequests).toEqual([]);
+});
 
 test("admin can generate and review a raster snapshot", async ({ page }) => {
   const suffix = Date.now();

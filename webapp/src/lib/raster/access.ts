@@ -33,8 +33,20 @@ export async function canAccessRasterDistrict(
 
   const scope = await prisma.scope.findFirst({
     where: {
-      OR: [{ code: district }, { name: district }],
-      userAssignments: { some: { userId: user.id } },
+      AND: [
+        { OR: [{ code: district }, { name: district }] },
+        {
+          OR: [
+            { userAssignments: { some: { userId: user.id } } },
+            { parent: { userAssignments: { some: { userId: user.id } } } },
+            {
+              parent: {
+                parent: { userAssignments: { some: { userId: user.id } } },
+              },
+            },
+          ],
+        },
+      ],
     },
     select: { id: true },
   });

@@ -113,10 +113,24 @@ async function main() {
     },
   });
 
+  const germanyScope = await prisma.scope.create({
+    data: {
+      code: "DE",
+      name: "Germany",
+    },
+  });
+  const wttvScope = await prisma.scope.create({
+    data: {
+      code: "WTTV",
+      name: "Westdeutscher Tischtennis-Verband",
+      parentId: germanyScope.id,
+    },
+  });
   const demoScope = await prisma.scope.create({
     data: {
       code: "OWL",
       name: "Ostwestfalen-Lippe",
+      parentId: wttvScope.id,
     },
   });
 
@@ -149,7 +163,7 @@ async function main() {
   }
 
   console.log(`Seeded initial admin user ${email}.`);
-  console.log("Seeded demo Raster district OWL and review users.");
+  console.log("Seeded demo Raster hierarchy DE > WTTV > OWL and review users.");
 }
 
 main()
