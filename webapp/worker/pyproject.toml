@@ -1,0 +1,42 @@
+[project]
+name = "raster-review-worker"
+version = "0.1.0"
+description = "Background worker for Rasterzahl review"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "ortools>=9.14,<10",
+  "python-dotenv>=1.1.1,<2",
+  "psycopg[binary]>=3.2.0,<4",
+]
+
+[project.scripts]
+raster-review-worker = "starter_worker.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+exclude-newer = "1 week" # nosemgrep: package_managers.uv.uv-missing-dependency-cooldown.uv-missing-dependency-cooldown
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/starter_worker"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "B"]
+ignore = ["E501"]
+
+[dependency-groups]
+dev = [
+    "complexipy>=5.3.0",
+    "mypy>=1.16.0",
+    "pytest>=8.4.0",
+    "radon>=6.0.1",
+    "ruff>=0.15.11",
+    "xenon>=0.9.3",
+]

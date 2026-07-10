@@ -1,0 +1,15 @@
+* text=auto eol=lf
+
+*.sh text eol=lf
+*.go text eol=lf
+go.mod text eol=lf
+go.sum text eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.pdf binary
+*.zip binary

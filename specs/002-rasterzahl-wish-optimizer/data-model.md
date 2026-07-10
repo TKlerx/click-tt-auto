@@ -7,7 +7,7 @@ All types are plain data (no behavior). The `SeasonModel` is the human-reviewabl
 ## Rulebook (constant, encoded once)
 
 ```
-RasterSize            = 10 | 12 | 14                 // in scope; 6/8 optional
+RasterSize            = 6 | "6d" | 8 | 10 | 12 | 14  // "6d" = official 6er Doppelrunde
 Template {
   size: RasterSize
   matchdays: Pairing[][]        // index = Spieltag-1; each Pairing = { home, away }
@@ -59,7 +59,9 @@ Team {
   confidence: "ok" | "review"                     // low-confidence extraction flag
 }
 
-Group { ref: GroupRef; size: number; teamIds: string[] }        // size 9..14
+RasterMode = "single" | "double"
+Group { ref: GroupRef; size: number; rasterMode?: RasterMode; teamIds: string[] }
+// size 6..14; size 6 + rasterMode "double" selects RasterSize "6d"; odd sizes ride the next even raster
 GroupRef = { league: string; name: string }
 
 RelationalWish {
@@ -86,7 +88,7 @@ AbsoluteConstraint { teamId: string; kind: "kalenderwoche"|"spieltage"; detail: 
 ```
 Assignment = Map<TeamId, Rasterzahl>          // decision variable
 
-Weights { overUsage: number; wechsel: number; zeitgleich: number; spielwoche: number }
+Weights { overUsage: number; overUsageFairness: number; wechsel: number; zeitgleich: number; sameClubDerbySt4: number; spielwoche: number }
 
 EvaluationResult {
   assignment: Assignment
@@ -99,7 +101,7 @@ EvaluationResult {
 }
 OverUsage   { clubId; hall; weekday: Weekday; week: number; teams: TeamId[]; capacity: number }
             // week = shared district calendar week (Spielwochen-aligned), comparable across raster sizes
-HardViolation { kind: "permutation"|"fixed-altered"|"derby-late"; detail: string }
+HardViolation { kind: "permutation"|"fixed-altered"|"derby-late"|"capacity-overflow"; detail: string }
 WishResult { wish: RelationalWish; status: "fulfilled"|"unfulfilled"|"unfulfillable"|"unknown"; reason?: string }
 ```
 
@@ -108,4 +110,4 @@ WishResult { wish: RelationalWish; status: "fulfilled"|"unfulfilled"|"unfulfilla
 - `Team.clubId → Club`; `Team.group → Group`; `Group.teamIds → Team`.
 - A `RelationalWish` references two `Team`s of one `Club`; evaluated via `DerivedRaster` (same size) or `CrossSize` (different sizes) once both Rasterzahlen are known.
 - `Assignment` covers only `assignable`/`pinned` teams; `fixed` teams contribute their given value as constant context.
-- Per group, the union of assigned + fixed + pinned Rasterzahlen MUST be a permutation of `1..size` (byes = top number for odd sizes).
+- Per group, the union of assigned + fixed + pinned Rasterzahlen MUST be a permutation of `1..size` (byes = top number for odd sizes; 6er Doppelrunde still uses Rasterzahlen `1..6`).

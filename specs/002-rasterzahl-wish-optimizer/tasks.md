@@ -35,12 +35,13 @@
 
 **Purpose**: The encoded rulebook + scorer primitives that US2/US3 depend on. **BLOCKS all user stories.**
 
-- [X] T007 Encode `src/raster/rulebook/templates.json` — the 10er/12er/14er home/away grids transcribed from `Rasterzahlen_OWL_komplett.pdf` (home = left number per Spieltag). Use the verified 12er grid in research.md §3 as the reference format.
+- [X] T007 Encode `src/raster/rulebook/templates.json` — the 6er, 6er Doppelrunde, 8er, 10er, 12er, and 14er home/away grids transcribed from `Rasterzahlen_OWL_komplett.pdf` (home = left number per Spieltag). Use the verified 12er grid in research.md §3 as the reference format.
 - [X] T008 Encode `src/raster/rulebook/spielwochen.json` — Spieltag → **shared district calendar week index** per size (PDF p.16). The week scale MUST be common across sizes so a 12er and a 10er team map to the same real week; verify a known cross-size alignment from p.16 in T010. Also encode `cross-size.json` — korrespondierende Schlüsselzahlen im Wechsel / zeitgleich (PDF pp.13–15)
 - [X] T009 Implement `src/raster/rulebook/rulebook.ts` — typed loader; build `DerivedRaster` per size (homeSpieltage, derbySpieltag, homeWeeks); lookups: `homeWeeks(size, rz)`, `derbySpieltag(size, a, b)`, `relation(sizeA, rzA, sizeB, rzB) → wechsel|zeitgleich|neither`
 - [X] T010 [P] Test `tests/unit/rulebook.test.ts` — for each size, decoded `DerivedRaster` MUST reproduce the PDF's published Gegenläufige pairs and same-club (gemeinsam/wechsel) pairs. Encode the research.md §3 12er expectations as fixtures (all 6 gegenläufig pairs, 6-7 & 1-12 gemeinsam + derby ST1).
 - [X] T011 Implement `src/raster/score/derive.ts` — (Rasterzahl, size) → home-Spieltag set → home-week set expressed in **shared district calendar weeks** (via spielwochen.json), so home weeks of different-size groups are directly comparable; odd-size bye handling (top number spielfrei); second-half (Rückrunde) home/away swap
 - [X] T012 [P] Test `tests/unit/derive.test.ts` — home-week sets per Rasterzahl match research.md §3 table; bye handling for 9/11/13.
+- [X] T036 [P] Extend the rulebook and scorer to support 6er, explicit 6er Doppelrunde mode, and 7/8er groups using the official PDF tables (`src/raster/types.ts`, `src/raster/rulebook/*.json`, `src/raster/rulebook/rulebook.ts`, `src/raster/score/*`, `scripts/solve-raster-cpsat.py`).
 
 **Checkpoint**: Rulebook encoded + verified; scorer primitives exist.
 
@@ -55,7 +56,7 @@
 - [X] T013 [US1] Implement `src/raster/ingest/wishes-pdf.ts` — extract text via pdfjs-dist; per club: name+id, venues (Spiellokal 1–3), per-team weekday+time+hall table, structured Spielwoche A/B; emit `Team` + `Club` records; flag misaligned/ambiguous rows `confidence:"review"`
 - [X] T014 [P] [US1] Implement `src/raster/ingest/wishes-freetext.ts` — rule-based extraction of relational wishes from "Besondere Wünsche" (im Wechsel/Wochenwechsel → wechsel; zeitgleich/parallel/gemeinsam/gleiches Wochenende → zeitgleich; map "1. und 2. Mannschaft" → team labels). All results `confidence:"review"`. Record explicit "Rasterzahl N" as non-binding `requestedRasterzahl`.
 - [X] T015 [P] [US1] Implement `src/raster/ingest/groups-pdf.ts` — parse `Gruppen-und-Raster-2026.pdf`: per higher league, team number = fixed Rasterzahl; mark those teams `rasterzahl:{kind:"fixed"}`; parse absolute-constraint notes into `AbsoluteConstraint`
-- [X] T016 [US1] Implement `src/raster/ingest/model.ts` — assemble `SeasonModel`; link teams↔clubs↔groups; resolve group sizes → raster size; collect `warnings`; validate structural sanity (each group size 9–14; permutation feasibility given fixed numbers)
+- [X] T016 [US1] Implement `src/raster/ingest/model.ts` — assemble `SeasonModel`; link teams↔clubs↔groups; resolve group sizes → raster size/mode; collect `warnings`; validate structural sanity (supported group size/mode; permutation feasibility given fixed numbers)
 - [X] T017 [US1] Wire `raster ingest` command in `src/raster-index.ts` per contracts/cli.md (`--wishes`, `--groups`, `--out`); stdout summary lists every `review` field + warnings; non-zero exit on unparseable required input
 - [X] T018 [P] [US1] Test `tests/unit/ingest.test.ts` — parse sample `Terminmeldung_gesamt_bol.pdf` + `Gruppen-und-Raster-2026.pdf`; assert known clubs/teams/venues/fixed-Rasterzahlen extracted; assert a known free-text wish (e.g. Alfen "Herren II/IV im Wochenwechsel") produces a `wechsel` relation flagged for review
 
@@ -70,7 +71,7 @@
 **Independent Test**: Feed a reviewed model + assignment (fixture); counts match a hand-computed reference.
 
 - [X] T019 [US2] Implement `src/raster/score/penalties.ts` — per penalty type: hall over-usage per (clubId, hall, weekday, week) vs capacity (default 1); im Wechsel / zeitgleich via `rulebook.relation`; Spielwoche A/B miss; each returns detail objects
-- [X] T020 [US2] Implement `src/raster/score/evaluate.ts` — assemble `EvaluationResult`: weighted objective (Weights), hard-violation detection (permutation, fixed-altered, derby-late), per-group validity; classify each wish fulfilled/unfulfilled/unfulfillable/unknown with reason. **Guard (FR-019)**: refuse to score any group whose size is not a supported raster size (10/12/14, incl. 9/11/13 mappings) with a clear error rather than guessing.
+- [X] T020 [US2] Implement `src/raster/score/evaluate.ts` — assemble `EvaluationResult`: weighted objective (Weights), hard-violation detection (permutation, fixed-altered, derby-late), per-group validity; classify each wish fulfilled/unfulfilled/unfulfillable/unknown with reason. **Guard (FR-019)**: refuse to score any group whose size/mode is not supported by the encoded rulebook with a clear error rather than guessing.
 - [X] T021 [US2] Implement `src/raster/report/reporter.ts` — stdout summary + JSON `EvaluationResult` to `reports/raster/` per contracts/cli.md
 - [X] T022 [US2] Wire `raster score` command in `src/raster-index.ts` (`--model`, `--assignment`, `--weights`, `--report`); does not mutate inputs
 - [X] T023 [US2] Build hand-computed reference: `tests/fixtures/raster/reference-group.json` (model + assignment + expected counts) for one 12er group derived from research.md

@@ -1,0 +1,187 @@
+import { execFileSync } from "node:child_process";
+import path from "node:path";
+import { expect, test } from "@playwright/test";
+import { Role } from "../../generated/prisma/enums";
+import {
+  appBasePath,
+  expectOnDashboard,
+  loginWithPassword,
+} from "./helpers/auth";
+import { assignUserToScope, seedLocalUser } from "./helpers/db";
+
+const district = "OWL";
+const scope = { code: district, name: "Ostwestfalen-Lippe" };
+
+test("admin can generate and review a raster snapshot", async ({ page }) => {
+  const suffix = Date.now();
+  const email = `e2e-raster-generate-${suffix}@example.com`;
+  const password = "RasterGenerate123";
+
+  await seedLocalUser({
+    email,
+    name: "E2E Raster Generator",
+    role: Role.PLATFORM_ADMIN,
+    password,
+    mustChangePassword: false,
+  });
+  await assignUserToScope(email, scope);
+
+  await loginWithPassword(page, email, password);
+  await expectOnDashboard(page);
+
+  const inputSetResponse = await page.request.post(
+    `${appBasePath}/api/raster/input-sets`,
+    {
+      data: { district, name: `E2E generated ${suffix}` },
+    },
+  );
+  expect(inputSetResponse.status()).toBe(201);
+  const inputSetBody = (await inputSetResponse.json()) as {
+    inputSet: { id: string };
+  };
+  const inputSetId = inputSetBody.inputSet.id;
+  const model = buildSeasonModel();
+
+  const modelResponse = await page.request.post(
+    `${appBasePath}/api/raster/input-sets/${inputSetId}/season-model`,
+    { data: model },
+  );
+  expect(modelResponse.status()).toBe(200);
+
+  const wishesResponse = await page.request.post(
+    `${appBasePath}/api/raster/input-sets/${inputSetId}/wishes/json`,
+    {
+      data: {
+        wishes: [
+          {
+            clubId: model.clubs[0].id,
+            clubName: model.clubs[0].name,
+            teamLabel: "I",
+            homeWeekday: "FRIDAY",
+            hall: "1",
+            spielwochePref: "A",
+          },
+        ],
+      },
+    },
+  );
+  expect(wishesResponse.status()).toBe(200);
+
+  const validateResponse = await page.request.post(
+    `${appBasePath}/api/raster/input-sets/${inputSetId}/validate`,
+  );
+  expect(validateResponse.status()).toBe(200);
+  const validation = (await validateResponse.json()) as { errors: string[] };
+  expect(validation.errors).toEqual([]);
+
+  const runResponse = await page.request.post(
+    `${appBasePath}/api/raster/input-sets/${inputSetId}/runs`,
+    { data: { timeLimitSeconds: 30 } },
+  );
+  expect(runResponse.status()).toBe(202);
+  const runBody = (await runResponse.json()) as { run: { id: string } };
+
+  processNextWorkerJob();
+
+  const runStatusResponse = await page.request.get(
+    `${appBasePath}/api/raster/runs/${runBody.run.id}`,
+  );
+  expect(runStatusResponse.status()).toBe(200);
+  const runStatus = (await runStatusResponse.json()) as {
+    run: { status: string; outcome: string; snapshot: { id: string } | null };
+  };
+  expect(runStatus.run.status).toBe("SUCCEEDED");
+  expect(runStatus.run.outcome).toBe("PROVEN_OPTIMAL");
+  expect(runStatus.run.snapshot?.id).toBeTruthy();
+
+  const snapshotId = runStatus.run.snapshot?.id;
+  const assignmentsResponse = await page.request.get(
+    `${appBasePath}/api/raster/snapshots/${snapshotId}/assignments`,
+  );
+  expect(assignmentsResponse.status()).toBe(200);
+  const assignments = (await assignmentsResponse.json()) as {
+    assignments: Array<{ rasterzahl: number }>;
+  };
+  expect(assignments.assignments).toHaveLength(10);
+  expect(
+    new Set(assignments.assignments.map((row) => row.rasterzahl)).size,
+  ).toBe(10);
+
+  const conflictsResponse = await page.request.get(
+    `${appBasePath}/api/raster/snapshots/${snapshotId}/conflicts/summary`,
+  );
+  expect(conflictsResponse.status()).toBe(200);
+
+  await page.goto(`${appBasePath}/raster?district=${district}`);
+  await expect(page.getByText(`E2E generated ${suffix}`)).toBeVisible();
+  await expect(page.getByText("READY")).toBeVisible();
+});
+
+function buildSeasonModel() {
+  const clubs = Array.from({ length: 10 }, (_, index) => ({
+    id: `club-${index + 1}`,
+    name: `Club ${index + 1}`,
+    venues: [{ hall: "1", name: "Hall 1", capacity: 1 }],
+    notes: "",
+  }));
+  const teams = clubs.map((club, index) => ({
+    id: `team-${index + 1}`,
+    clubId: club.id,
+    label: "I",
+    homeWeekday: "friday",
+    hall: "1",
+    rasterzahl: { kind: "assignable" },
+    confidence: "ok",
+  }));
+  return {
+    clubs,
+    teams,
+    groups: [
+      {
+        ref: { league: "Bezirksoberliga", name: "Gruppe 1" },
+        size: 10,
+        teamIds: teams.map((team) => team.id),
+      },
+    ],
+    wishes: [],
+    absoluteConstraints: [],
+    warnings: [],
+  };
+}
+
+function processNextWorkerJob() {
+  const workerDir = path.join(process.cwd(), "worker");
+  const repoRoot = path.dirname(process.cwd());
+  const databaseUrl =
+    process.env.WORKER_DATABASE_URL ??
+    process.env.DATABASE_URL ??
+    "postgresql://starter:starter_e2e_password@localhost:55432/business_app_starter_e2e_test";
+  execFileSync(
+    "uv",
+    [
+      "run",
+      "python",
+      "-c",
+      [
+        "import os",
+        "from starter_worker.config import WorkerConfig",
+        "from starter_worker.db import JobStore",
+        "from starter_worker.main import _process_claimed_job",
+        "config = WorkerConfig(database_url=os.environ['DATABASE_URL'], poll_interval_seconds=0.1, worker_id='e2e-worker', max_attempts=1, retry_backoff_seconds=0, stale_lock_seconds=300, teams_poll_interval_seconds=60)",
+        "store = JobStore(config)",
+        "job = store.claim_next_job()",
+        "assert job is not None",
+        "_process_claimed_job(store, config, job)",
+      ].join("; "),
+    ],
+    {
+      cwd: workerDir,
+      env: {
+        ...process.env,
+        DATABASE_URL: databaseUrl,
+        RASTER_REPO_ROOT: repoRoot,
+      },
+      stdio: "pipe",
+    },
+  );
+}

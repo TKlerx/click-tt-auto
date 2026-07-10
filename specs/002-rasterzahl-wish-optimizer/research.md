@@ -15,7 +15,7 @@ This document (a) inventories the real inputs, (b) proves the rulebook can be de
 | `Gruppen-und-Raster-2026.pdf` | **Group assignment + fixed higher-league Rasterzahlen** — each higher group lists teams `1..12`; the number *is* the fixed Rasterzahl | Yearly input |
 | `*ScheduleReportFOP.pdf` | Generated Spielpläne (per group) | Validation only |
 
-In scope: group sizes 9–14 → **10er / 12er / 14er** rasters (odd size rides the next-even raster; top number = bye). Only Rasterzahl is chosen; weekday/hall/time are fixed by the wish.
+In scope: group sizes 6–14 → **6er / 8er / 10er / 12er / 14er** rasters (odd size rides the next-even raster; top number = bye). Six-team groups can use the normal 6er table or the official 6er Doppelrunde table; that mode must be reviewed as part of the season model. Only Rasterzahl is chosen; weekday/hall/time are fixed by the wish.
 
 ## 2. How to read a raster template (mechanical)
 

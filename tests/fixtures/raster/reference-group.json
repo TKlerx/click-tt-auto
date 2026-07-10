@@ -12,7 +12,7 @@
   },
   "assignment": { "a": 6, "b": 12 },
   "expected": {
-    "objective": 30,
+    "objective": 1039,
     "overUsages": 3,
     "unfulfilledWishes": 0
   }

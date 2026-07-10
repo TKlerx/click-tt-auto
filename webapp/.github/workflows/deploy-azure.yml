@@ -1,0 +1,345 @@
+name: Deploy Azure
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Azure environment to deploy
+        required: true
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+      app_image_tag:
+        description: Existing ACR tag for the app image
+        required: true
+        type: string
+      worker_image_tag:
+        description: Existing ACR tag for the worker image
+        required: true
+        type: string
+      migration_image_tag:
+        description: Existing ACR tag for the migration image; defaults to app_image_tag
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    name: Deploy ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    env:
+      ARM_USE_OIDC: "true"
+      ARM_CLIENT_ID: ${{ vars.DEPLOYMENT_IDENTITY_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      TF_VAR_project: ${{ vars.PROJECT }}
+      TF_VAR_environment: ${{ inputs.environment }}
+      TF_VAR_location: ${{ vars.AZURE_LOCATION }}
+      TF_VAR_registry_id: ${{ vars.ACR_ID }}
+      TF_VAR_registry_login_server: ${{ vars.ACR_LOGIN_SERVER }}
+      TF_VAR_runtime_identity_id: ${{ vars.RUNTIME_IDENTITY_ID }}
+      TF_VAR_runtime_identity_client_id: ${{ vars.RUNTIME_IDENTITY_CLIENT_ID }}
+      TF_VAR_runtime_identity_principal_id: ${{ vars.RUNTIME_IDENTITY_PRINCIPAL_ID }}
+      TF_VAR_deployment_identity_client_id: ${{ vars.DEPLOYMENT_IDENTITY_CLIENT_ID }}
+      TF_VAR_deployment_identity_object_id: ${{ vars.DEPLOYMENT_IDENTITY_OBJECT_ID }}
+
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Set up Node
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: "24"
+          cache: pnpm
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install smoke dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install OpenTofu
+        uses: opentofu/setup-opentofu@847eaa4afeb791b06daa46e8eafa8b1b68d7cfb4 # v2.0.1
+
+      - name: Azure login
+        uses: Azure/login@1384c340ab2dda50fed2bee3041d1d87018aa5e8 # v2
+        with:
+          client-id: ${{ vars.DEPLOYMENT_IDENTITY_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Validate inputs and image tags
+        id: validate-inputs
+        shell: bash
+        env:
+          APP_IMAGE_TAG: ${{ inputs.app_image_tag }}
+          WORKER_IMAGE_TAG: ${{ inputs.worker_image_tag }}
+          MIGRATION_IMAGE_TAG_INPUT: ${{ inputs.migration_image_tag }}
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+          ACR_NAME: ${{ vars.ACR_NAME }}
+          APP_IMAGE_REPOSITORY: ${{ vars.APP_IMAGE_REPOSITORY || 'app' }}
+          WORKER_IMAGE_REPOSITORY: ${{ vars.WORKER_IMAGE_REPOSITORY || 'worker' }}
+          MIGRATION_IMAGE_REPOSITORY: ${{ vars.MIGRATION_IMAGE_REPOSITORY || vars.APP_IMAGE_REPOSITORY || 'app' }}
+        run: |
+          set -euo pipefail
+
+          case "$TARGET_ENVIRONMENT" in
+            dev|staging|prod) ;;
+            *) echo "Unsupported environment: $TARGET_ENVIRONMENT" >&2; exit 1 ;;
+          esac
+
+          if [[ -z "${APP_IMAGE_TAG// }" || -z "${WORKER_IMAGE_TAG// }" ]]; then
+            echo "app_image_tag and worker_image_tag are required." >&2
+            exit 1
+          fi
+
+          MIGRATION_IMAGE_TAG="${MIGRATION_IMAGE_TAG_INPUT:-$APP_IMAGE_TAG}"
+
+          for item in \
+            "$APP_IMAGE_REPOSITORY:$APP_IMAGE_TAG" \
+            "$WORKER_IMAGE_REPOSITORY:$WORKER_IMAGE_TAG" \
+            "$MIGRATION_IMAGE_REPOSITORY:$MIGRATION_IMAGE_TAG"
+          do
+            repository="${item%%:*}"
+            tag="${item#*:}"
+            count="$(az acr repository show-tags \
+              --name "$ACR_NAME" \
+              --repository "$repository" \
+              --query "[?@=='$tag'] | length(@)" \
+              --output tsv)"
+            if [[ "$count" != "1" ]]; then
+              echo "Missing ACR image tag: $repository:$tag" >&2
+              exit 1
+            fi
+          done
+
+          {
+            echo "migration_image_tag=$MIGRATION_IMAGE_TAG"
+            echo "app_repository=$APP_IMAGE_REPOSITORY"
+            echo "worker_repository=$WORKER_IMAGE_REPOSITORY"
+            echo "migration_repository=$MIGRATION_IMAGE_REPOSITORY"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Export build metadata
+        shell: bash
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$REF_TYPE" == "tag" ]]; then
+            app_version="$REF_NAME"
+          else
+            app_version="$TARGET_ENVIRONMENT-$GITHUB_RUN_NUMBER"
+          fi
+
+          {
+            echo "TF_VAR_app_version=$app_version"
+            echo "TF_VAR_app_revision=$GITHUB_SHA"
+            echo "TF_VAR_app_build_id=$GITHUB_RUN_ID.$GITHUB_RUN_ATTEMPT"
+            echo "TF_VAR_app_built_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } >> "$GITHUB_ENV"
+
+      - name: Provision infrastructure
+        id: provision
+        shell: bash
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+          BOOTSTRAP_RESOURCE_GROUP: ${{ vars.BOOTSTRAP_RESOURCE_GROUP }}
+          TF_STATE_STORAGE_ACCOUNT: ${{ vars.TF_STATE_STORAGE_ACCOUNT }}
+          TF_STATE_CONTAINER: ${{ vars.TF_STATE_CONTAINER || 'tfstate' }}
+          TF_STATE_KEY_PREFIX: ${{ vars.TF_STATE_KEY_PREFIX || 'app' }}
+        run: |
+          set -euo pipefail
+
+          cd infra/azure
+          tofu init -input=false -reconfigure \
+            -backend-config="resource_group_name=$BOOTSTRAP_RESOURCE_GROUP" \
+            -backend-config="storage_account_name=$TF_STATE_STORAGE_ACCOUNT" \
+            -backend-config="container_name=$TF_STATE_CONTAINER" \
+            -backend-config="key=$TF_STATE_KEY_PREFIX/$TARGET_ENVIRONMENT.tfstate" \
+            -backend-config="use_oidc=true"
+
+          tofu plan -input=false \
+            -var-file="environments/$TARGET_ENVIRONMENT.tfvars" \
+            -out=tfplan
+          tofu apply -input=false -auto-approve tfplan
+
+          {
+            echo "resource_group_name=$(tofu output -raw resource_group_name)"
+            echo "app_endpoint=$(tofu output -raw app_endpoint)"
+            echo "app_container_app_name=$(tofu output -raw app_container_app_name)"
+            echo "worker_container_app_name=$(tofu output -raw worker_container_app_name)"
+            echo "migration_job_name=$(tofu output -raw migration_job_name)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Run migration job
+        id: migrate
+        shell: bash
+        env:
+          RESOURCE_GROUP: ${{ steps.provision.outputs.resource_group_name }}
+          MIGRATION_JOB_NAME: ${{ steps.provision.outputs.migration_job_name }}
+          ACR_LOGIN_SERVER: ${{ vars.ACR_LOGIN_SERVER }}
+          MIGRATION_REPOSITORY: ${{ steps.validate-inputs.outputs.migration_repository }}
+          MIGRATION_IMAGE_TAG: ${{ steps.validate-inputs.outputs.migration_image_tag }}
+        run: |
+          set -euo pipefail
+
+          migration_image="$ACR_LOGIN_SERVER/$MIGRATION_REPOSITORY:$MIGRATION_IMAGE_TAG"
+          execution_name="$(az containerapp job start \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "$MIGRATION_JOB_NAME" \
+            --image "$migration_image" \
+            --query name \
+            --output tsv)"
+
+          deadline=$((SECONDS + 1800))
+          while (( SECONDS < deadline )); do
+            status="$(az containerapp job execution show \
+              --resource-group "$RESOURCE_GROUP" \
+              --job-name "$MIGRATION_JOB_NAME" \
+              --name "$execution_name" \
+              --query properties.status \
+              --output tsv)"
+            case "$status" in
+              Succeeded)
+                echo "migration_result=Succeeded" >> "$GITHUB_OUTPUT"
+                echo "migration_execution=$execution_name" >> "$GITHUB_OUTPUT"
+                exit 0
+                ;;
+              Failed)
+                az containerapp job execution show \
+                  --resource-group "$RESOURCE_GROUP" \
+                  --job-name "$MIGRATION_JOB_NAME" \
+                  --name "$execution_name" \
+                  --output json
+                echo "migration_result=Failed" >> "$GITHUB_OUTPUT"
+                echo "Migration job failed: $execution_name" >&2
+                exit 1
+                ;;
+            esac
+            sleep 20
+          done
+
+          echo "migration_result=TimedOut" >> "$GITHUB_OUTPUT"
+          echo "Migration job timed out: $execution_name" >&2
+          exit 1
+
+      - name: Promote app and worker revisions
+        id: promote-app-worker
+        if: ${{ steps.migrate.outcome == 'success' }}
+        shell: bash
+        env:
+          RESOURCE_GROUP: ${{ steps.provision.outputs.resource_group_name }}
+          APP_CONTAINER_APP_NAME: ${{ steps.provision.outputs.app_container_app_name }}
+          WORKER_CONTAINER_APP_NAME: ${{ steps.provision.outputs.worker_container_app_name }}
+          ACR_LOGIN_SERVER: ${{ vars.ACR_LOGIN_SERVER }}
+          APP_REPOSITORY: ${{ steps.validate-inputs.outputs.app_repository }}
+          WORKER_REPOSITORY: ${{ steps.validate-inputs.outputs.worker_repository }}
+          APP_IMAGE_TAG: ${{ inputs.app_image_tag }}
+          WORKER_IMAGE_TAG: ${{ inputs.worker_image_tag }}
+        run: |
+          set -euo pipefail
+
+          app_image="$ACR_LOGIN_SERVER/$APP_REPOSITORY:$APP_IMAGE_TAG"
+          worker_image="$ACR_LOGIN_SERVER/$WORKER_REPOSITORY:$WORKER_IMAGE_TAG"
+
+          az containerapp update \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "$APP_CONTAINER_APP_NAME" \
+            --image "$app_image" \
+            --revision-suffix "app-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+
+          app_revision="$(az containerapp show \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "$APP_CONTAINER_APP_NAME" \
+            --query properties.latestRevisionName \
+            --output tsv)"
+
+          az containerapp ingress traffic set \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "$APP_CONTAINER_APP_NAME" \
+            --revision-weight "$app_revision=100"
+
+          az containerapp update \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "$WORKER_CONTAINER_APP_NAME" \
+            --image "$worker_image" \
+            --revision-suffix "worker-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+
+          worker_revision="$(az containerapp show \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "$WORKER_CONTAINER_APP_NAME" \
+            --query properties.latestRevisionName \
+            --output tsv)"
+
+          {
+            echo "app_revision=$app_revision"
+            echo "worker_revision=$worker_revision"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Smoke verify deployment
+        id: smoke
+        if: ${{ steps.promote-app-worker.outcome == 'success' }}
+        shell: bash
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+          APP_ENDPOINT: ${{ steps.provision.outputs.app_endpoint }}
+          RESOURCE_GROUP: ${{ steps.provision.outputs.resource_group_name }}
+          APP_CONTAINER_APP_NAME: ${{ steps.provision.outputs.app_container_app_name }}
+          WORKER_CONTAINER_APP_NAME: ${{ steps.provision.outputs.worker_container_app_name }}
+          MIGRATION_JOB_NAME: ${{ steps.provision.outputs.migration_job_name }}
+          MIGRATION_EXECUTION: ${{ steps.migrate.outputs.migration_execution }}
+        run: |
+          set +e
+          output="$(pnpm run smoke:azure -- \
+            --environment "$TARGET_ENVIRONMENT" \
+            --app-endpoint "$APP_ENDPOINT" \
+            --resource-group "$RESOURCE_GROUP" \
+            --app-name "$APP_CONTAINER_APP_NAME" \
+            --worker-name "$WORKER_CONTAINER_APP_NAME" \
+            --migration-job-name "$MIGRATION_JOB_NAME" \
+            --migration-execution "$MIGRATION_EXECUTION" 2>&1)"
+          status=$?
+          set -e
+
+          printf '%s\n' "$output"
+          {
+            echo "### Azure deployment smoke"
+            echo
+            echo '```text'
+            printf '%s\n' "$output"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+
+      - name: Report deployment
+        id: report
+        if: ${{ always() }}
+        shell: bash
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+          MIGRATION_RESULT: ${{ steps.migrate.outputs.migration_result || steps.migrate.outcome }}
+          MIGRATION_EXECUTION: ${{ steps.migrate.outputs.migration_execution || 'n/a' }}
+          APP_REVISION: ${{ steps.promote-app-worker.outputs.app_revision || 'not-promoted' }}
+          WORKER_REVISION: ${{ steps.promote-app-worker.outputs.worker_revision || 'not-promoted' }}
+          SMOKE_RESULT: ${{ steps.smoke.outcome || 'not-run' }}
+        run: |
+          {
+            echo "### Azure deployment"
+            echo
+            echo "- Environment: $TARGET_ENVIRONMENT"
+            echo "- Migration result: $MIGRATION_RESULT"
+            echo "- Migration execution: $MIGRATION_EXECUTION"
+            echo "- App revision: $APP_REVISION"
+            echo "- Worker revision: $WORKER_REVISION"
+            echo "- Smoke result: $SMOKE_RESULT"
+          } >> "$GITHUB_STEP_SUMMARY"

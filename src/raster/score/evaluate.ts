@@ -5,6 +5,7 @@ import type {
   Assignment,
   EvaluationResult,
   HardViolation,
+  OverUsage,
   SeasonModel,
   Weights
 } from "../types.js";
@@ -23,6 +24,17 @@ export function completeAssignment(
   return full;
 }
 
+export function overUsageFairnessCost(overUsages: OverUsage[]): number {
+  const excessByClub = new Map<string, number>();
+  for (const usage of overUsages) {
+    excessByClub.set(
+      usage.clubId,
+      (excessByClub.get(usage.clubId) ?? 0) + usage.excess
+    );
+  }
+  return [...excessByClub.values()].reduce((sum, excess) => sum + excess ** 2, 0);
+}
+
 export function evaluate(
   model: SeasonModel,
   partialAssignment: Assignment,
@@ -31,9 +43,10 @@ export function evaluate(
   const assignment = completeAssignment(model, partialAssignment);
   const hardViolations: HardViolation[] = [];
   const perGroup: EvaluationResult["perGroup"] = [];
+  let sameClubDerbySt4 = 0;
 
   for (const group of model.groups) {
-    const rasterSize = rasterSizeForGroupSize(group.size);
+    const rasterSize = rasterSizeForGroupSize(group.size, group.rasterMode);
     const values = group.teamIds.map((teamId) => assignment[teamId]);
     const assignedValues = values.filter(
       (value): value is number => value !== undefined
@@ -55,15 +68,6 @@ export function evaluate(
       valid
     });
 
-    if (
-      !group.teamIds.some(
-        (teamId) =>
-          model.teams.find((team) => team.id === teamId)?.rasterzahl.kind === "assignable"
-      )
-    ) {
-      continue;
-    }
-
     for (const [leftIndex, leftId] of group.teamIds.entries()) {
       const left = model.teams.find((team) => team.id === leftId);
       const leftRz = assignment[leftId];
@@ -79,6 +83,7 @@ export function evaluate(
             kind: "derby-late",
             detail: `${left.id}/${right.id} meet on Spieltag ${spieltag}`
           });
+        if (spieltag === 4) sameClubDerbySt4++;
       }
     }
   }
@@ -96,6 +101,12 @@ export function evaluate(
   }
 
   const overUsages = findOverUsages(model, assignment);
+  for (const usage of overUsages.filter((usage) => usage.excess > 1)) {
+    hardViolations.push({
+      kind: "capacity-overflow",
+      detail: `${usage.clubId}/${usage.weekday}/hall ${usage.hall}/week ${usage.week} has ${usage.teams.length} teams, capacity ${usage.capacity}`
+    });
+  }
   const wishResults = evaluateWishes(model, assignment);
   const spielwocheMisses = model.teams.flatMap((team) => {
     if (!team.spielwochePref) return [];
@@ -104,7 +115,7 @@ export function evaluate(
     );
     const rz = assignment[team.id];
     if (!group || rz === undefined) return [];
-    const got = deriveHomeWeeks(group.size, rz).slot;
+    const got = deriveHomeWeeks(group.size, rz, group.rasterMode).slot;
     return got === team.spielwochePref
       ? []
       : [{ teamId: team.id, want: team.spielwochePref, got }];
@@ -118,9 +129,11 @@ export function evaluate(
       result.status === "unfulfilled" && result.wish.relation === "zeitgleich"
   ).length;
   const objective =
-    overUsages.length * weights.overUsage +
+    overUsages.reduce((sum, usage) => sum + usage.excess ** 2, 0) * weights.overUsage +
+    overUsageFairnessCost(overUsages) * weights.overUsageFairness +
     brokenWechsel * weights.wechsel +
     brokenZeitgleich * weights.zeitgleich +
+    sameClubDerbySt4 * weights.sameClubDerbySt4 +
     spielwocheMisses.length * weights.spielwoche;
 
   return {

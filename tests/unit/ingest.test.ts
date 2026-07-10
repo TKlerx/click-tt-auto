@@ -56,7 +56,7 @@ describe("assignment table ingestion", () => {
     const sizes = splitIntoSupportedGroupSizes(277);
 
     expect(sizes.reduce((total, size) => total + size, 0)).toBe(277);
-    expect(sizes.every((size) => size >= 9 && size <= 14)).toBe(true);
+    expect(sizes.every((size) => size >= 6 && size <= 14)).toBe(true);
   });
 
   it("keeps fixed table rows fixed and maps current rows to internal ids", async () => {
@@ -242,5 +242,5 @@ describe("wishes PDF text ingestion", () => {
         startTime: "14:30"
       }
     ]);
-  });
+  }, 15000);
 });

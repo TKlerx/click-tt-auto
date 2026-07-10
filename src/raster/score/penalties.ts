@@ -24,6 +24,12 @@ export function findOverUsages(
   assignment: Assignment
 ): OverUsage[] {
   const slots = new Map<string, { teams: string[]; capacity: number }>();
+  const inferredCapacities = new Map<string, number>();
+  for (const team of model.teams) {
+    if (!team.spielwochePref) continue;
+    const key = `${team.clubId}|${team.hall}|${team.homeWeekday}|${team.spielwochePref}`;
+    inferredCapacities.set(key, (inferredCapacities.get(key) ?? 0) + 1);
+  }
   for (const team of model.teams) {
     const group = model.groups.find((candidate) =>
       candidate.teamIds.includes(team.id)
@@ -32,9 +38,13 @@ export function findOverUsages(
     if (!group || rz === undefined) continue;
     const club = model.clubs.find((candidate) => candidate.id === team.clubId);
     const venue = club?.venues.find((candidate) => candidate.hall === team.hall);
-    const capacity = venue?.capacityByWeekday?.[team.homeWeekday] ?? venue?.capacity;
+    const inferredCapacity = Math.max(
+      inferredCapacities.get(`${team.clubId}|${team.hall}|${team.homeWeekday}|A`) ?? 0,
+      inferredCapacities.get(`${team.clubId}|${team.hall}|${team.homeWeekday}|B`) ?? 0
+    );
+    const capacity = venue?.capacityByWeekday?.[team.homeWeekday] ?? venue?.capacity ?? (inferredCapacity || undefined);
     if (capacity === undefined) continue;
-    for (const week of new Set(deriveHomeWeeks(group.size, rz).weeks)) {
+    for (const week of new Set(deriveHomeWeeks(group.size, rz, group.rasterMode).weeks)) {
       const key = `${team.clubId}|${team.hall}|${team.homeWeekday}|${week}`;
       const bucket = slots.get(key) ?? { teams: [], capacity };
       bucket.teams.push(team.id);
@@ -46,6 +56,7 @@ export function findOverUsages(
   return [...slots.entries()].flatMap(([key, bucket]) => {
     if (bucket.teams.length <= bucket.capacity) return [];
     const [clubId, hall, weekday, week] = key.split("|");
+    const excess = bucket.teams.length - bucket.capacity;
     return [
       {
         clubId: clubId!,
@@ -53,7 +64,8 @@ export function findOverUsages(
         weekday: weekday as OverUsage["weekday"],
         week: Number(week),
         teams: bucket.teams,
-        capacity: bucket.capacity
+        capacity: bucket.capacity,
+        excess
       }
     ];
   });
@@ -79,9 +91,9 @@ export function evaluateWishes(
     if (!groupA || !groupB || rzA === undefined || rzB === undefined)
       return { wish, status: "unknown", reason: "missing group or assignment" };
     const actual = relation(
-      deriveHomeWeeks(groupA.size, rzA).rasterSize,
+      deriveHomeWeeks(groupA.size, rzA, groupA.rasterMode).rasterSize,
       rzA,
-      deriveHomeWeeks(groupB.size, rzB).rasterSize,
+      deriveHomeWeeks(groupB.size, rzB, groupB.rasterMode).rasterSize,
       rzB
     );
     if (actual === wish.relation) return { wish, status: "fulfilled" };

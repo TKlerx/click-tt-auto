@@ -108,17 +108,19 @@
 
 **Purpose**: Final cleanup and robustness improvements
 
-- [X] T030 [P] Add session expiry detection in src/auth.ts - detect if redirected to login page mid-run and abort gracefully
+- [ ] T030 [P] Rework session-expiry handling in src/auth.ts + src/navigation.ts (FR-023) - detect login-page redirect mid-run, re-authenticate automatically with the same credentials, and resume from the current page/match instead of aborting. Rely on checkmark-skip to stay idempotent. (Supersedes prior abort-gracefully behavior.)
 - [X] T031 [P] Add match format detection in src/match-detail.ts - check page heading for "Sechser-Paarkreuz-System" and report unsupported formats
 - [X] T032 [P] Create README.md with setup instructions, usage examples, and explanation of validation rules
 - [X] T033 Run validate.ps1 and fix any typecheck/lint issues
-- [ ] T034 Manual end-to-end test: run --dry-run against live click-TT, review report, then run live and verify approvals in the webapp
+- [ ] T034 Manual end-to-end test: run --dry-run against live click-TT, review report, then run live and verify approvals; record wall-clock time and confirm SC-003 (<30 min for ~284 matches)
 - [X] T035 Add explicit detail-page safety guards, headed debug mode, and halt-for-inspection behavior
 - [X] T036 Improve detail parsing for nested / side-by-side lineup tables and acceptable bottom-of-page Hinweise
 - [X] T037 Add richer progress reporting (overall/page/item progress, ETA, plain-progress fallback)
 - [X] T038 Extend stdout/JSON reporting with scanned/actionable/ignored counts and fine-workbook sync summary
 - [X] T039 Implement fine workbook sync in src/fines.ts using ExcelJS with duplicate suppression and ignore-column support
-- [X] T040 Export `Nicht angetreten` fine candidates and workbook failure reasons, including already-approved search-result rows
+- [X] T040 Export `Nicht angetreten` fine candidates and workbook failure reasons, including already-approved search-result rows (FR-019, FR-020, FR-022 — reads `CLICK_TT_FINE_NA_KOSTEN`)
+- [ ] T041 [P] Align fine-workbook dedup key to home + guest + match date + sanction reason (`grund`) in src/fines.ts per SC-006 - exclude `spielnummer` from the key; confirm ignore-column rows are matched on the same key
+- [ ] T042 [P] Add/adjust unit test in tests/unit/fines.test.ts asserting the dedup key (heim+gast+datum+grund) suppresses duplicates and that differing `grund` on the same fixture produces separate rows
 
 ---
 
@@ -151,6 +153,7 @@
 - T019, T020, T021 can run in parallel
 - US1 and US3 can run in parallel after Phase 2
 - T030, T031, T032 can run in parallel
+- T041, T042 can run in parallel (fines.ts impl vs its unit test — coordinate if touched together)
 
 ---
 

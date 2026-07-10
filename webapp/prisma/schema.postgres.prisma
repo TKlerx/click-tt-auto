@@ -1,0 +1,715 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  PLATFORM_ADMIN
+  SCOPE_ADMIN
+  SCOPE_USER
+}
+
+enum UserStatus {
+  PENDING_APPROVAL
+  ACTIVE
+  INACTIVE
+}
+
+enum AuthMethod {
+  SSO
+  LOCAL
+  BOTH
+}
+
+enum ThemePreference {
+  LIGHT
+  DARK
+}
+
+enum TokenType {
+  PAT
+  CLI_LOGIN
+}
+
+enum TokenStatus {
+  ACTIVE
+  REVOKED
+}
+
+enum AuditAction {
+  USER_CREATED
+  ROLE_CHANGED
+  SCOPE_ASSIGNMENT_CHANGED
+  USER_STATUS_CHANGED
+  USER_THEME_CHANGED
+  AUTH_LOGIN_SUCCEEDED
+  AUTH_LOGIN_REJECTED
+  AUTH_PASSWORD_CHANGED
+  AUTH_LOGOUT_SUCCEEDED
+  AUDIT_EXPORT_REQUESTED
+  PAT_CREATED
+  PAT_REVOKED
+  PAT_RENEWED
+  PAT_DELETED
+  CLI_LOGIN_COMPLETED
+  RASTER_INPUT_UPLOADED
+  RASTER_RUN_STARTED
+  RASTER_CAPACITY_CHANGED
+  RASTER_REVIEW_DECISION_CHANGED
+}
+
+enum BackgroundJobStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+}
+
+enum NotificationEventType {
+  USER_CREATED
+  ROLE_CHANGED
+  USER_STATUS_CHANGED
+  SCOPE_ASSIGNMENT_CHANGED
+}
+
+enum NotificationStatus {
+  QUEUED
+  SENDING
+  RETRYING
+  SENT
+  FAILED
+  BOUNCED
+}
+
+enum InboundEmailStatus {
+  RECEIVED
+  PROCESSED
+  IGNORED
+  FAILED
+}
+
+enum TeamsMessageStatus {
+  QUEUED
+  SENDING
+  RETRYING
+  SENT
+  FAILED
+}
+
+enum TeamsInboundStatus {
+  RECEIVED
+  PROCESSED
+  IGNORED
+}
+
+enum RasterWeekday {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+enum InputSetStatus {
+  DRAFT
+  READY
+}
+
+enum RasterWishSource {
+  PDF_PARSED
+  LLM_PASTED
+  STRUCTURED
+}
+
+enum RasterConfidence {
+  OK
+  REVIEW
+}
+
+enum HallCapacityBasis {
+  REVIEWED
+  INFERRED
+  MISSING
+}
+
+enum FixedRasterzahlSource {
+  PDF
+  MANUAL
+  STRUCTURED
+}
+
+enum OptimizationRunStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum OptimizationRunOutcome {
+  PROVEN_OPTIMAL
+  FEASIBLE
+  INFEASIBLE
+  FAILED
+  CANCELLED
+}
+
+enum SnapshotOrigin {
+  GENERATED
+  IMPORTED
+}
+
+enum SnapshotOptimality {
+  PROVEN_OPTIMAL
+  FEASIBLE
+  IMPORTED_HEURISTIC
+}
+
+enum AssignmentStatus {
+  OPTIMIZED
+  FIXED
+  PINNED
+  MISSING
+}
+
+enum ReviewTargetType {
+  CONFLICT
+  CLUB_SUMMARY
+}
+
+enum ReviewDecisionStatus {
+  REVIEWED
+  NEEDS_CORRECTION
+  ACCEPTED_UNAVOIDABLE
+}
+
+model User {
+  id                            String                    @id @default(cuid())
+  email                         String                    @unique
+  emailVerified                 Boolean                   @default(false)
+  name                          String
+  image                         String?
+  role                          Role                      @default(SCOPE_USER)
+  status                        UserStatus                @default(PENDING_APPROVAL)
+  authMethod                    AuthMethod
+  mustChangePassword            Boolean                   @default(true)
+  themePreference               ThemePreference           @default(LIGHT)
+  locale                        String                    @default("en")
+  createdAt                     DateTime                  @default(now())
+  updatedAt                     DateTime                  @updatedAt
+  accounts                      Account[]
+  sessions                      Session[]
+  scopeAssignments              UserScopeAssignment[]
+  auditEntries                  AuditEntry[]              @relation("AuditActor")
+  backgroundJobs                BackgroundJob[]           @relation("BackgroundJobCreator")
+  personalAccessTokens          PersonalAccessToken[]
+  cliAuthCodes                  CliAuthCode[]
+  teamsIntegrationConfigUpdates TeamsIntegrationConfig[]  @relation("TeamsIntegrationUpdatedBy")
+  teamsDeliveryTargets          TeamsDeliveryTarget[]     @relation("TeamsDeliveryTargetCreator")
+  teamsIntakeSubscriptions      TeamsIntakeSubscription[] @relation("TeamsIntakeSubscriptionCreator")
+  teamsDelegatedGrant           TeamsDelegatedGrant?
+  rasterInputSets               RasterInputSet[]          @relation("RasterInputSetCreator")
+  rasterRuns                    RasterOptimizationRun[]   @relation("RasterRunStarter")
+  rasterCapacityUpdates         RasterHallCapacity[]      @relation("RasterCapacityUpdater")
+  rasterReviewDecisions         RasterReviewDecision[]    @relation("RasterReviewDecider")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Account {
+  id                    String    @id @default(cuid())
+  accountId             String
+  providerId            String
+  userId                String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, accountId])
+  @@index([userId])
+}
+
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+}
+
+model Scope {
+  id              String                @id @default(cuid())
+  name            String                @unique
+  code            String                @unique
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  userAssignments UserScopeAssignment[]
+  auditEntries    AuditEntry[]
+}
+
+model UserScopeAssignment {
+  id        String   @id @default(cuid())
+  userId    String
+  scopeId   String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scope     Scope    @relation(fields: [scopeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, scopeId])
+  @@index([scopeId])
+}
+
+model AuditEntry {
+  id         String      @id @default(cuid())
+  action     AuditAction
+  entityType String
+  entityId   String
+  actorId    String
+  scopeId    String?
+  details    String
+  createdAt  DateTime    @default(now())
+  actor      User        @relation("AuditActor", fields: [actorId], references: [id], onDelete: Restrict)
+  scope      Scope?      @relation(fields: [scopeId], references: [id], onDelete: SetNull)
+
+  @@index([action])
+  @@index([entityType, entityId])
+  @@index([actorId])
+  @@index([scopeId])
+  @@index([createdAt])
+}
+
+model PersonalAccessToken {
+  id           String      @id @default(cuid())
+  name         String
+  tokenHash    String      @unique
+  tokenPrefix  String
+  userId       String
+  type         TokenType
+  expiresAt    DateTime
+  lastUsedAt   DateTime?
+  status       TokenStatus @default(ACTIVE)
+  revokedAt    DateTime?
+  renewalCount Int         @default(0)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name])
+  @@index([tokenHash])
+  @@index([userId, status])
+  @@index([status, expiresAt])
+}
+
+model CliAuthCode {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  state       String
+  callbackUrl String
+  userId      String?
+  exchanged   Boolean  @default(false)
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  user        User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([code])
+  @@index([expiresAt])
+}
+
+model BackgroundJob {
+  id              String              @id @default(cuid())
+  jobType         String
+  status          BackgroundJobStatus @default(PENDING)
+  payload         String
+  result          String?
+  error           String?
+  attemptCount    Int                 @default(0)
+  availableAt     DateTime            @default(now())
+  startedAt       DateTime?
+  lockedAt        DateTime?
+  finishedAt      DateTime?
+  workerId        String?
+  createdByUserId String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  createdBy       User?               @relation("BackgroundJobCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([status, availableAt])
+  @@index([createdByUserId, createdAt])
+  @@index([jobType, createdAt])
+}
+
+model NotificationEvent {
+  id                    String                 @id @default(cuid())
+  eventType             NotificationEventType
+  actorId               String?
+  affectedUserId        String?
+  payload               String                 @default("{}")
+  createdAt             DateTime               @default(now())
+  notifications         Notification[]
+  teamsOutboundMessages TeamsOutboundMessage[]
+
+  @@index([eventType, createdAt])
+  @@index([actorId, createdAt])
+  @@index([affectedUserId, createdAt])
+}
+
+model NotificationTypeConfiguration {
+  eventType       NotificationEventType @id
+  enabled         Boolean               @default(true)
+  updatedByUserId String?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+}
+
+model Notification {
+  id                String             @id @default(cuid())
+  eventId           String
+  recipientEmail    String
+  recipientUserId   String?
+  locale            String             @default("en")
+  subject           String
+  bodyText          String
+  bodyHtml          String?
+  status            NotificationStatus @default(QUEUED)
+  retryCount        Int                @default(0)
+  providerMessageId String?
+  lastError         String?
+  sentAt            DateTime?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  event             NotificationEvent  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+  @@index([status, createdAt])
+  @@index([recipientEmail, status])
+  @@index([recipientUserId, createdAt])
+}
+
+model InboundEmail {
+  id                       String             @id @default(cuid())
+  providerMessageId        String             @unique
+  mailbox                  String
+  internetMessageId        String?
+  conversationId           String?
+  senderEmail              String?
+  senderName               String?
+  subject                  String
+  bodyPreview              String?
+  bodyText                 String?
+  bodyHtml                 String?
+  inReplyTo                String?
+  referenceIds             String             @default("[]")
+  receivedAt               DateTime
+  processingStatus         InboundEmailStatus @default(RECEIVED)
+  processingNotes          String?
+  correlatedNotificationId String?
+  linkedEntityType         String?
+  linkedEntityId           String?
+  createdAt                DateTime           @default(now())
+  updatedAt                DateTime           @updatedAt
+
+  @@index([processingStatus, receivedAt])
+  @@index([mailbox, receivedAt])
+  @@index([correlatedNotificationId, receivedAt])
+  @@index([linkedEntityType, linkedEntityId])
+}
+
+model TeamsIntegrationConfig {
+  id              String   @id @default(cuid())
+  sendEnabled     Boolean  @default(false)
+  intakeEnabled   Boolean  @default(false)
+  updatedByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  updatedBy       User?    @relation("TeamsIntegrationUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+}
+
+model TeamsDeliveryTarget {
+  id               String                 @id @default(cuid())
+  name             String
+  teamId           String
+  channelId        String
+  teamName         String?
+  channelName      String?
+  active           Boolean                @default(true)
+  createdByUserId  String
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+  createdBy        User                   @relation("TeamsDeliveryTargetCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  outboundMessages TeamsOutboundMessage[]
+
+  @@unique([teamId, channelId])
+  @@index([active])
+}
+
+model TeamsOutboundMessage {
+  id             String                @id @default(cuid())
+  targetId       String
+  eventType      NotificationEventType
+  eventId        String?
+  content        String
+  contentType    String                @default("html")
+  truncated      Boolean               @default(false)
+  status         TeamsMessageStatus    @default(QUEUED)
+  graphMessageId String?
+  attemptCount   Int                   @default(0)
+  lastError      String?
+  sentAt         DateTime?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  target         TeamsDeliveryTarget   @relation(fields: [targetId], references: [id], onDelete: Restrict)
+  event          NotificationEvent?    @relation(fields: [eventId], references: [id], onDelete: SetNull)
+
+  @@index([targetId, createdAt])
+  @@index([status, createdAt])
+  @@index([eventType, createdAt])
+}
+
+model TeamsIntakeSubscription {
+  id              String                @id @default(cuid())
+  teamId          String
+  channelId       String
+  teamName        String?
+  channelName     String?
+  active          Boolean               @default(true)
+  deltaToken      String?
+  lastPolledAt    DateTime?
+  createdByUserId String
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  createdBy       User                  @relation("TeamsIntakeSubscriptionCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  inboundMessages TeamsInboundMessage[]
+
+  @@unique([teamId, channelId])
+  @@index([active])
+}
+
+model TeamsInboundMessage {
+  id                String                  @id @default(cuid())
+  subscriptionId    String
+  providerMessageId String                  @unique
+  teamId            String
+  channelId         String
+  senderDisplayName String?
+  senderUserId      String?
+  content           String?
+  contentType       String?
+  truncated         Boolean                 @default(false)
+  processingStatus  TeamsInboundStatus      @default(RECEIVED)
+  processingNotes   String?
+  messageCreatedAt  DateTime
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  subscription      TeamsIntakeSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+
+  @@index([subscriptionId, createdAt])
+  @@index([processingStatus, createdAt])
+  @@index([channelId, messageCreatedAt])
+}
+
+model TeamsDelegatedGrant {
+  id           String    @id @default(cuid())
+  userId       String    @unique
+  scope        String
+  accessToken  String
+  refreshToken String?
+  expiresAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+}
+
+model RasterInputSet {
+  id                String                  @id @default(cuid())
+  name              String
+  district          String
+  createdById       String
+  createdAt         DateTime                @default(now())
+  status            InputSetStatus          @default(DRAFT)
+  seasonModelJson   String?
+  createdBy         User                    @relation("RasterInputSetCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  wishes            RasterWish[]
+  fixedRasterzahlen RasterFixedRasterzahl[]
+  runs              RasterOptimizationRun[]
+
+  @@index([district, createdAt])
+  @@index([createdById])
+}
+
+model RasterWish {
+  id                  String           @id @default(cuid())
+  inputSetId          String
+  clubId              String
+  clubName            String
+  teamLabel           String?
+  homeWeekday         RasterWeekday
+  hall                String?
+  startTime           String?
+  spielwochePref      String?
+  requestedRasterzahl String?
+  notes               String?
+  source              RasterWishSource
+  confidence          RasterConfidence @default(REVIEW)
+  inputSet            RasterInputSet   @relation(fields: [inputSetId], references: [id], onDelete: Cascade)
+
+  @@index([inputSetId])
+  @@index([clubId])
+}
+
+model RasterHallCapacity {
+  id          String            @id @default(cuid())
+  district    String
+  clubId      String
+  hall        String
+  weekday     RasterWeekday
+  capacity    Int
+  basis       HallCapacityBasis @default(MISSING)
+  updatedById String?
+  updatedAt   DateTime          @updatedAt
+  updatedBy   User?             @relation("RasterCapacityUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@unique([district, clubId, hall, weekday])
+  @@index([district, clubId])
+  @@index([updatedById])
+}
+
+model RasterFixedRasterzahl {
+  id         String                @id @default(cuid())
+  inputSetId String
+  clubId     String
+  teamLabel  String
+  rasterzahl Int
+  source     FixedRasterzahlSource
+  inputSet   RasterInputSet        @relation(fields: [inputSetId], references: [id], onDelete: Cascade)
+
+  @@index([inputSetId])
+  @@index([clubId])
+}
+
+model RasterOptimizationRun {
+  id                 String                  @id @default(cuid())
+  inputSetId         String
+  startedById        String
+  jobId              String?
+  status             OptimizationRunStatus   @default(PENDING)
+  outcome            OptimizationRunOutcome?
+  objectiveValue     Float?
+  objectiveBreakdown String?
+  solverStatus       String?
+  settings           String                  @default("{}")
+  createdAt          DateTime                @default(now())
+  finishedAt         DateTime?
+  inputSet           RasterInputSet          @relation(fields: [inputSetId], references: [id], onDelete: Restrict)
+  startedBy          User                    @relation("RasterRunStarter", fields: [startedById], references: [id], onDelete: Restrict)
+  snapshot           RasterSnapshot?
+
+  @@index([inputSetId, createdAt])
+  @@index([startedById])
+  @@index([status, createdAt])
+}
+
+model RasterSnapshot {
+  id                 String                 @id @default(cuid())
+  runId              String?                @unique
+  district           String
+  origin             SnapshotOrigin
+  optimality         SnapshotOptimality
+  stale              Boolean                @default(false)
+  totalConflicts     Int                    @default(0)
+  totalExcess        Int                    @default(0)
+  maxExcess          Int                    @default(0)
+  affectedClubs      Int                    @default(0)
+  objectiveBreakdown String                 @default("{}")
+  createdAt          DateTime               @default(now())
+  run                RasterOptimizationRun? @relation(fields: [runId], references: [id], onDelete: SetNull)
+  assignments        RasterAssignment[]
+  conflicts          RasterConflict[]
+  reviewDecisions    RasterReviewDecision[]
+
+  @@index([district, createdAt])
+  @@index([stale])
+}
+
+model RasterAssignment {
+  id         String           @id @default(cuid())
+  snapshotId String
+  league     String
+  group      String
+  clubId     String
+  clubName   String
+  team       String
+  rasterzahl Int
+  status     AssignmentStatus
+  weekday    RasterWeekday
+  hall       String
+  startTime  String?
+  weekSlot   String?
+  snapshot   RasterSnapshot   @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+
+  @@index([snapshotId, clubId])
+  @@index([snapshotId, league, group])
+}
+
+model RasterConflict {
+  id          String         @id @default(cuid())
+  snapshotId  String
+  matchWeek   Int
+  clubId      String
+  clubName    String
+  weekday     RasterWeekday
+  hall        String
+  capacity    Int
+  actualCount Int
+  excess      Int
+  teams       String
+  snapshot    RasterSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+
+  @@index([snapshotId, clubId])
+  @@index([snapshotId, excess])
+}
+
+model RasterReviewDecision {
+  id          String               @id @default(cuid())
+  snapshotId  String
+  targetType  ReviewTargetType
+  targetId    String
+  status      ReviewDecisionStatus
+  note        String?
+  decidedById String
+  decidedAt   DateTime             @default(now())
+  snapshot    RasterSnapshot       @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  decidedBy   User                 @relation("RasterReviewDecider", fields: [decidedById], references: [id], onDelete: Restrict)
+
+  @@index([snapshotId, targetType, targetId])
+  @@index([decidedById])
+}

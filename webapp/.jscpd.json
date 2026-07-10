@@ -1,0 +1,23 @@
+{
+  "threshold": 3.1,
+  "min-lines": 5,
+  "min-tokens": 50,
+  "reporters": ["console"],
+  "absolute": true,
+  "ignore": [
+    "**/tests/**",
+    "**/test-results/**",
+    "**/playwright-report/**",
+    "**/coverage/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/*.test.ts",
+    "**/*.spec.ts",
+    "**/.next/**",
+    "**/generated/**",
+    "**/node_modules/**",
+    "**/src/app/api/integrations/teams/**",
+    "**/src/components/teams/**",
+    "**/src/services/teams/**"
+  ]
+}

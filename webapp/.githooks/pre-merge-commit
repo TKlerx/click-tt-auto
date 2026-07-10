@@ -1,0 +1,6 @@
+#!/usr/bin/env sh
+set -eu
+
+hook_dir=${0%/*}
+
+exec "$hook_dir/run-validate.sh" full

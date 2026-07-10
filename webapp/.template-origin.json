@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "templateRepoUrl": "https://github.com/TKlerx/webapp-template.git",
+  "templateDefaultBranch": "main",
+  "recordedUpstreamTemplateCommit": "91c20e9d9ceac0f1233ab2b1d4a13a70952dde16",
+  "recordedUpstreamTemplateShortCommit": "91c20e9",
+  "templateRecordedAt": "2026-04-01",
+  "templateVersionLabel": "main+011-route-refactor@91c20e9"
+}

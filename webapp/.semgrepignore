@@ -1,0 +1,16 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+.next/
+dist/
+out/
+build/
+coverage/
+
+# Claude Code
+.claude/
+
+# Generated files
+prisma/migrations/
+*.min.js

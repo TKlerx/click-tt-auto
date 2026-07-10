@@ -1,0 +1,16 @@
+node_modules/
+.next/
+.agents/
+.claude/
+.codex/
+.deepsec/
+coverage/
+dist/
+build/
+public/vendor/
+worker/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+generated/
+

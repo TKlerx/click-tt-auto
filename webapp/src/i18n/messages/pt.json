@@ -1,0 +1,379 @@
+{
+  "common": {
+    "appName": "Business App Starter",
+    "signOut": "Sair",
+    "save": "Salvar",
+    "cancel": "Cancelar",
+    "loading": "Carregando...",
+    "error": "Ocorreu um erro",
+    "darkMode": "Modo escuro",
+    "lightMode": "Modo claro",
+    "saving": "Salvando..."
+  },
+  "nav": {
+    "dashboard": "Painel",
+    "raster": "Raster",
+    "backgroundJobs": "Tarefas em segundo plano",
+    "users": "Gestao de utilizadores",
+    "auditTrail": "Audit Trail",
+    "notifications": "Notificacoes",
+    "tokens": "Tokens",
+    "apiDocs": "API Docs",
+    "adminTokens": "Admin Tokens",
+    "teamsIntegrations": "Teams",
+    "opsHealth": "Saúde Ops"
+  },
+  "auth": {
+    "signIn": "Entrar",
+    "signInAzure": "Entrar com Azure",
+    "localAccount": "Conta local",
+    "email": "E-mail",
+    "password": "Palavra-passe",
+    "signingIn": "A entrar...",
+    "loginFailed": "Falha no login. Tente novamente.",
+    "description": "Use Azure SSO ou uma conta local criada por um administrador.",
+    "ssoRevoked": "O seu acesso SSO foi revogado. Contacte um administrador.",
+    "ssoNotConfigured": "Azure SSO ainda nao esta configurado. Defina as variaveis de ambiente Azure AD e tente novamente.",
+    "authFailed": "Falha na autenticacao. Tente novamente.",
+    "changePassword": "Alterar palavra-passe",
+    "changePasswordDescription": "As contas locais devem definir uma nova palavra-passe antes de aceder ao painel.",
+    "currentPassword": "Palavra-passe atual",
+    "newPassword": "Nova palavra-passe",
+    "saving": "Salvando...",
+    "saveNewPassword": "Guardar nova palavra-passe",
+    "passwordChanged": "Palavra-passe alterada com sucesso",
+    "couldNotUpdatePassword": "Nao foi possivel atualizar a palavra-passe",
+    "firstLogin": "Primeiro login"
+  },
+  "pending": {
+    "title": "A sua conta esta aguardando aprovacao administrativa.",
+    "description": "Pode iniciar sessao agora, mas so tera acesso a aplicacao depois que um administrador aprovar o seu acesso.",
+    "label": "Aprovacao pendente"
+  },
+  "dashboard": {
+    "label": "Painel",
+    "welcomeBack": "Bem-vindo de volta, {name}.",
+    "role": "Funcao",
+    "status": "Estado",
+    "theme": "Tema",
+    "email": "E-mail"
+  },
+  "users": {
+    "title": "Utilizadores",
+    "createUser": "Criar utilizador local",
+    "emailPlaceholder": "E-mail",
+    "namePlaceholder": "Nome",
+    "temporaryPassword": "Palavra-passe temporaria",
+    "createButton": "Criar utilizador",
+    "userCreated": "Utilizador criado",
+    "couldNotCreate": "Nao foi possivel criar o utilizador",
+    "notAuthorized": "Nao esta autorizado a aceder a esta pagina.",
+    "name": "Nome",
+    "email": "E-mail",
+    "role": "Funcao",
+    "statusLabel": "Estado",
+    "auth": "Auth",
+    "actions": "Acoes",
+    "approve": "Aprovar",
+    "deactivate": "Desativar",
+    "reactivate": "Reativar",
+    "userApproved": "Utilizador aprovado",
+    "userDeactivated": "Utilizador desativado",
+    "userReactivated": "Utilizador reativado",
+    "roleUpdated": "Funcao atualizada para {role}",
+    "lastAdminDeactivateError": "Nao e possivel desativar o ultimo utilizador administrador",
+    "lastAdminRoleError": "Nao e possivel alterar a funcao do ultimo utilizador administrador",
+    "couldNotUpdate": "Nao foi possivel atualizar o utilizador",
+    "roles": {
+      "PLATFORM_ADMIN": "Admin da plataforma",
+      "SCOPE_ADMIN": "Admin de escopo",
+      "SCOPE_USER": "Usuario de escopo"
+    },
+    "statuses": {
+      "ACTIVE": "Ativo",
+      "INACTIVE": "Inativo",
+      "PENDING_APPROVAL": "Aprovacao pendente"
+    }
+  },
+  "theme": {
+    "switchedTo": "Tema alterado para modo {theme}"
+  },
+  "audit": {
+    "title": "Auditoria",
+    "action": "Acao",
+    "actor": "Autor",
+    "entity": "Entidade",
+    "details": "Details",
+    "date": "Date",
+    "scope": "Scope",
+    "filters": "Filters",
+    "exportCsv": "Export CSV",
+    "exportPdf": "Export PDF",
+    "exportTruncated": "Exportacao limitada a {count} entradas. Refine filtros para exportar tudo.",
+    "empty": "No audit entries match your filters."
+  },
+  "backgroundJobs": {
+    "eyebrow": "Fila do worker",
+    "title": "Tarefas em segundo plano",
+    "description": "Tarefas recentes do worker em toda a aplicacao. Esta pagina mostra fila, falhas e payloads.",
+    "showingRecent": "A mostrar as ultimas {count} tarefas",
+    "retryScheduled": "Nova tentativa {attempt} as {time}",
+    "empty": "Ainda nao existem tarefas em segundo plano.",
+    "notAssigned": "Nao atribuido",
+    "system": "Sistema",
+    "none": "Nenhum",
+    "summary": {
+      "pending": "Pendentes",
+      "inProgress": "Em progresso",
+      "completed": "Concluidas",
+      "failed": "Falhadas"
+    },
+    "fields": {
+      "createdAt": "Criada",
+      "updatedAt": "Atualizada",
+      "attempts": "Tentativas",
+      "worker": "Worker",
+      "createdBy": "Criada por",
+      "availableAt": "Disponivel",
+      "payload": "Payload",
+      "result": "Resultado",
+      "error": "Erro"
+    }
+  },
+  "opsHealth": {
+    "eyebrow": "Operações",
+    "title": "Saúde Ops",
+    "description": "Identifique o build em execução, inspecione verificações de saúde e copie um resumo diagnóstico seguro.",
+    "overall": "Estado geral",
+    "capturedAt": "Capturado: {value}",
+    "checkedAt": "Verificado: {value}",
+    "refresh": "Atualizar",
+    "refreshing": "Atualizando...",
+    "refreshFailed": "Não foi possível atualizar o instantâneo de saúde.",
+    "status": {
+      "healthy": "Saudável",
+      "degraded": "Degradado",
+      "unknown": "Desconhecido",
+      "unavailable": "Indisponível"
+    },
+    "environment": {
+      "title": "Identidade do ambiente",
+      "environment": "Ambiente",
+      "version": "Versão",
+      "revision": "Revisão",
+      "buildId": "ID do build",
+      "builtAt": "Build criado"
+    },
+    "checks": {
+      "runtime": "Runtime",
+      "database": "Banco de dados",
+      "configuration": "Configuração",
+      "worker": "Worker",
+      "deploySmoke": "Smoke de deploy"
+    },
+    "summary": {
+      "title": "Resumo diagnóstico",
+      "description": "Copie este texto sem segredos para issues ou notas de incidente."
+    },
+    "copy": {
+      "button": "Copiar resumo",
+      "success": "Resumo diagnóstico copiado",
+      "error": "Não foi possível copiar o resumo diagnóstico"
+    }
+  },
+  "tokens": {
+    "eyebrow": "API Access",
+    "title": "Personal access tokens",
+    "description": "Create, review, and manage API tokens for scripts, integrations, and CLI use.",
+    "create": "Create token",
+    "creating": "Creating...",
+    "createTitle": "Create token",
+    "createDescription": "Choose a memorable name and expiration. The token value is shown only once.",
+    "nameLabel": "Token name",
+    "namePlaceholder": "my-script",
+    "expiryLabel": "Expiration",
+    "expiryOptions": {
+      "7": "7 days",
+      "30": "30 days",
+      "60": "60 days",
+      "90": "90 days",
+      "180": "180 days",
+      "365": "1 year"
+    },
+    "cancel": "Cancel",
+    "created": "Token created",
+    "createFailed": "Could not create token",
+    "loadFailed": "Could not load tokens",
+    "updateFailed": "Could not update token",
+    "copied": "Token copied to clipboard",
+    "copy": "Copy token",
+    "done": "Done",
+    "tokenValueTitle": "Save {name}",
+    "tokenValueWarning": "This token will not be shown again. Copy it somewhere secure now.",
+    "tableTitle": "Token inventory",
+    "tableDescription": "Active tokens stay visible by default. Older revoked or expired tokens can be revealed when needed.",
+    "empty": "No personal access tokens yet.",
+    "showAll": "Show tokens older than 90 days",
+    "nameColumn": "Name",
+    "prefixColumn": "Prefix",
+    "typeColumn": "Type",
+    "statusColumn": "Status",
+    "expiresColumn": "Expires",
+    "lastUsedColumn": "Last used",
+    "createdColumn": "Created",
+    "actionsColumn": "Actions",
+    "renew": "Renew",
+    "revoke": "Revoke",
+    "delete": "Delete",
+    "renewed": "Token renewed",
+    "revoked": "Token revoked",
+    "deleted": "Token deleted",
+    "renewConfirm": "Renew this token? The previous value will stop working immediately.",
+    "revokeConfirm": "Revoke this token now?",
+    "deleteConfirm": "Delete this token permanently?",
+    "statusExpired": "Expired",
+    "status": {
+      "ACTIVE": "Active",
+      "REVOKED": "Revoked"
+    },
+    "loading": "Refreshing tokens..."
+  },
+  "adminTokens": {
+    "title": "Admin tokens",
+    "tableTitle": "All user tokens",
+    "tableDescription": "Review and manage tokens issued across the workspace.",
+    "user": "User",
+    "filterByUser": "Filter by user",
+    "allUsers": "All users"
+  },
+  "notifications": {
+    "eyebrow": "Mail Ops",
+    "title": "Notificacoes",
+    "description": "Gerencie os controles de notificacao e revise tentativas recentes de entrega de e-mails.",
+    "settingsTitle": "Configuracoes de notificacao",
+    "settingsDescription": "Ative ou desative a entrega para cada evento de aplicacao suportado.",
+    "logTitle": "Log de notificacoes",
+    "logDescription": "Entregas recentes de notificacoes enviadas pela aplicacao.",
+    "enabled": "Ativo",
+    "disabled": "Desativado",
+    "enabledSaved": "Tipo de notificacao ativado",
+    "disabledSaved": "Tipo de notificacao desativado",
+    "saveFailed": "Nao foi possivel salvar a configuracao de notificacao",
+    "loadFailed": "Nao foi possivel carregar as notificacoes",
+    "updatedAt": "Atualizado {value}",
+    "allEvents": "Todos os eventos",
+    "eventFilter": "Filtrar por evento",
+    "allStatuses": "Todos os status",
+    "statusFilter": "Filtrar por status",
+    "summaryQueued": "Na fila",
+    "summarySent": "Enviadas",
+    "summaryFailed": "Falhas",
+    "empty": "Nenhuma notificacao corresponde aos filtros selecionados.",
+    "createdAtLabel": "Criada",
+    "eventLabel": "Evento",
+    "recipientLabel": "Destinatario",
+    "statusLabel": "Status",
+    "subjectLabel": "Assunto",
+    "detailsLabel": "Detalhes",
+    "localeValue": "Idioma: {locale}",
+    "sentAtValue": "Enviada: {value}",
+    "notSentYet": "Ainda nao enviada",
+    "retryCountValue": "Tentativas: {count}",
+    "eventTypes": {
+      "USER_CREATED": "Usuario criado",
+      "ROLE_CHANGED": "Papel alterado",
+      "USER_STATUS_CHANGED": "Status de usuario alterado",
+      "SCOPE_ASSIGNMENT_CHANGED": "Atribuicao de scope alterada"
+    },
+    "statuses": {
+      "QUEUED": "Na fila",
+      "SENDING": "Enviando",
+      "RETRYING": "Tentando novamente",
+      "SENT": "Enviada",
+      "FAILED": "Falhou",
+      "BOUNCED": "Rejeitada"
+    },
+    "loading": "Atualizando notificacoes..."
+  },
+  "apiDocs": {
+    "title": "API reference",
+    "description": "Browse the current OpenAPI specification with interactive Swagger UI."
+  },
+  "cliLogin": {
+    "successTitle": "Browser login approved",
+    "errorTitle": "CLI login failed",
+    "redirecting": "Returning to your CLI callback now...",
+    "errorMessage": "This CLI login request is missing or has already expired.",
+    "confirmTitle": "Approve CLI login",
+    "confirmMessage": "Approve the CLI login request from {callback}.",
+    "approve": "Approve login"
+  },
+  "teams": {
+    "eyebrow": "Teams Ops",
+    "title": "Teams Integration",
+    "description": "Configure Microsoft Teams delivery targets, intake subscriptions, and health controls.",
+    "toggles": {
+      "title": "Integration toggles",
+      "sendEnabled": "Enable outbound Teams delivery",
+      "intakeEnabled": "Enable inbound Teams intake"
+    },
+    "targets": {
+      "title": "Delivery targets",
+      "name": "Target name",
+      "teamId": "Team ID",
+      "channelId": "Channel ID",
+      "teamName": "Team name (optional)",
+      "channelName": "Channel name (optional)",
+      "add": "Add target"
+    },
+    "subscriptions": {
+      "title": "Intake subscriptions",
+      "teamId": "Team ID",
+      "channelId": "Channel ID",
+      "teamName": "Team name (optional)",
+      "channelName": "Channel name (optional)",
+      "add": "Add subscription",
+      "lastPolled": "Last polled"
+    },
+    "health": {
+      "title": "Integration health",
+      "sendFailures": "Send failures (24h)",
+      "intakeFailures": "Intake failures (24h)",
+      "lastSend": "Last successful send",
+      "lastIntake": "Last successful intake"
+    },
+    "common": {
+      "active": "Active",
+      "inactive": "Inactive",
+      "delete": "Delete"
+    },
+    "messages": {
+      "saved": "Settings saved",
+      "saveFailed": "Could not save settings",
+      "targetCreated": "Target created",
+      "targetCreateFailed": "Could not create target",
+      "targetUpdateFailed": "Could not update target",
+      "targetDeleteFailed": "Could not delete target",
+      "subscriptionCreated": "Subscription created",
+      "subscriptionCreateFailed": "Could not create subscription",
+      "subscriptionUpdateFailed": "Could not update subscription",
+      "subscriptionDeleteFailed": "Could not delete subscription",
+      "archivedChannelWarning": "Recent Teams send failures indicate a channel is archived or posting-restricted. Use an active channel for delivery."
+    },
+    "consent": {
+      "title": "Delegated send consent",
+      "connected": "Connected for delegated channel sending",
+      "notConnected": "Not connected. Outbound channel sends may fail without delegated consent.",
+      "connectButton": "Connect Teams consent",
+      "expiresAt": "Token expires: {value}",
+      "noExpiry": "No token expiry information available."
+    },
+    "linkParser": {
+      "label": "Paste Teams channel link (optional)",
+      "placeholder": "https://teams.microsoft.com/l/channel/...",
+      "apply": "Parse link",
+      "invalid": "Could not parse Teams channel link. Please check the URL format.",
+      "applied": "Channel link parsed."
+    }
+  }
+}

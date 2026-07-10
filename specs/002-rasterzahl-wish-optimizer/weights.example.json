@@ -1,6 +1,8 @@
 {
   "overUsage": 10,
+  "overUsageFairness": 1,
   "wechsel": 5,
   "zeitgleich": 5,
-  "spielwoche": 1
+  "sameClubDerbySt4": 1000,
+  "spielwoche": 0
 }

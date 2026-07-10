@@ -43,6 +43,7 @@
 
 **Decision**: Use ExcelJS to append fine candidates directly into the existing season workbook instead of generating a separate spreadsheet per run.
 **Rationale**: The Staffelleiter already maintains one workbook and needs append-only behavior, duplicate suppression, and an ignore column for known false positives.
+**Dedup identity**: A candidate is a duplicate when home team + guest team + match date + sanction reason (`grund`) all match an existing (or ignored) row. The click-TT internal match number (`spielnummer`) is NOT part of the key — it is not reliably exposed on search-result / `Nicht angetreten` rows.
 **Alternatives considered**:
 - CSV export per run — would require manual merge work
 - New workbook each run — poor fit for an ongoing season ledger
@@ -62,6 +63,14 @@
 **Alternatives considered**:
 - Ignore approved `Nicht angetreten` rows entirely — loses sanction entries
 - Open every `Nicht angetreten` detail page — unnecessary overhead for the initial export path
+
+## Decision: Session Expiry Handling
+
+**Decision**: Detect a login-page redirect mid-run, re-authenticate automatically with the same credentials, and resume from the current page/match.
+**Rationale**: A ~30-minute run over 10 pages can outlive the server session. Aborting wastes the whole pass; auto re-login keeps the run unattended. Resumption is idempotent — already-approved matches show a checkmark and are skipped, so re-entering the list causes no double approvals.
+**Alternatives considered**:
+- Abort gracefully on expiry, require manual re-run — safe but wastes progress on long runs
+- Re-login once then abort on second failure — unnecessarily brittle; a fresh login almost always succeeds
 
 ## Decision: CLI Argument Parsing
 
