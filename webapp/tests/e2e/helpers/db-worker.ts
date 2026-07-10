@@ -17,6 +17,8 @@ type Operation =
   | "findUserByEmail"
   | "updateUserStatus"
   | "assignUserToScope"
+  | "seedRasterScopeHierarchy"
+  | "seedRasterSource"
   | "addAuditEntryFixture"
   | "seedBackgroundJob"
   | "seedNotificationTypeConfiguration"
@@ -36,6 +38,7 @@ async function readJson<T>() {
   return (input ? JSON.parse(input) : {}) as T;
 }
 
+// eslint-disable-next-line complexity, sonarjs/cognitive-complexity
 async function main() {
   const operation = process.argv[2] as Operation | undefined;
   if (!operation) {
@@ -222,6 +225,90 @@ async function main() {
       });
 
       process.stdout.write(JSON.stringify(scopeRecord.id));
+      break;
+    }
+
+    case "seedRasterScopeHierarchy": {
+      const de = await prisma.scope.upsert({
+        where: { code: "DE" },
+        update: { name: "Germany", parentId: null },
+        create: { code: "DE", name: "Germany" },
+        select: { id: true },
+      });
+      const wttv = await prisma.scope.upsert({
+        where: { code: "WTTV" },
+        update: { name: "WTTV", parentId: de.id },
+        create: { code: "WTTV", name: "WTTV", parentId: de.id },
+        select: { id: true },
+      });
+      const owl = await prisma.scope.upsert({
+        where: { code: "OWL" },
+        update: { name: "Ostwestfalen-Lippe", parentId: wttv.id },
+        create: {
+          code: "OWL",
+          name: "Ostwestfalen-Lippe",
+          parentId: wttv.id,
+        },
+        select: { id: true },
+      });
+
+      process.stdout.write(
+        JSON.stringify({ de: de.id, wttv: wttv.id, owl: owl.id }),
+      );
+      break;
+    }
+
+    case "seedRasterSource": {
+      const input = await readJson<{
+        scopeCode: string;
+        sourceType: string;
+        sourceRef: string;
+        displayName: string;
+        contentHash?: string | null;
+        parsedJson?: unknown;
+      }>();
+      const scope = await prisma.scope.findUnique({
+        where: { code: input.scopeCode },
+        select: { id: true },
+      });
+
+      if (!scope) {
+        throw new Error(
+          `Scope not found for raster source: ${input.scopeCode}`,
+        );
+      }
+
+      const source = await prisma.rasterSource.upsert({
+        where: {
+          scopeId_sourceType_sourceRef: {
+            scopeId: scope.id,
+            sourceType: input.sourceType,
+            sourceRef: input.sourceRef,
+          },
+        },
+        update: {
+          displayName: input.displayName,
+          contentHash: input.contentHash ?? null,
+          parsedJson:
+            input.parsedJson === undefined
+              ? null
+              : JSON.stringify(input.parsedJson),
+        },
+        create: {
+          scopeId: scope.id,
+          sourceType: input.sourceType,
+          sourceRef: input.sourceRef,
+          displayName: input.displayName,
+          contentHash: input.contentHash ?? null,
+          parsedJson:
+            input.parsedJson === undefined
+              ? null
+              : JSON.stringify(input.parsedJson),
+        },
+        select: { id: true },
+      });
+
+      process.stdout.write(JSON.stringify(source.id));
       break;
     }
 

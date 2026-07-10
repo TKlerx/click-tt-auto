@@ -1,7 +1,15 @@
-import type { WishParseResult } from "../../../../src/raster/ingest/index.js";
+import type {
+  TeamRasterAssignmentRow,
+  WishParseResult,
+} from "../../../../src/raster/ingest/index.js";
 
 type WishesPdfModule = {
   parseWishesPdf(filePath: string): Promise<WishParseResult>;
+  readAssignmentTable(filePath: string): Promise<TeamRasterAssignmentRow[]>;
+};
+
+type ClickTtScrapeModule = {
+  scrapeCurrentTeamRasterAssignments(): Promise<TeamRasterAssignmentRow[]>;
 };
 
 function parseCsvLine(line: string): string[] {
@@ -27,14 +35,43 @@ function parseCsvLine(line: string): string[] {
 }
 
 async function parseWishesPdf(filePath: string): Promise<WishParseResult> {
-  const modulePath = "../../../../src/raster/ingest/wishes-pdf.js";
+  const modulePath = new URL(
+    "../../../../src/raster/ingest/wishes-pdf.ts",
+    import.meta.url,
+  ).href;
   const wishesPdf = (await import(
     /* webpackIgnore: true */ modulePath
   )) as WishesPdfModule;
   return wishesPdf.parseWishesPdf(filePath);
 }
 
+async function readAssignmentTable(
+  filePath: string,
+): Promise<TeamRasterAssignmentRow[]> {
+  const modulePath = new URL(
+    "../../../../src/raster/ingest/index.ts",
+    import.meta.url,
+  ).href;
+  const ingest = (await import(
+    /* webpackIgnore: true */ modulePath
+  )) as WishesPdfModule;
+  return ingest.readAssignmentTable(filePath);
+}
+
+async function scrapeClickTtAssignments(): Promise<TeamRasterAssignmentRow[]> {
+  const modulePath = new URL(
+    "../../../../src/raster/ingest/scrape.ts",
+    import.meta.url,
+  ).href;
+  const scrape = (await import(
+    /* webpackIgnore: true */ modulePath
+  )) as ClickTtScrapeModule;
+  return scrape.scrapeCurrentTeamRasterAssignments();
+}
+
 export const rasterIngest = {
   parseCsvLine,
   parseWishesPdf,
+  readAssignmentTable,
+  scrapeClickTtAssignments,
 };

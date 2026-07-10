@@ -4,7 +4,7 @@ import type { Prisma } from "../../../generated/prisma/client";
 import {
   derbySpieltag,
   rasterSizeForGroupSize,
-} from "../../../../src/raster/rulebook/index.js";
+} from "../../../../src/raster/rulebook/rulebook.ts";
 import {
   SnapshotOptimality,
   SnapshotOrigin,

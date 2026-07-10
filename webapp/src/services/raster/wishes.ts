@@ -23,29 +23,37 @@ export async function replaceParsedWishes(
   parsed: WishParseResult,
 ) {
   const clubsById = new Map(parsed.clubs.map((club) => [club.id, club]));
-  await prisma.rasterWish.deleteMany({ where: { inputSetId } });
-  if (!parsed.teams.length) return { count: 0 };
-
-  return prisma.rasterWish.createMany({
-    data: parsed.teams.map((team) => ({
-      inputSetId,
-      clubId: team.clubId,
-      clubName: clubsById.get(team.clubId)?.name ?? team.clubId,
-      teamLabel: team.label,
-      homeWeekday: weekdayMap[team.homeWeekday],
-      hall: team.hall,
-      startTime: team.startTime,
-      spielwochePref: team.spielwochePref,
-      requestedRasterzahl: team.requestedRasterzahl
-        ? JSON.stringify(team.requestedRasterzahl)
-        : undefined,
-      source: RasterWishSource.PDF_PARSED,
-      confidence:
-        team.confidence === "ok"
-          ? RasterConfidence.OK
-          : RasterConfidence.REVIEW,
-    })),
+  await prisma.$transaction(async (tx) => {
+    await tx.rasterInputSet.update({
+      where: { id: inputSetId },
+      data: { wishesJson: JSON.stringify(parsed) },
+    });
+    await tx.rasterWish.deleteMany({ where: { inputSetId } });
+    if (parsed.teams.length) {
+      await tx.rasterWish.createMany({
+        data: parsed.teams.map((team) => ({
+          inputSetId,
+          clubId: team.clubId,
+          clubName: clubsById.get(team.clubId)?.name ?? team.clubId,
+          teamLabel: team.label,
+          homeWeekday: weekdayMap[team.homeWeekday],
+          hall: team.hall,
+          startTime: team.startTime,
+          spielwochePref: team.spielwochePref,
+          requestedRasterzahl: team.requestedRasterzahl
+            ? JSON.stringify(team.requestedRasterzahl)
+            : undefined,
+          source: RasterWishSource.PDF_PARSED,
+          confidence:
+            team.confidence === "ok"
+              ? RasterConfidence.OK
+              : RasterConfidence.REVIEW,
+        })),
+      });
+    }
   });
+
+  return { count: parsed.teams.length };
 }
 
 export async function replaceJsonWishes(
@@ -53,28 +61,36 @@ export async function replaceJsonWishes(
   wishes: WishJsonInput[],
   source: RasterWishSource = RasterWishSource.LLM_PASTED,
 ) {
-  await prisma.rasterWish.deleteMany({ where: { inputSetId } });
-  if (!wishes.length) return { count: 0 };
-
-  return prisma.rasterWish.createMany({
-    data: wishes.map((wish) => ({
-      inputSetId,
-      clubId: wish.clubId,
-      clubName: wish.clubName,
-      teamLabel: wish.teamLabel,
-      homeWeekday: wish.homeWeekday,
-      hall: wish.hall,
-      startTime: wish.startTime,
-      spielwochePref: wish.spielwochePref,
-      requestedRasterzahl:
-        wish.requestedRasterzahl === undefined
-          ? undefined
-          : JSON.stringify(wish.requestedRasterzahl),
-      notes: wish.notes,
-      source,
-      confidence: RasterConfidence.REVIEW,
-    })),
+  await prisma.$transaction(async (tx) => {
+    await tx.rasterInputSet.update({
+      where: { id: inputSetId },
+      data: { wishesJson: JSON.stringify({ wishes }) },
+    });
+    await tx.rasterWish.deleteMany({ where: { inputSetId } });
+    if (wishes.length) {
+      await tx.rasterWish.createMany({
+        data: wishes.map((wish) => ({
+          inputSetId,
+          clubId: wish.clubId,
+          clubName: wish.clubName,
+          teamLabel: wish.teamLabel,
+          homeWeekday: wish.homeWeekday,
+          hall: wish.hall,
+          startTime: wish.startTime,
+          spielwochePref: wish.spielwochePref,
+          requestedRasterzahl:
+            wish.requestedRasterzahl === undefined
+              ? undefined
+              : JSON.stringify(wish.requestedRasterzahl),
+          notes: wish.notes,
+          source,
+          confidence: RasterConfidence.REVIEW,
+        })),
+      });
+    }
   });
+
+  return { count: wishes.length };
 }
 
 export async function updateWish(wishId: string, wish: WishJsonInput) {

@@ -4,7 +4,9 @@ import {
   GroupModeReview,
   type GroupModeReviewRow,
 } from "@/components/raster/group-mode-review";
-import { listInputSets } from "@/services/raster";
+import { RasterSourcesPanel } from "@/components/raster/sources/raster-sources-panel";
+import { Role } from "../../../../generated/prisma/enums";
+import { listInputSets, listRasterSourcesForDistrict } from "@/services/raster";
 
 type SeasonGroup = {
   id?: string;
@@ -30,7 +32,10 @@ export default async function RasterPage({
     );
   }
 
-  const inputSets = await listInputSets(district);
+  const [inputSets, sources] = await Promise.all([
+    listInputSets(district),
+    listRasterSourcesForDistrict(district),
+  ]);
 
   return (
     <div className="space-y-7">
@@ -42,6 +47,12 @@ export default async function RasterPage({
           Raster
         </h1>
       </section>
+
+      <RasterSourcesPanel
+        canEdit={user.role === Role.PLATFORM_ADMIN}
+        district={district}
+        sources={sources}
+      />
 
       <section className="overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--panel)]">
         <div className="grid grid-cols-[minmax(12rem,1fr)_8rem_8rem_8rem] gap-3 border-b border-[var(--border)] px-4 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">

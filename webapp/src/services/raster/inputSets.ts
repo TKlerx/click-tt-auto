@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { rasterDistrictWhere } from "@/lib/raster/access";
 import { seasonModelSchema, type SeasonModelInput } from "@/lib/raster/schemas";
 import { InputSetStatus } from "../../../generated/prisma/enums";
+import { listRasterSourcesForDistrict } from "./sources";
 
 type SeasonGroup = Record<string, unknown> & {
   id?: string;
@@ -44,6 +45,7 @@ export async function getInputSet(id: string) {
 }
 
 export async function validateInputSet(id: string) {
+  await syncInputSetSourceCaches(id);
   const inputSet = await getInputSet(id);
   if (!inputSet) return null;
 
@@ -85,6 +87,47 @@ export async function validateInputSet(id: string) {
   return { inputSet: { ...inputSet, status }, errors };
 }
 
+export async function syncInputSetSourceCaches(inputSetId: string) {
+  const inputSet = await prisma.rasterInputSet.findUnique({
+    where: { id: inputSetId },
+    select: { id: true, district: true },
+  });
+  if (!inputSet) return null;
+
+  const sources = await listRasterSourcesForDistrict(inputSet.district);
+  const groupSource = sources.find(
+    (source) =>
+      source.sourceType.toUpperCase() === "GROUP_ASSIGNMENT" &&
+      source.parsedJson,
+  );
+  const wishSources = sources.filter(
+    (source) =>
+      source.sourceType.toUpperCase() === "WISHES_PDF" && source.parsedJson,
+  );
+  const data: {
+    groupAssignmentJson?: string;
+    wishesJson?: string;
+  } = {};
+  if (groupSource?.parsedJson) {
+    data.groupAssignmentJson = groupSource.parsedJson;
+  }
+  if (wishSources.length) {
+    data.wishesJson = JSON.stringify({
+      sources: wishSources.map((source) => ({
+        sourceId: source.id,
+        sourceRef: source.sourceRef,
+        parsed: JSON.parse(source.parsedJson ?? "{}"),
+      })),
+    });
+  }
+  if (!data.groupAssignmentJson && !data.wishesJson) return inputSet;
+
+  return prisma.rasterInputSet.update({
+    where: { id: inputSet.id },
+    data,
+  });
+}
+
 export async function updateSeasonModel(
   inputSetId: string,
   model: SeasonModelInput,
@@ -94,6 +137,7 @@ export async function updateSeasonModel(
     where: { id: inputSetId },
     data: {
       seasonModelJson: JSON.stringify(parsed),
+      groupAssignmentJson: JSON.stringify(parsed.groups),
       status: InputSetStatus.DRAFT,
     },
   });

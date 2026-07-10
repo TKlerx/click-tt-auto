@@ -269,10 +269,32 @@ model Scope {
   id              String                @id @default(cuid())
   name            String                @unique
   code            String                @unique
+  parentId        String?
   createdAt       DateTime              @default(now())
   updatedAt       DateTime              @updatedAt
+  parent          Scope?                @relation("ScopeHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children        Scope[]               @relation("ScopeHierarchy")
   userAssignments UserScopeAssignment[]
   auditEntries    AuditEntry[]
+  rasterSources   RasterSource[]
+
+  @@index([parentId])
+}
+
+model RasterSource {
+  id          String   @id @default(cuid())
+  scopeId     String
+  sourceType  String
+  sourceRef   String
+  displayName String
+  contentHash String?
+  parsedJson  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  scope       Scope    @relation(fields: [scopeId], references: [id], onDelete: Cascade)
+
+  @@unique([scopeId, sourceType, sourceRef])
+  @@index([scopeId, sourceType])
 }
 
 model UserScopeAssignment {
@@ -550,17 +572,19 @@ model TeamsDelegatedGrant {
 }
 
 model RasterInputSet {
-  id                String                  @id @default(cuid())
-  name              String
-  district          String
-  createdById       String
-  createdAt         DateTime                @default(now())
-  status            InputSetStatus          @default(DRAFT)
-  seasonModelJson   String?
-  createdBy         User                    @relation("RasterInputSetCreator", fields: [createdById], references: [id], onDelete: Restrict)
-  wishes            RasterWish[]
-  fixedRasterzahlen RasterFixedRasterzahl[]
-  runs              RasterOptimizationRun[]
+  id                  String                  @id @default(cuid())
+  name                String
+  district            String
+  createdById         String
+  createdAt           DateTime                @default(now())
+  status              InputSetStatus          @default(DRAFT)
+  seasonModelJson     String?
+  groupAssignmentJson String?
+  wishesJson          String?
+  createdBy           User                    @relation("RasterInputSetCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  wishes              RasterWish[]
+  fixedRasterzahlen   RasterFixedRasterzahl[]
+  runs                RasterOptimizationRun[]
 
   @@index([district, createdAt])
   @@index([createdById])

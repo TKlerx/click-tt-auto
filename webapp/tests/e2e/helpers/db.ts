@@ -135,6 +135,24 @@ export function assignUserToScope(
   });
 }
 
+export function seedRasterScopeHierarchy() {
+  return runDbWorker<
+    Record<string, never>,
+    { de: string; wttv: string; owl: string }
+  >("seedRasterScopeHierarchy", {});
+}
+
+export function seedRasterSource(input: {
+  scopeCode: string;
+  sourceType: string;
+  sourceRef: string;
+  displayName: string;
+  contentHash?: string | null;
+  parsedJson?: unknown;
+}) {
+  return runDbWorker<typeof input, string>("seedRasterSource", input);
+}
+
 export function addAuditEntryFixture(input: {
   actorEmail: string;
   action: AuditAction;

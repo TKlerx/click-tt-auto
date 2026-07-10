@@ -1,6 +1,39 @@
 # Data Model: Raster Generation & Review Webapp
 
-Prisma models added to `webapp/prisma/schema.prisma` (+ `schema.postgres.prisma`). Users, Role, and Audit come from the existing baseline and are referenced, not redefined. All review entities carry a `district` scope (FR-025).
+Prisma models added to `webapp/prisma/schema.prisma` (+ `schema.postgres.prisma`). Users, Role, and Audit come from the existing baseline and are referenced, not redefined. Review entities carry a district key for district-scale views, while shared source material is attached to the hierarchy scope where it is valid (FR-008b/008c/025).
+
+## Scope
+
+Existing baseline scope, extended for raster hierarchy. Initial hierarchy: `DE` → `WTTV` → `OWL`.
+
+| Field    | Type          | Notes                                                   |
+| -------- | ------------- | ------------------------------------------------------- |
+| id       | string (cuid) | PK                                                      |
+| code     | string        | Unique key, e.g. `DE`, `WTTV`, `OWL`                    |
+| name     | string        | Unique display name                                     |
+| parentId | string?       | FK → Scope; null for root                               |
+
+Relations: parent/children, user assignments, audit entries, raster sources.
+
+Access rule: a user assigned to a parent scope can access child district data according to their role. Child access does not grant sibling access.
+
+## RasterSource
+
+A registered document/link/cache used to build input sets. It belongs to the scope where the source is valid, not necessarily the target district.
+
+| Field       | Type          | Notes                                                             |
+| ----------- | ------------- | ----------------------------------------------------------------- |
+| id          | string (cuid) | PK                                                                |
+| scopeId     | string        | FK → Scope                                                        |
+| sourceType  | string        | e.g. `GROUP_ASSIGNMENT`, `WISHES_PDF`, `FIXED_RASTERZAHL`         |
+| sourceRef   | string        | URL, file id, or stable source identifier                         |
+| displayName | string        | User-facing label                                                 |
+| contentHash | string?       | Optional replacement/change detection                             |
+| parsedJson  | string?       | Parsed cache; updated only on explicit refresh/upload             |
+| createdAt   | datetime      |                                                                   |
+| updatedAt   | datetime      |                                                                   |
+
+Uniqueness: (scopeId, sourceType, sourceRef). District flows list sources from the district scope and ancestors.
 
 ## InputSet
 
@@ -15,6 +48,8 @@ A named collection of inputs used for one generation run.
 | createdAt       | datetime              |                                                                                                      |
 | status          | enum(`draft`,`ready`) | `ready` = validated, runnable (FR-008)                                                               |
 | seasonModelJson | string?               | Validated structured season model (`clubs`, `teams`, `groups` including reviewed `rasterMode`, relational wishes) used by the solver |
+| groupAssignmentJson | string?          | Cached parsed group assignment source used for the input set; refreshed only on explicit source refresh/upload |
+| wishesJson      | string?               | Cached parsed/uploaded wishes source used for the input set; refreshed only on explicit source refresh/upload |
 
 Relations: has many Wish, HallCapacity, FixedRasterzahl; has many OptimizationRun.
 

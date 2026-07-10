@@ -147,6 +147,29 @@
 
 ---
 
+## Phase 10: Source Hierarchy & DB-Backed Input Caches
+
+**Goal**: Model Germany / WTTV / district hierarchy, store source documents and parsed caches at the scope where they are valid, and refresh cached parsing only on explicit request.
+
+**Independent Test**: Register a WTTV group source, open an OWL raster flow, verify the WTTV source is visible to OWL users with parent-scope access, and verify reopening the input set does not reparse until refresh/upload is requested.
+
+- [x] T054 [US1] Extend `webapp/prisma/schema.postgres.prisma` and migrations with hierarchical `Scope.parentId` for Germany → WTTV → OWL.
+- [x] T055 [US1] Update `webapp/prisma/seed.ts` to seed `DE`, `WTTV`, and `OWL` hierarchy while preserving demo OWL users.
+- [x] T056 [US5] Update `webapp/src/lib/raster/access.ts` so users assigned to parent scopes can access child district raster data according to role.
+- [x] T057 [P] [US5] Add hierarchy access tests in `webapp/tests/unit/raster-access.test.ts`.
+- [x] T058 [US1] Add `RasterSource` model and migration for scoped documents/links/parsed cache in `webapp/prisma/schema.postgres.prisma`.
+- [x] T059 [US1] Add DB-backed cache fields `groupAssignmentJson` and `wishesJson` to `RasterInputSet` and migration.
+- [x] T060 [US1] Update `webapp/src/services/raster/inputSets.ts` and `webapp/src/services/raster/wishes.ts` so caches are written only on source upload/update paths.
+- [x] T061 [P] [US1] Add source service helpers and tests in `webapp/src/services/raster/sources.ts`, `webapp/tests/unit/raster-sources-service.test.ts`, and `webapp/tests/unit/raster-wishes-service.test.ts`.
+- [x] T062 [US1] Add `GET/POST /api/raster/sources` in `webapp/src/app/api/raster/sources/route.ts` with route tests in `webapp/tests/unit/raster-sources-route.test.ts`.
+- [x] T063 [US1] Add Raster page source list/manual source-cache form in `webapp/src/components/raster/sources/raster-sources-panel.tsx` and wire it into `webapp/src/app/(dashboard)/raster/page.tsx`.
+- [x] T064 [US1] Add explicit parser refresh action for a stored `RasterSource` in `webapp/src/app/api/raster/sources/[id]/refresh/route.ts`, supporting group assignment and wishes PDF source types without refreshing on ordinary page load.
+- [x] T065 [US1] Add source upload/link UI controls in `webapp/src/components/raster/sources/raster-sources-panel.tsx` so admins can upload replacement PDFs or trigger click-TT parsing for a selected hierarchy scope.
+- [x] T066 [US1] Wire refreshed `RasterSource.parsedJson` into input-set preparation in `webapp/src/services/raster/inputSets.ts`, allowing OWL input sets to consume inherited WTTV group assignment cache plus OWL wishes cache.
+- [x] T067 [P] [US1] Add Playwright coverage in `webapp/tests/e2e/raster-generate.spec.ts` proving an inherited WTTV source appears in the OWL flow and is not reparsed on reload.
+
+---
+
 ## Dependencies & Execution Order
 
 - **Setup (Phase 1)**: T001 governance blocker first; T002→T003 (schema→migration) ordered; T004/T005/T006 parallel after.
@@ -158,6 +181,7 @@
 - **US5 (Phase 7)**: gates apply across all prior routes — do after routes exist, before release.
 - **US6 (Phase 8)**: reuses review layer (US2/US3).
 - **Polish (Phase 9)**: after target stories.
+- **Source hierarchy/cache (Phase 10)**: schema/access tasks T054–T059 before APIs/UI; T064–T066 complete parser integration; T067 verifies behavior end-to-end.
 
 ### Parallel Opportunities
 
@@ -166,6 +190,7 @@
 - T016, T017, T018, T019 (distinct input types) parallel.
 - T025, T026, T028 parallel; T031, T032, T034 parallel.
 - US2 and US3 can proceed in parallel once US1 produces a snapshot.
+- T064 and T065 can proceed in parallel after T062/T063.
 
 ### MVP
 

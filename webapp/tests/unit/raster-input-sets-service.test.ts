@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { prismaMock } from "@/lib/__mocks__/db";
-import { validateInputSet, updateGroupRasterMode } from "@/services/raster";
+import {
+  syncInputSetSourceCaches,
+  updateGroupRasterMode,
+  validateInputSet,
+} from "@/services/raster";
 import { InputSetStatus } from "../../generated/prisma/enums";
 
 vi.mock("@/lib/db", () => ({
@@ -28,7 +32,12 @@ describe("raster input set service", () => {
   });
 
   it("blocks unconfirmed six-team groups", async () => {
-    prismaMock.rasterInputSet.findUnique.mockResolvedValue({
+    prismaMock.rasterInputSet.findUnique.mockResolvedValueOnce({
+      id: "input-1",
+      district: "OWL",
+    } as never);
+    prismaMock.scope.findFirst.mockResolvedValue(null);
+    prismaMock.rasterInputSet.findUnique.mockResolvedValueOnce({
       id: "input-1",
       status: InputSetStatus.DRAFT,
       seasonModelJson: JSON.stringify(model),
@@ -42,6 +51,11 @@ describe("raster input set service", () => {
 
   it("accepts reviewed six-team group modes", async () => {
     for (const rasterMode of ["single", "double"] as const) {
+      prismaMock.rasterInputSet.findUnique.mockResolvedValueOnce({
+        id: `input-${rasterMode}`,
+        district: "OWL",
+      } as never);
+      prismaMock.scope.findFirst.mockResolvedValueOnce(null);
       prismaMock.rasterInputSet.findUnique.mockResolvedValueOnce({
         id: `input-${rasterMode}`,
         status: InputSetStatus.DRAFT,
@@ -78,8 +92,45 @@ describe("raster input set service", () => {
       expect.objectContaining({
         data: expect.objectContaining({
           seasonModelJson: expect.stringContaining('"rasterMode":"double"'),
+          groupAssignmentJson: expect.stringContaining('"rasterMode":"double"'),
         }),
       }),
     );
+  });
+
+  it("syncs inherited source caches into input sets", async () => {
+    prismaMock.rasterInputSet.findUnique.mockResolvedValue({
+      id: "input-1",
+      district: "OWL",
+    } as never);
+    prismaMock.scope.findFirst.mockResolvedValue({
+      id: "owl",
+      parent: { id: "wttv", parent: { id: "de" } },
+    } as never);
+    prismaMock.rasterSource.findMany.mockResolvedValue([
+      {
+        id: "group-source",
+        sourceType: "GROUP_ASSIGNMENT",
+        sourceRef: "uploads/group.csv",
+        parsedJson: '{"assignments":[]}',
+      },
+      {
+        id: "wish-source",
+        sourceType: "WISHES_PDF",
+        sourceRef: "uploads/wishes.pdf",
+        parsedJson: '{"teams":[]}',
+      },
+    ] as never);
+    prismaMock.rasterInputSet.update.mockResolvedValue({} as never);
+
+    await syncInputSetSourceCaches("input-1");
+
+    expect(prismaMock.rasterInputSet.update).toHaveBeenCalledWith({
+      where: { id: "input-1" },
+      data: {
+        groupAssignmentJson: '{"assignments":[]}',
+        wishesJson: expect.stringContaining("wish-source"),
+      },
+    });
   });
 });

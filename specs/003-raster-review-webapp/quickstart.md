@@ -32,12 +32,15 @@ cd webapp && pnpm worker        # or docker compose up worker
 ## Happy-path smoke test (US1)
 
 1. Sign in as **admin**. Create an InputSet for a district.
-2. Upload a wishes PDF → verify deterministic parse shows clubs/teams marked *review*; correct any.
-3. Upload hall-capacity CSV (or add via form); search a club to confirm.
-4. Add fixed upper-league Rasterzahlen (manual entry).
-5. Validate the InputSet → status `ready`.
-6. Start a run → it goes `pending`→`running` asynchronously; the UI stays responsive.
-7. When it finishes, open the snapshot → confirm optimality label (proven-optimal/feasible) and that **no fixed Rasterzahl is violated** (SC-003).
+2. Register source material at the right hierarchy level: WTTV-wide group documents under `WTTV`, district-only wishes under `OWL`, and shared national material under `DE`.
+3. Open `/raster?district=OWL` and verify inherited WTTV sources are visible without being copied into OWL.
+4. Upload or explicitly refresh wishes/group sources only when the underlying PDF/link changed; reopening the input set should reuse the stored cache.
+5. Upload a wishes PDF → verify deterministic parse shows clubs/teams marked *review*; correct any.
+6. Upload hall-capacity CSV (or add via form); search a club to confirm.
+7. Add fixed upper-league Rasterzahlen (manual entry).
+8. Validate the InputSet → status `ready`.
+9. Start a run → it goes `pending`→`running` asynchronously; the UI stays responsive.
+10. When it finishes, open the snapshot → confirm optimality label (proven-optimal/feasible) and that **no fixed Rasterzahl is violated** (SC-003).
 
 ## Review checks (US2–US4)
 
