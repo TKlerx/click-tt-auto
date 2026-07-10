@@ -3,6 +3,7 @@ dist/
 reports/
 reports/raster/
 data/*.xlsx
+data/*.pdf
 .env
 .env.local
 .env.*
