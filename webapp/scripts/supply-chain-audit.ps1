@@ -411,7 +411,7 @@ function Build-Image([string]$ArtifactName, [string]$ImageReference) {
     $command = switch ($ArtifactName) {
         "app" { "docker build --pull --no-cache --target runner -t `"$ImageReference`" -f Dockerfile.app ." }
         "migrate" { "docker build --pull --no-cache --target migrate-runner -t `"$ImageReference`" -f Dockerfile.app ." }
-        "worker" { "docker build --pull --no-cache -t `"$ImageReference`" -f Dockerfile.worker ." }
+        "worker" { "docker build --pull --no-cache -t `"$ImageReference`" -f webapp/Dockerfile.worker .." }
         default { throw "Unknown artifact: $ArtifactName" }
     }
 
@@ -429,7 +429,7 @@ function Build-Image([string]$ArtifactName, [string]$ImageReference) {
 function Build-AuditImage([string]$ArtifactName, [string]$ImageReference) {
     $command = switch ($ArtifactName) {
         "app" { "docker build --target dependency-audit -t `"$ImageReference`" -f Dockerfile.app ." }
-        "worker" { "docker build --target dependency-audit -t `"$ImageReference`" -f Dockerfile.worker ." }
+        "worker" { "docker build --target dependency-audit -t `"$ImageReference`" -f webapp/Dockerfile.worker .." }
         default { throw "Dependency audit image is not defined for artifact: $ArtifactName" }
     }
 

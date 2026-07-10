@@ -1,4 +1,14 @@
-# Raster open points
+# Raster Open Points
+
+## Webapp Generation Gap
+
+- The webapp can collect/review wishes, fixed Rasterzahlen, hall capacities, imported snapshots, assignments, conflicts, and review decisions.
+- The `raster_run` worker job currently transitions status and has OR-Tools available, but generated runs are not complete yet.
+- To complete generated runs, the webapp still needs a persisted team/group context table or upload that answers: league, group, club, team label, division/category, and whether a row came from public click-TT or fixed upper-league data.
+- Once that context exists, T022 can build solver input by joining: input-set wishes + fixed Rasterzahlen + hall capacities + team/group context.
+- Until then, imported snapshots are the honest review path for webapp UI testing.
+
+## CSV Pipeline
 
 - Get all `Terminwünsche` PDFs for the whole district and place them in the configured input folder before producing the final review export.
 - Review and complete `data/upper-fixed.csv`, generated from visible rows in `data/Gruppen-und-Raster-2026.pdf`.

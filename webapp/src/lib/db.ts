@@ -1,6 +1,9 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../../generated/prisma/client";
-import { getDatabaseProviderForUrl, resolveAppDatabaseUrl } from "@/lib/database-url";
+import {
+  getDatabaseProviderForUrl,
+  resolveAppDatabaseUrl,
+} from "@/lib/database-url";
 
 function createAdapter(connectionString: string) {
   getDatabaseProviderForUrl(connectionString);

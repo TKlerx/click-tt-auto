@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sqlite3
+import sys
 import tempfile
 import unittest
 from contextlib import closing
@@ -19,6 +21,7 @@ from starter_worker.main import (
     _log_teams_poll_scheduled,
     process_inbound_mail_poll,
     process_job,
+    process_raster_run,
     process_teams_intake_poll,
 )
 
@@ -87,6 +90,127 @@ class WorkerTests(unittest.TestCase):
         self.assertEqual(result["teamsOutboundMessageId"], "outbound-1")
         self.assertEqual(result["graphMessageId"], "graph-1")
         self.assertEqual(result["status"], "sent")
+
+    def test_process_raster_run_updates_run_status(self) -> None:
+        store = self._make_store()
+        season_model = {
+            "clubs": [
+                {
+                    "id": "club-a",
+                    "name": "Club A",
+                    "venues": [{"hall": "1", "name": "Hall 1", "capacity": 2}],
+                    "notes": "",
+                }
+            ],
+            "teams": [
+                {
+                    "id": "team-a",
+                    "clubId": "club-a",
+                    "label": "I",
+                    "homeWeekday": "friday",
+                    "hall": "1",
+                    "rasterzahl": {"kind": "assignable"},
+                    "confidence": "ok",
+                },
+                {
+                    "id": "team-b",
+                    "clubId": "club-a",
+                    "label": "II",
+                    "homeWeekday": "friday",
+                    "hall": "1",
+                    "rasterzahl": {"kind": "assignable"},
+                    "confidence": "ok",
+                },
+            ],
+            "groups": [
+                {
+                    "ref": {"league": "Liga", "name": "Gruppe"},
+                    "size": 10,
+                    "teamIds": ["team-a", "team-b"],
+                }
+            ],
+            "wishes": [],
+            "absoluteConstraints": [],
+            "warnings": [],
+        }
+        with closing(sqlite3.connect(self.db_path)) as connection:
+            connection.execute(
+                """
+                INSERT INTO RasterInputSet (id, district, seasonModelJson)
+                VALUES ('input-1', 'OWL', ?)
+                """,
+                (json.dumps(season_model),),
+            )
+            connection.execute(
+                """
+                INSERT INTO RasterOptimizationRun (id, inputSetId, status, settings)
+                VALUES ('run-1', 'input-1', 'PENDING', '{"timeLimitSeconds": 60}')
+                """
+            )
+            connection.commit()
+
+        with patch(
+            "starter_worker.main._solve_raster_model",
+            return_value={
+                "assignment": {"team-a": 1, "team-b": 2},
+                "metadata": {
+                    "status": "OPTIMAL",
+                    "objective": 0,
+                    "bestBound": 0,
+                    "wallTimeSeconds": 0.1,
+                },
+            },
+        ):
+            result = process_raster_run(
+                store,
+                type(
+                    "Job",
+                    (),
+                    {
+                        "id": "job-1",
+                        "job_type": "raster_run",
+                        "payload": {"runId": "run-1"},
+                    },
+                )(),
+            )
+
+        with closing(sqlite3.connect(self.db_path)) as connection:
+            connection.row_factory = sqlite3.Row
+            row = connection.execute(
+                """
+                SELECT status, jobId, outcome, solverStatus, finishedAt
+                FROM RasterOptimizationRun
+                WHERE id = 'run-1'
+                """,
+            ).fetchone()
+            snapshot = connection.execute(
+                "SELECT id, optimality, totalConflicts FROM RasterSnapshot WHERE runId = 'run-1'",
+            ).fetchone()
+            assignments = connection.execute(
+                "SELECT team, rasterzahl FROM RasterAssignment ORDER BY team",
+            ).fetchall()
+
+        assert row is not None
+        assert snapshot is not None
+        self.assertEqual(result["status"], "OPTIMAL")
+        self.assertEqual(row["status"], "SUCCEEDED")
+        self.assertEqual(row["outcome"], "PROVEN_OPTIMAL")
+        self.assertEqual(row["solverStatus"], "OPTIMAL")
+        self.assertEqual(row["jobId"], "job-1")
+        self.assertIsNotNone(row["finishedAt"])
+        self.assertEqual(snapshot["optimality"], "PROVEN_OPTIMAL")
+        self.assertEqual(snapshot["totalConflicts"], 0)
+        self.assertEqual([tuple(row) for row in assignments], [("I", 1), ("II", 2)])
+
+    def test_worker_runtime_has_ortools(self) -> None:
+        result = subprocess.run(
+            [sys.executable, "-c", "import ortools"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_process_inbound_mail_poll_stores_bounces_and_entity_links(self) -> None:
         with (
@@ -558,6 +682,97 @@ class WorkerTests(unittest.TestCase):
                     messageCreatedAt TEXT NOT NULL,
                     createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE TABLE RasterOptimizationRun (
+                    id TEXT PRIMARY KEY,
+                    inputSetId TEXT,
+                    jobId TEXT,
+                    status TEXT NOT NULL DEFAULT 'PENDING',
+                    outcome TEXT,
+                    objectiveValue REAL,
+                    objectiveBreakdown TEXT,
+                    solverStatus TEXT,
+                    settings TEXT NOT NULL DEFAULT '{}',
+                    finishedAt TEXT
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE TABLE RasterInputSet (
+                    id TEXT PRIMARY KEY,
+                    district TEXT NOT NULL,
+                    seasonModelJson TEXT
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE TABLE RasterHallCapacity (
+                    id TEXT PRIMARY KEY,
+                    district TEXT NOT NULL,
+                    clubId TEXT NOT NULL,
+                    hall TEXT NOT NULL,
+                    weekday TEXT NOT NULL,
+                    capacity INTEGER NOT NULL
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE TABLE RasterSnapshot (
+                    id TEXT PRIMARY KEY,
+                    runId TEXT,
+                    district TEXT NOT NULL,
+                    origin TEXT NOT NULL,
+                    optimality TEXT NOT NULL,
+                    stale INTEGER NOT NULL DEFAULT 0,
+                    totalConflicts INTEGER NOT NULL DEFAULT 0,
+                    totalExcess INTEGER NOT NULL DEFAULT 0,
+                    maxExcess INTEGER NOT NULL DEFAULT 0,
+                    affectedClubs INTEGER NOT NULL DEFAULT 0,
+                    objectiveBreakdown TEXT NOT NULL DEFAULT '{}',
+                    createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE TABLE RasterAssignment (
+                    id TEXT PRIMARY KEY,
+                    snapshotId TEXT NOT NULL,
+                    league TEXT NOT NULL,
+                    "group" TEXT NOT NULL,
+                    clubId TEXT NOT NULL,
+                    clubName TEXT NOT NULL,
+                    team TEXT NOT NULL,
+                    rasterzahl INTEGER NOT NULL,
+                    status TEXT NOT NULL,
+                    weekday TEXT NOT NULL,
+                    hall TEXT NOT NULL,
+                    startTime TEXT,
+                    weekSlot TEXT
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE TABLE RasterConflict (
+                    id TEXT PRIMARY KEY,
+                    snapshotId TEXT NOT NULL,
+                    matchWeek INTEGER NOT NULL,
+                    clubId TEXT NOT NULL,
+                    clubName TEXT NOT NULL,
+                    weekday TEXT NOT NULL,
+                    hall TEXT NOT NULL,
+                    capacity INTEGER NOT NULL,
+                    actualCount INTEGER NOT NULL,
+                    excess INTEGER NOT NULL,
+                    teams TEXT NOT NULL
                 )
                 """
             )

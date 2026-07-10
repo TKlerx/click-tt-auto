@@ -25,13 +25,30 @@ function getPostgresSchema(connectionString: string) {
 }
 
 const connectionString =
-  process.env.MIGRATION_DATABASE_URL ??
-  process.env.DATABASE_URL;
+  process.env.MIGRATION_DATABASE_URL ?? process.env.DATABASE_URL;
 if (!connectionString) {
   throw new Error("MIGRATION_DATABASE_URL or DATABASE_URL must be set");
 }
 const adapter = createAdapter(connectionString);
 const prisma = new PrismaClient({ adapter });
+
+const demoRasterUsers = [
+  {
+    email: "raster.admin@example.com",
+    name: "Raster Admin",
+    role: Role.PLATFORM_ADMIN,
+  },
+  {
+    email: "raster.scheduler@example.com",
+    name: "Raster Scheduler",
+    role: Role.SCOPE_ADMIN,
+  },
+  {
+    email: "raster.viewer@example.com",
+    name: "Raster Viewer",
+    role: Role.SCOPE_USER,
+  },
+] as const;
 
 async function main() {
   const rawEmail = process.env.INITIAL_ADMIN_EMAIL;
@@ -96,7 +113,43 @@ async function main() {
     },
   });
 
+  const demoScope = await prisma.scope.create({
+    data: {
+      code: "OWL",
+      name: "Ostwestfalen-Lippe",
+    },
+  });
+
+  for (const demoUser of demoRasterUsers) {
+    await prisma.user.create({
+      data: {
+        email: demoUser.email,
+        emailVerified: true,
+        name: demoUser.name,
+        role: demoUser.role,
+        status: UserStatus.ACTIVE,
+        authMethod: AuthMethod.LOCAL,
+        mustChangePassword: true,
+        themePreference: ThemePreference.LIGHT,
+        locale: "en",
+        accounts: {
+          create: {
+            providerId: "credential",
+            accountId: demoUser.email,
+            password: passwordHash,
+          },
+        },
+        scopeAssignments: {
+          create: {
+            scopeId: demoScope.id,
+          },
+        },
+      },
+    });
+  }
+
   console.log(`Seeded initial admin user ${email}.`);
+  console.log("Seeded demo Raster district OWL and review users.");
 }
 
 main()

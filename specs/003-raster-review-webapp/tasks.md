@@ -16,12 +16,12 @@
 
 ## Phase 1: Setup (Shared Infrastructure)
 
-- [X] T001 Amend constitution to v3.0.0 in `.specify/memory/constitution.md` — added the Rasterzahl Review Webapp as a third capability and permitted web-scoped deps in `webapp/` (resolves the plan's Constitution Check CONFLICT on Principle I).
-- [X] T002 [P] Add raster models to `webapp/prisma/schema.postgres.prisma` (InputSet, Wish, HallCapacity, FixedRasterzahl, OptimizationRun, Snapshot, Assignment, Conflict, ReviewDecision per data-model.md)
-- [ ] T003 Create Prisma migration for the raster models (SQLite + `migrations-postgres`) and run `prisma:generate`
-- [ ] T004 [P] Define shared zod schemas in `webapp/src/lib/raster/schemas.ts` (Wish JSON schema, capacity CSV row, fixed-Rasterzahl, run settings)
-- [ ] T005 [P] Add district-scope + role-gate helpers in `webapp/src/lib/raster/access.ts` (assert admin/scheduler/viewer; scope queries by `district`)
-- [ ] T006 [P] Seed a demo district + admin/scheduler/viewer users in `webapp/prisma/seed.ts`
+- [x] T001 Amend constitution to v3.0.0 in `.specify/memory/constitution.md` — added the Rasterzahl Review Webapp as a third capability and permitted web-scoped deps in `webapp/` (resolves the plan's Constitution Check CONFLICT on Principle I).
+- [x] T002 [P] Add raster models to `webapp/prisma/schema.postgres.prisma` (InputSet, Wish, HallCapacity, FixedRasterzahl, OptimizationRun, Snapshot, Assignment, Conflict, ReviewDecision per data-model.md)
+- [x] T003 Create Prisma migration for the raster models (`migrations-postgres`) and run `prisma:generate`
+- [x] T004 [P] Define shared zod schemas in `webapp/src/lib/raster/schemas.ts` (Wish JSON schema, capacity CSV row, fixed-Rasterzahl, run settings)
+- [x] T005 [P] Add district-scope + role-gate helpers in `webapp/src/lib/raster/access.ts` (assert admin/scheduler/viewer; scope queries by `district`)
+- [x] T006 [P] Seed a demo district + admin/scheduler/viewer users in `webapp/prisma/seed.ts`
 
 ---
 
@@ -29,12 +29,12 @@
 
 **CRITICAL**: No user story work begins until this phase is complete.
 
-- [ ] T007 Add pipeline glue in `webapp/src/lib/raster/pipeline.ts` re-exporting root `src/raster` ingest/optimize/report/score entrypoints for webapp use (add named exports to `src/raster/*/index.ts` where missing)
-- [ ] T008 Define the solver I/O contract in `webapp/src/lib/raster/solver-io.ts` (zod input/output mirroring `scripts/solve-raster-cpsat.py`, including objective breakdown and `sameClubDerbySt4`)
-- [ ] T009 Scaffold the `raster-run` background job handler in `webapp/worker/raster-run.ts` registered with the existing job system (no solve logic yet — status transitions only)
-- [ ] T049 Provision the worker runtime: ensure `Dockerfile.worker` includes Python 3.12 + `uv` + OR-Tools so the job can spawn `scripts/solve-raster-cpsat.py`; add a smoke test that the worker can invoke the solver (FR-010)
-- [ ] T010 Add the raster service layer skeleton in `webapp/src/services/raster/` (inputSets, capacity, runs, snapshots) with typed function stubs
-- [ ] T011 Add the raster dashboard shell + nav entry in `webapp/src/app/(dashboard)/raster/layout.tsx` and route stubs
+- [x] T007 Add pipeline glue in `webapp/src/lib/raster/pipeline.ts` re-exporting root `src/raster` ingest/optimize/report/score entrypoints for webapp use (add named exports to `src/raster/*/index.ts` where missing)
+- [x] T008 Define the solver I/O contract in `webapp/src/lib/raster/solver-io.ts` (zod input/output mirroring `scripts/solve-raster-cpsat.py`, including objective breakdown and `sameClubDerbySt4`)
+- [x] T009 Scaffold the `raster_run` background job handler in the Python worker registered with the existing job system (no solve logic yet — status transitions only)
+- [x] T049 Provision the worker runtime: ensure `Dockerfile.worker` includes Python 3.12 + `uv` + OR-Tools so the job can spawn `scripts/solve-raster-cpsat.py`; add a smoke test that the worker can invoke the solver (FR-010)
+- [x] T010 Add the raster service layer skeleton in `webapp/src/services/raster/` (inputSets, capacity, runs, snapshots) with typed functions
+- [x] T011 Add the raster dashboard shell + nav entry in `webapp/src/app/(dashboard)/raster/layout.tsx` and route stubs
 
 **Checkpoint**: Models, access control, pipeline glue, job scaffold, and service/UI skeletons exist.
 
@@ -48,21 +48,21 @@
 
 ### Tests for User Story 1
 
-- [ ] T012 [P] [US1] Unit test for wishes JSON schema validation in `webapp/tests/unit/wishes-schema.test.ts` (valid, invalid, incomplete)
-- [ ] T013 [P] [US1] Unit test for the `raster-run` outcome mapping (CP-SAT status → outcome) and objective-breakdown persistence in `webapp/tests/unit/run-outcome.test.ts`
-- [ ] T014 [P] [US1] Unit test asserting hard-constraint invariants (fixed Rasterzahl and same-club derby after Spieltag 4 fail rather than persisting a violating snapshot) in `webapp/tests/unit/fixed-constraint.test.ts`
+- [x] T012 [P] [US1] Unit test for wishes JSON schema validation in `webapp/tests/unit/wishes-schema.test.ts` (valid, invalid, incomplete)
+- [x] T013 [P] [US1] Unit test for the `raster-run` outcome mapping (CP-SAT status → outcome) and objective-breakdown persistence in `webapp/tests/unit/run-outcome.test.ts`
+- [x] T014 [P] [US1] Unit test asserting hard-constraint invariants (fixed Rasterzahl and same-club derby after Spieltag 4 fail rather than persisting a violating snapshot) in `webapp/tests/unit/fixed-constraint.test.ts`
 
 ### Implementation for User Story 1
 
-- [ ] T015 [US1] InputSet API + service: `POST/GET /api/raster/input-sets` in `webapp/src/app/api/raster/input-sets/route.ts`
-- [ ] T016 [P] [US1] Wishes PDF upload → deterministic parse: `POST /api/raster/input-sets/{id}/wishes/pdf` wiring root `src/raster/ingest/wishes-pdf.ts`, persisting Wishes with `confidence`
-- [ ] T017 [P] [US1] Wishes LLM fallback: `GET .../wishes/prompt` (build prompt from extracted PDF text + JSON schema) and `POST .../wishes/json` (schema-validate, 422 on error)
-- [ ] T018 [P] [US1] Wishes review/correct UI + `PUT .../wishes/{wishId}` in `webapp/src/components/raster/wishes-review.tsx`
-- [ ] T019 [P] [US1] Fixed upper-league Rasterzahlen input (PDF/manual/structured): `POST .../fixed-rasterzahlen`
-- [ ] T020 [US1] InputSet validation: `POST .../validate` (completeness/schema → `ready`) (FR-008)
-- [ ] T021 [US1] Run start: `POST .../runs` enqueues `raster-run` job; 409 if not `ready` (FR-009)
-- [ ] T022 [US1] Complete `raster-run` handler: build solver input, spawn `uv run ... solve-raster-cpsat.py`, ingest output, run report/score, create Snapshot + Assignment + Conflict, set optimality/objective/objectiveBreakdown/solverStatus (FR-010–013a)
-- [ ] T023 [US1] Run status UI + `GET /api/raster/runs/{id}` and cancel; snapshot optimality badge + objective-breakdown component including ST4 derby fallback count (FR-013/013a)
+- [x] T015 [US1] InputSet API + service: `POST/GET /api/raster/input-sets` in `webapp/src/app/api/raster/input-sets/route.ts`
+- [x] T016 [P] [US1] Wishes PDF upload → deterministic parse: `POST /api/raster/input-sets/{id}/wishes/pdf` wiring root `src/raster/ingest/wishes-pdf.ts`, persisting Wishes with `confidence`
+- [x] T017 [P] [US1] Wishes LLM fallback: `GET .../wishes/prompt` (build prompt from extracted PDF text + JSON schema) and `POST .../wishes/json` (schema-validate, 422 on error)
+- [x] T018 [P] [US1] Wishes review/correct UI + `PUT .../wishes/{wishId}` in `webapp/src/components/raster/wishes-review.tsx`
+- [x] T019 [P] [US1] Fixed upper-league Rasterzahlen input (PDF/manual/structured): `POST .../fixed-rasterzahlen`
+- [x] T020 [US1] InputSet validation: `POST .../validate` (completeness/schema → `ready`) (FR-008)
+- [x] T021 [US1] Run start: `POST .../runs` enqueues `raster-run` job; 409 if not `ready` (FR-009)
+- [x] T022 [US1] Complete `raster-run` handler: build solver input, spawn `uv run ... solve-raster-cpsat.py`, ingest output, run report/score, create Snapshot + Assignment + Conflict, set optimality/objective/objectiveBreakdown/solverStatus (FR-010–013a)
+- [x] T023 [US1] Run status UI + `GET /api/raster/runs/{id}` and cancel; snapshot optimality badge + objective-breakdown component including ST4 derby fallback count (FR-013/013a)
 
 **Checkpoint**: End-to-end generation works; snapshot respects fixed Rasterzahlen.
 
@@ -72,13 +72,13 @@
 
 **Independent Test**: Open a snapshot with overages; overview/summary/detail match run output.
 
-- [ ] T048 [US2] Snapshot list + version selection UI and `GET /api/raster/snapshots?district=` (retain/compare review versions; stale badge per FR-014/022, SC-010)
-- [ ] T024 [US2] Conflict overview API `GET /api/raster/snapshots/{id}` (totals, max excess, affected clubs, top clubs) + visible **stale** indicator in the overview (FR-015/022, SC-010)
-- [ ] T025 [P] [US2] Conflict list API with filters `GET .../conflicts?club=&weekday=&hall=&week=&minExcess=` (FR-016/017)
-- [ ] T026 [P] [US2] Per-club conflict summary API `GET .../conflicts/summary` (FR-018)
-- [ ] T027 [US2] Conflict overview + drill-down UI in `webapp/src/components/raster/conflicts/` (top-10 readable < 30s; ≤ 3 clicks to weeks/teams) (SC-004/005)
-- [ ] T028 [P] [US2] Empty state: snapshot with no conflicts still allows assignment review (FR-024)
-- [ ] T047 [US2] Review decisions API + UI: `POST /api/raster/snapshots/{id}/decisions` and controls to mark a conflict or club summary reviewed / needs-correction / accepted-unavoidable (FR-023)
+- [x] T048 [US2] Snapshot list + version selection UI and `GET /api/raster/snapshots?district=` (retain/compare review versions; stale badge per FR-014/022, SC-010)
+- [x] T024 [US2] Conflict overview API `GET /api/raster/snapshots/{id}` (totals, max excess, affected clubs, top clubs) + visible **stale** indicator in the overview (FR-015/022, SC-010)
+- [x] T025 [P] [US2] Conflict list API with filters `GET .../conflicts?club=&weekday=&hall=&week=&minExcess=` (FR-016/017)
+- [x] T026 [P] [US2] Per-club conflict summary API `GET .../conflicts/summary` (FR-018)
+- [x] T027 [US2] Conflict overview + drill-down UI in `webapp/src/components/raster/conflicts/` (top-10 readable < 30s; ≤ 3 clicks to weeks/teams) (SC-004/005)
+- [x] T028 [P] [US2] Empty state: snapshot with no conflicts still allows assignment review (FR-024)
+- [x] T047 [US2] Review decisions API + UI: `POST /api/raster/snapshots/{id}/decisions` and controls to mark a conflict or club summary reviewed / needs-correction / accepted-unavoidable (FR-023)
 
 **Checkpoint**: Conflicts fully reviewable.
 
@@ -88,8 +88,8 @@
 
 **Independent Test**: Assignment table matches run output; search finds a team < 15s.
 
-- [ ] T029 [US3] Assignment API with filters `GET .../assignments?club=&league=&group=&team=&status=` (FR-019/020)
-- [ ] T030 [US3] Assignment table UI with search/filter + status badges (optimized/fixed/pinned/missing) in `webapp/src/components/raster/assignments/` (FR-021, SC-007)
+- [x] T029 [US3] Assignment API with filters `GET .../assignments?club=&league=&group=&team=&status=` (FR-019/020)
+- [x] T030 [US3] Assignment table UI with search/filter + status badges (optimized/fixed/pinned/missing) in `webapp/src/components/raster/assignments/` (FR-021, SC-007)
 
 **Checkpoint**: Assignments reviewable and searchable.
 
@@ -99,11 +99,11 @@
 
 **Independent Test**: Upload CSV, edit via form, guess-then-correct, search; values feed next run; edits mark snapshots stale.
 
-- [ ] T031 [P] [US4] Capacity CSV/Excel upload `POST /api/raster/capacity/upload` → upsert (FR-004)
-- [ ] T032 [P] [US4] Capacity search API `GET /api/raster/capacity?district=&q=` (FR-006, SC-008)
-- [ ] T033 [US4] Capacity edit `PUT /api/raster/capacity/{id}` (last-write-wins, audited) + mark dependent snapshots `stale` (FR-005/022)
-- [ ] T034 [P] [US4] Inferred/guessed default handling + `basis` badge (reviewed vs inferred vs missing) (FR-005/011)
-- [ ] T035 [US4] Capacity search/edit UI in `webapp/src/components/raster/capacity/`
+- [x] T031 [P] [US4] Capacity CSV upload `POST /api/raster/capacity/upload` → upsert (FR-004)
+- [x] T032 [P] [US4] Capacity search API `GET /api/raster/capacity?district=&q=` (FR-006, SC-008)
+- [x] T033 [US4] Capacity edit `PUT /api/raster/capacity/{id}` (last-write-wins) + mark dependent snapshots `stale` (FR-005/022)
+- [x] T034 [P] [US4] Inferred/guessed default handling + `basis` badge (reviewed vs inferred vs missing) (FR-005/011)
+- [x] T035 [US4] Capacity search/edit UI in `webapp/src/components/raster/capacity/`
 
 **Checkpoint**: Capacity managed, searchable, drives staleness.
 
@@ -113,9 +113,9 @@
 
 **Independent Test**: Sign in per role; allowed/blocked actions correct across upload/run/review/capacity/user-mgmt.
 
-- [ ] T036 [US5] Enforce role gates on all raster API routes via `access.ts` (district scope FR-025; viewer read-only; scheduler no run-start/upload; admin full) (FR-025–029)
-- [ ] T037 [P] [US5] Wire audit events for input uploads, run starts, capacity edits, review-status changes to the baseline audit system (FR-030)
-- [ ] T038 [P] [US5] Playwright e2e: per-role allowed/blocked matrix in `webapp/tests/e2e/raster-roles.spec.ts` (SC-009)
+- [x] T036 [US5] Enforce role gates on all raster API routes via `access.ts` (district scope FR-025; viewer read-only; scheduler no run-start/upload; admin full) (FR-025–029)
+- [x] T037 [P] [US5] Wire audit events for input uploads, run starts, capacity edits, review-status changes to the baseline audit system (FR-030)
+- [x] T038 [P] [US5] Playwright e2e: per-role allowed/blocked matrix in `webapp/tests/e2e/raster-roles.spec.ts` (SC-009)
 
 **Checkpoint**: Access control verified end-to-end.
 
@@ -125,8 +125,8 @@
 
 **Independent Test**: Import a snapshot; appears in review screens like a generated one; mismatched files warn.
 
-- [ ] T039 [US6] Import API `POST /api/raster/snapshots/import` mapping external files → Snapshot/Assignment/Conflict with `origin=imported`, `optimality=imported_heuristic`; warn on identity/row-count mismatch (FR-031)
-- [ ] T040 [P] [US6] Import UI + mismatch warning in `webapp/src/components/raster/import/`
+- [x] T039 [US6] Import API `POST /api/raster/snapshots/import` mapping external files → Snapshot/Assignment/Conflict with `origin=imported`, `optimality=imported_heuristic`; warn on identity/row-count mismatch (FR-031)
+- [x] T040 [P] [US6] Import UI + mismatch warning in `webapp/src/components/raster/import/`
 
 **Checkpoint**: Optional import path works.
 
@@ -134,12 +134,12 @@
 
 ## Phase 9: Polish & Cross-Cutting Concerns
 
-- [ ] T041 [P] Empty/error states across missing snapshot, run/import failure, permission-denied (FR-024)
-- [ ] T042 [P] Playwright e2e happy-path generation + review flow in `webapp/tests/e2e/raster-generate.spec.ts` (US1→US2)
-- [ ] T043 [P] Scanned-PDF fallback path: detect low/no extracted text, guide user to JSON paste / structured upload (edge case)
-- [ ] T044 [P] Perf spot-check: district-scoped conflict/assignment/capacity views at ~hundreds of rows meet SC-004/007/008
-- [ ] T045 [P] Docs: update `webapp/README.md` + `docs/raster-open-points.md` with the generation/review flow and solver invocation
-- [ ] T046 Run `webapp/validate.ps1` (typecheck + lint + tests) and root `pnpm test && pnpm typecheck`; fix issues
+- [x] T041 [P] Empty/error states across missing snapshot, run/import failure, permission-denied (FR-024)
+- [x] T042 [P] Playwright e2e happy-path generation + review flow in `webapp/tests/e2e/raster-generate.spec.ts` (US1→US2)
+- [x] T043 [P] Scanned-PDF fallback path: detect low/no extracted text, guide user to JSON paste / structured upload (edge case)
+- [x] T044 [P] Perf spot-check: district-scoped conflict/assignment/capacity views at ~hundreds of rows meet SC-004/007/008
+- [x] T045 [P] Docs: update `webapp/README.md` + `docs/raster-open-points.md` with the generation/review flow and solver invocation
+- [x] T046 Run `webapp/validate.ps1` (typecheck + lint + tests) and root `pnpm test && pnpm typecheck`; fix issues
 
 ---
 
@@ -175,4 +175,4 @@ US1 + US2 (generate a proposal and review its conflicts) is the minimum valuable
 - Generation core is reused, not rebuilt (`src/raster/*`, `scripts/solve-raster-cpsat.py`).
 - Safety invariants: role gates (FR-025–029) and the fixed-Rasterzahl hard constraint (SC-003) are test-backed (T014, T038).
 - T001 is a governance prerequisite — the plan's Constitution Check fails until it lands.
-</content>
+  </content>

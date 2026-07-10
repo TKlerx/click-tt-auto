@@ -27,9 +27,8 @@ const mutants = [
 const pnpm = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 
 function runVitest(files, quiet = false) {
-  const result = spawnSync(`${pnpm} exec vitest run ${files.join(" ")}`, {
+  const result = spawnSync(pnpm, ["exec", "vitest", "run", ...files], {
     encoding: "utf8",
-    shell: true,
     stdio: quiet ? "pipe" : "inherit",
   });
   if (result.error) {

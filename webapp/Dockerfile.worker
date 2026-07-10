@@ -8,8 +8,8 @@ RUN apt-get update -y \
 
 RUN pip install --no-cache-dir uv
 
-COPY worker/pyproject.toml ./pyproject.toml
-COPY worker/uv.lock ./uv.lock
+COPY webapp/worker/pyproject.toml ./pyproject.toml
+COPY webapp/worker/uv.lock ./uv.lock
 
 CMD ["uv", "audit", "--frozen", "--no-dev"]
 
@@ -35,10 +35,12 @@ RUN apt-get update -y \
 
 RUN pip install --no-cache-dir uv
 
-COPY worker/pyproject.toml ./pyproject.toml
-COPY worker/uv.lock ./uv.lock
-COPY worker/README.md ./README.md
-COPY worker/src ./src
+COPY webapp/worker/pyproject.toml ./pyproject.toml
+COPY webapp/worker/uv.lock ./uv.lock
+COPY webapp/worker/README.md ./README.md
+COPY webapp/worker/src ./src
+COPY scripts /app/scripts
+COPY src/raster /app/src/raster
 
 RUN uv sync --frozen --no-dev
 

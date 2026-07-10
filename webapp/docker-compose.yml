@@ -151,8 +151,8 @@ services:
   worker:
     image: ${WORKER_IMAGE_NAME:-business-app-starter-worker}:latest
     build:
-      context: .
-      dockerfile: Dockerfile.worker
+      context: ..
+      dockerfile: webapp/Dockerfile.worker
       args:
         APP_VERSION: ${APP_VERSION:-local}
         APP_REVISION: ${APP_REVISION:-unknown}

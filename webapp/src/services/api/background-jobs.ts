@@ -15,6 +15,7 @@ const ALLOWED_BACKGROUND_JOB_TYPES = new Set([
   "inbound_mail_poll",
   "teams_message_delivery",
   "teams_intake_poll",
+  "raster_run",
 ]);
 const MAX_BACKGROUND_JOB_PAYLOAD_LENGTH = 10 * 1024;
 const SENSITIVE_JOB_KEYS = new Set([

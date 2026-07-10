@@ -3,10 +3,15 @@ from __future__ import annotations
 import logging
 import os
 import re
+import json
+import subprocess
+import tempfile
 import time
 from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
 
-from .config import load_config
+from .config import WorkerConfig, load_config
 from .db import BackgroundJob, JobStore
 from .graph_mail import get_graph_mail_message, list_graph_mail_messages, send_graph_mail
 from .graph_teams import list_teams_channel_messages, send_teams_channel_message
@@ -20,6 +25,7 @@ logging.basicConfig(
 
 worker_logger = create_worker_logger()
 
+RASTER_RUN_JOB_TYPE = "raster_run"
 NOTIFICATION_REFERENCE_PATTERN = re.compile(r"\[notification:([a-zA-Z0-9_-]+)\]", re.IGNORECASE)
 ENTITY_REFERENCE_PATTERN = re.compile(r"\[ref:([a-zA-Z0-9_.-]+):([^\]\s]+)\]", re.IGNORECASE)
 BOUNCE_SUBJECT_PATTERN = re.compile(
@@ -68,6 +74,159 @@ def process_job(job: BackgroundJob) -> dict[str, object]:
         }
 
     raise ValueError(f"Unsupported job type: {job.job_type}")
+
+
+def process_raster_run(store: JobStore, job: BackgroundJob) -> dict[str, object]:
+    run_id = str(job.payload.get("runId") or "").strip()
+    if not run_id:
+        raise ValueError("raster_run job payload is missing runId")
+
+    store.mark_raster_run_running(run_id, job.id)
+    context = store.get_raster_run_context(run_id)
+    model = _model_with_capacity_overrides(
+        _parse_json_object(context["seasonModelJson"], "seasonModelJson"),
+        store.list_raster_hall_capacities(str(context["district"])),
+    )
+    settings = _parse_json_object(context.get("settings") or "{}", "settings")
+    solver_output = _solve_raster_model(model, settings)
+    snapshot_id = store.persist_raster_run_result(
+        run_id=run_id,
+        district=str(context["district"]),
+        model=model,
+        solver_output=solver_output,
+    )
+    metadata = solver_output.get("metadata") if isinstance(solver_output, dict) else {}
+    return {
+        "runId": run_id,
+        "snapshotId": snapshot_id,
+        "status": str(metadata.get("status") if isinstance(metadata, dict) else ""),
+        "processedAt": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+def _parse_json_object(value: object, name: str) -> dict[str, object]:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{name} is missing")
+    parsed = json.loads(value)
+    if not isinstance(parsed, dict):
+        raise ValueError(f"{name} must be a JSON object")
+    return parsed
+
+
+def _model_with_capacity_overrides(
+    model: dict[str, object], capacities: list[dict[str, object]]
+) -> dict[str, object]:
+    if not capacities:
+        return model
+    clubs = model.get("clubs")
+    if not isinstance(clubs, list):
+        return model
+    by_slot = {
+        (
+            str(row.get("clubId") or ""),
+            str(row.get("hall") or ""),
+            _weekday_to_model(str(row.get("weekday") or "")),
+        ): _as_int(row.get("capacity"), 0)
+        for row in capacities
+    }
+    for club in clubs:
+        if not isinstance(club, dict):
+            continue
+        venues = club.get("venues")
+        if not isinstance(venues, list):
+            continue
+        for venue in venues:
+            if not isinstance(venue, dict):
+                continue
+            hall = str(venue.get("hall") or "")
+            capacity_by_weekday = dict(venue.get("capacityByWeekday") or {})
+            for (club_id, capacity_hall, weekday), capacity in by_slot.items():
+                if club_id == str(club.get("id") or "") and capacity_hall == hall:
+                    capacity_by_weekday[weekday] = capacity
+            venue["capacityByWeekday"] = capacity_by_weekday
+    return model
+
+
+def _weekday_to_model(value: str) -> str:
+    return value.strip().lower()
+
+
+def _repo_root() -> Path:
+    configured = os.environ.get("RASTER_REPO_ROOT")
+    if configured:
+        return Path(configured)
+    local_root = Path(__file__).resolve().parents[4]
+    if (local_root / "scripts" / "solve-raster-cpsat.py").exists():
+        return local_root
+    return Path("/app")
+
+
+def _solve_raster_model(model: dict[str, object], settings: dict[str, object]) -> dict[str, Any]:
+    repo_root = _repo_root()
+    solver_script = Path(
+        os.environ.get("RASTER_SOLVER_SCRIPT") or repo_root / "scripts" / "solve-raster-cpsat.py"
+    )
+    time_limit = _as_int(settings.get("timeLimitSeconds"), 60)
+    weights = _solver_weights(settings.get("weights"))
+    with tempfile.TemporaryDirectory(prefix="raster-run-") as tmp:
+        tmp_path = Path(tmp)
+        model_path = tmp_path / "model.json"
+        weights_path = tmp_path / "weights.json"
+        out_path = tmp_path / "assignment.json"
+        metadata_path = tmp_path / "metadata.json"
+        model_path.write_text(json.dumps({"model": model}), encoding="utf-8")
+        weights_path.write_text(json.dumps(weights), encoding="utf-8")
+        command = [
+            "uv",
+            "run",
+            "python",
+            str(solver_script),
+            "--model",
+            str(model_path),
+            "--weights",
+            str(weights_path),
+            "--out",
+            str(out_path),
+            "--metadata",
+            str(metadata_path),
+            "--time-limit",
+            str(time_limit),
+        ]
+        completed = subprocess.run(
+            command,
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=max(time_limit + 30, 60),
+        )
+        if completed.returncode != 0:
+            raise ValueError((completed.stderr or completed.stdout or "CP-SAT failed").strip())
+        assignment = json.loads(out_path.read_text(encoding="utf-8"))
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    if not isinstance(assignment, dict) or not isinstance(metadata, dict):
+        raise ValueError("CP-SAT returned invalid JSON")
+    return {"assignment": assignment, "metadata": metadata}
+
+
+def _solver_weights(value: object) -> dict[str, int]:
+    weights = value if isinstance(value, dict) else {}
+    return {
+        "overUsage": _as_int(weights.get("hallExcess") or weights.get("overUsage"), 10),
+        "overUsageFairness": _as_int(
+            weights.get("clubFairness") or weights.get("overUsageFairness"), 1
+        ),
+        "wechsel": _as_int(weights.get("wechsel"), 5),
+        "zeitgleich": _as_int(weights.get("zeitgleich"), 5),
+        "sameClubDerbySt4": _as_int(weights.get("sameClubDerbySt4"), 1000),
+        "spielwoche": _as_int(weights.get("spielwoche"), 0),
+    }
+
+
+def _as_int(value: object, default: int) -> int:
+    if value is None or value == "":
+        return default
+    return int(str(value))
 
 
 def process_teams_intake_poll(store: JobStore) -> dict[str, object]:
@@ -490,47 +649,56 @@ def main() -> None:
             time.sleep(config.poll_interval_seconds)
             continue
 
-        _log_job_claimed(job)
-        try:
-            notification_id = str(job.payload.get("notificationId") or "").strip()
-            if job.job_type == "notification_delivery" and notification_id:
-                store.mark_notification_processing(notification_id, job.attempt_count)
-            teams_outbound_id = str(job.payload.get("teamsOutboundMessageId") or "").strip()
-            if job.job_type == "teams_message_delivery" and teams_outbound_id:
-                store.mark_teams_outbound_processing(teams_outbound_id, job.attempt_count)
+        _process_claimed_job(store, config, job)
 
-            if job.job_type == "inbound_mail_poll":
-                result = process_inbound_mail_poll(store, job.payload)
-            elif job.job_type == "teams_intake_poll":
-                result = process_teams_intake_poll(store)
-            else:
-                result = process_job(job)
-            store.complete_job(job.id, result)
-            if job.job_type == "notification_delivery" and notification_id:
-                store.mark_notification_sent(notification_id, job.attempt_count)
-            if job.job_type == "teams_message_delivery" and teams_outbound_id:
-                graph_message_id = str(result.get("graphMessageId") or "").strip() or None
-                store.mark_teams_outbound_sent(teams_outbound_id, graph_message_id)
-            _log_job_completed(job, result)
-        except Exception as error:  # noqa: BLE001
-            notification_id = str(job.payload.get("notificationId") or "").strip()
-            if job.job_type == "notification_delivery" and notification_id:
-                store.mark_notification_failed(
-                    notification_id,
-                    str(error),
-                    job.attempt_count,
-                    will_retry=job.attempt_count < config.max_attempts,
-                )
-            teams_outbound_id = str(job.payload.get("teamsOutboundMessageId") or "").strip()
-            if job.job_type == "teams_message_delivery" and teams_outbound_id:
-                store.mark_teams_outbound_failed(
-                    teams_outbound_id,
-                    str(error),
-                    job.attempt_count,
-                    will_retry=job.attempt_count < config.max_attempts,
-                )
-            store.fail_job(job.id, str(error))
-            _log_job_failed(job, error)
+
+def _process_claimed_job(store: JobStore, config: WorkerConfig, job: BackgroundJob) -> None:
+    _log_job_claimed(job)
+    try:
+        notification_id = str(job.payload.get("notificationId") or "").strip()
+        if job.job_type == "notification_delivery" and notification_id:
+            store.mark_notification_processing(notification_id, job.attempt_count)
+        teams_outbound_id = str(job.payload.get("teamsOutboundMessageId") or "").strip()
+        if job.job_type == "teams_message_delivery" and teams_outbound_id:
+            store.mark_teams_outbound_processing(teams_outbound_id, job.attempt_count)
+
+        if job.job_type == "inbound_mail_poll":
+            result = process_inbound_mail_poll(store, job.payload)
+        elif job.job_type == "teams_intake_poll":
+            result = process_teams_intake_poll(store)
+        elif job.job_type == RASTER_RUN_JOB_TYPE:
+            result = process_raster_run(store, job)
+        else:
+            result = process_job(job)
+        store.complete_job(job.id, result)
+        if job.job_type == "notification_delivery" and notification_id:
+            store.mark_notification_sent(notification_id, job.attempt_count)
+        if job.job_type == "teams_message_delivery" and teams_outbound_id:
+            graph_message_id = str(result.get("graphMessageId") or "").strip() or None
+            store.mark_teams_outbound_sent(teams_outbound_id, graph_message_id)
+        _log_job_completed(job, result)
+    except Exception as error:  # noqa: BLE001
+        notification_id = str(job.payload.get("notificationId") or "").strip()
+        if job.job_type == "notification_delivery" and notification_id:
+            store.mark_notification_failed(
+                notification_id,
+                str(error),
+                job.attempt_count,
+                will_retry=job.attempt_count < config.max_attempts,
+            )
+        teams_outbound_id = str(job.payload.get("teamsOutboundMessageId") or "").strip()
+        if job.job_type == "teams_message_delivery" and teams_outbound_id:
+            store.mark_teams_outbound_failed(
+                teams_outbound_id,
+                str(error),
+                job.attempt_count,
+                will_retry=job.attempt_count < config.max_attempts,
+            )
+        raster_run_id = str(job.payload.get("runId") or "").strip()
+        if job.job_type == RASTER_RUN_JOB_TYPE and raster_run_id:
+            store.mark_raster_run_failed(raster_run_id, str(error))
+        store.fail_job(job.id, str(error))
+        _log_job_failed(job, error)
 
 
 def _is_teams_enabled() -> bool:

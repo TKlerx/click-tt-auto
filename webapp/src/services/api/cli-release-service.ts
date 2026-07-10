@@ -97,7 +97,9 @@ async function findArchive(
   const suffix = `_${goos}_${arch}.${extension}`;
   return (
     entries
-      .filter((entry) => entry.startsWith("starterctl_") && entry.endsWith(suffix))
+      .filter(
+        (entry) => entry.startsWith("starterctl_") && entry.endsWith(suffix),
+      )
       .sort()
       .at(-1) ?? null
   );
@@ -163,7 +165,10 @@ export async function readCliReleaseAsset(target: string) {
 
 export async function readCliChecksums() {
   try {
-    return await readFile(path.join(getCliReleasesDir(), "checksums.txt"), "utf8");
+    return await readFile(
+      path.join(getCliReleasesDir(), "checksums.txt"),
+      "utf8",
+    );
   } catch {
     return null;
   }

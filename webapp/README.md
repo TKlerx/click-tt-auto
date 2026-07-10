@@ -2,7 +2,35 @@
 
 Downstream app skeleton copied from `C:\dev\webapp-template` for the Rasterzahl review and optimization workflow.
 
-The initial template still contains generic starter docs below; product-specific docs will replace them as the webapp is adapted.
+## Raster Flow
+
+The `/raster` dashboard is the multi-user review surface for Rasterzahl work.
+It currently supports:
+
+- creating district-scoped input sets;
+- uploading/pasting wishes as PDF-derived JSON or validated structured JSON;
+- uploading fixed upper-league Rasterzahlen as structured rows;
+- uploading and editing hall capacity as CSV rows;
+- importing pre-computed snapshots with assignments and conflicts;
+- reviewing assignments, hall-capacity conflicts, and review decisions;
+- auditing raster input uploads, run starts, capacity changes, and review decisions.
+
+The permission mapping uses the baseline roles:
+
+- `PLATFORM_ADMIN`: raster admin; can upload inputs, import snapshots, start runs, edit capacity, review, and manage users.
+- `SCOPE_ADMIN`: raster scheduler for assigned districts; can inspect data, edit capacity, and record review decisions, but cannot upload inputs, start runs, import snapshots, or manage users.
+- `SCOPE_USER`: viewer for assigned districts; read-only.
+
+The async `raster_run` worker job is scaffolded and the worker runtime includes OR-Tools. Generated optimization runs are not complete yet: the app still needs a persisted team/group context input, joined from public click-TT/fixed upper-league data, before it can build the CP-SAT solver input honestly. Imported snapshots are available for review while that gap is closed.
+
+Focused checks used during Raster work:
+
+```powershell
+pnpm --dir webapp run typecheck
+pnpm --dir webapp exec vitest run tests/unit/wishes-schema.test.ts tests/unit/run-outcome.test.ts tests/unit/fixed-constraint.test.ts tests/unit/raster-input-sets-route.test.ts tests/unit/background-jobs-route.test.ts
+pnpm --dir webapp exec playwright test tests/e2e/raster-roles.spec.ts
+cd webapp/worker; uv run python -m unittest tests.test_main.WorkerTests.test_worker_runtime_has_ortools tests.test_main.WorkerTests.test_process_raster_run_updates_run_status
+```
 
 A reusable internal web-app starter built from the extracted platform core of the original product.
 

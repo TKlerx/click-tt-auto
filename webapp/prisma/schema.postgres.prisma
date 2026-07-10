@@ -56,6 +56,10 @@ enum AuditAction {
   PAT_RENEWED
   PAT_DELETED
   CLI_LOGIN_COMPLETED
+  RASTER_INPUT_UPLOADED
+  RASTER_RUN_STARTED
+  RASTER_CAPACITY_CHANGED
+  RASTER_REVIEW_DECISION_CHANGED
 }
 
 enum BackgroundJobStatus {
@@ -552,6 +556,7 @@ model RasterInputSet {
   createdById       String
   createdAt         DateTime                @default(now())
   status            InputSetStatus          @default(DRAFT)
+  seasonModelJson   String?
   createdBy         User                    @relation("RasterInputSetCreator", fields: [createdById], references: [id], onDelete: Restrict)
   wishes            RasterWish[]
   fixedRasterzahlen RasterFixedRasterzahl[]

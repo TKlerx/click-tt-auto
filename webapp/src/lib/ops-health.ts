@@ -216,9 +216,7 @@ async function mapDatabaseHealth(
         ? "Database connectivity check passed"
         : "Database connectivity check failed",
     detail:
-      database.status === "ok"
-        ? "Provider: postgresql."
-        : database.message,
+      database.status === "ok" ? "Provider: postgresql." : database.message,
     checkedAt: capturedAt,
   };
 }

@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Rasterzahl review webapp",
   "private": true,
-  "packageManager": "pnpm@11.1.0",
+  "packageManager": "pnpm@11.7.0",
   "scripts": {
     "dev": "node scripts/run-next.mjs dev",
     "docker": "node scripts/docker-compose.mjs",

@@ -12,6 +12,7 @@
   },
   "nav": {
     "dashboard": "Painel",
+    "raster": "Raster",
     "backgroundJobs": "Tarefas em segundo plano",
     "users": "Gestao de utilizadores",
     "auditTrail": "Audit Trail",

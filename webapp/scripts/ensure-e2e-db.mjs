@@ -35,7 +35,11 @@ const env = {
 };
 
 runStep("Generate PostgreSQL Prisma client", "pnpm exec prisma generate", env);
-runStep("Reset PostgreSQL E2E schema", "pnpm exec prisma migrate reset --force", env);
+runStep(
+  "Reset PostgreSQL E2E schema",
+  "pnpm exec prisma migrate reset --force",
+  env,
+);
 runStep("Seed PostgreSQL E2E data", "pnpm exec tsx prisma/seed.ts", env);
 
 function ensureDockerPostgres() {

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import uuid
 from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -217,6 +218,294 @@ class JobStore:
                     (status, retry_count, error, notification_id),
                 )
             connection.commit()
+
+    def mark_raster_run_running(self, run_id: str, job_id: str) -> None:
+        if self._is_sqlite:
+            with closing(self._sqlite_conn()) as connection:
+                connection.execute(
+                    """
+                    UPDATE RasterOptimizationRun
+                    SET status = 'RUNNING',
+                        jobId = ?
+                    WHERE id = ?
+                    """,
+                    (job_id, run_id),
+                )
+                connection.commit()
+            return
+
+        with psycopg.connect(self._postgres_database_url) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    UPDATE "RasterOptimizationRun"
+                    SET status = 'RUNNING',
+                        "jobId" = %s
+                    WHERE id = %s
+                    """,
+                    (job_id, run_id),
+                )
+            connection.commit()
+
+    def mark_raster_run_succeeded(self, run_id: str) -> None:
+        if self._is_sqlite:
+            with closing(self._sqlite_conn()) as connection:
+                connection.execute(
+                    """
+                    UPDATE RasterOptimizationRun
+                    SET status = 'SUCCEEDED',
+                        finishedAt = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                    """,
+                    (run_id,),
+                )
+                connection.commit()
+            return
+
+        with psycopg.connect(self._postgres_database_url) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    UPDATE "RasterOptimizationRun"
+                    SET status = 'SUCCEEDED',
+                        "finishedAt" = NOW()
+                    WHERE id = %s
+                    """,
+                    (run_id,),
+                )
+            connection.commit()
+
+    def mark_raster_run_failed(self, run_id: str, error: str) -> None:
+        if self._is_sqlite:
+            with closing(self._sqlite_conn()) as connection:
+                connection.execute(
+                    """
+                    UPDATE RasterOptimizationRun
+                    SET status = 'FAILED',
+                        outcome = 'FAILED',
+                        solverStatus = ?,
+                        finishedAt = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                    """,
+                    (error, run_id),
+                )
+                connection.commit()
+            return
+
+        with psycopg.connect(self._postgres_database_url) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    UPDATE "RasterOptimizationRun"
+                    SET status = 'FAILED',
+                        outcome = 'FAILED',
+                        "solverStatus" = %s,
+                        "finishedAt" = NOW()
+                    WHERE id = %s
+                    """,
+                    (error, run_id),
+                )
+            connection.commit()
+
+    def get_raster_run_context(self, run_id: str) -> dict[str, Any]:
+        if self._is_sqlite:
+            with closing(self._sqlite_conn()) as connection:
+                connection.row_factory = sqlite3.Row
+                row = connection.execute(
+                    """
+                    SELECT run.id, run.settings, input.district, input.seasonModelJson
+                    FROM RasterOptimizationRun run
+                    JOIN RasterInputSet input ON input.id = run.inputSetId
+                    WHERE run.id = ?
+                    """,
+                    (run_id,),
+                ).fetchone()
+                if row is None:
+                    raise ValueError(f"Raster run {run_id} not found")
+                return dict(row)
+
+        with psycopg.connect(self._postgres_database_url, row_factory=dict_row) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT run.id, run.settings, input.district, input."seasonModelJson"
+                    FROM "RasterOptimizationRun" run
+                    JOIN "RasterInputSet" input ON input.id = run."inputSetId"
+                    WHERE run.id = %s
+                    """,
+                    (run_id,),
+                )
+                row = cursor.fetchone()
+            connection.commit()
+            if row is None:
+                raise ValueError(f"Raster run {run_id} not found")
+            return dict(row)
+
+    def list_raster_hall_capacities(self, district: str) -> list[dict[str, Any]]:
+        if self._is_sqlite:
+            with closing(self._sqlite_conn()) as connection:
+                connection.row_factory = sqlite3.Row
+                rows = connection.execute(
+                    """
+                    SELECT clubId, hall, weekday, capacity
+                    FROM RasterHallCapacity
+                    WHERE district = ?
+                    """,
+                    (district,),
+                ).fetchall()
+                return [dict(row) for row in rows]
+
+        with psycopg.connect(self._postgres_database_url, row_factory=dict_row) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT "clubId", hall, weekday, capacity
+                    FROM "RasterHallCapacity"
+                    WHERE district = %s
+                    """,
+                    (district,),
+                )
+                rows = cursor.fetchall()
+            connection.commit()
+            return list(rows)
+
+    def persist_raster_run_result(
+        self,
+        *,
+        run_id: str,
+        district: str,
+        model: dict[str, Any],
+        solver_output: dict[str, Any],
+    ) -> str:
+        snapshot_id = _new_id()
+        metadata = solver_output["metadata"]
+        assignment = solver_output["assignment"]
+        overages = _find_overage_rows(model, assignment)
+        total_excess = sum(int(row["excess"]) for row in overages)
+        affected_clubs = len({str(row["clubId"]) for row in overages})
+        max_excess = max([int(row["excess"]) for row in overages], default=0)
+        optimality = "PROVEN_OPTIMAL" if metadata.get("status") == "OPTIMAL" else "FEASIBLE"
+        outcome = "PROVEN_OPTIMAL" if metadata.get("status") == "OPTIMAL" else "FEASIBLE"
+        assignments = _assignment_rows(snapshot_id, model, assignment)
+        objective_breakdown = json.dumps(
+            metadata.get("objectiveBreakdown")
+            or _objective_breakdown(overages, metadata.get("weights"))
+        )
+
+        if self._is_sqlite:
+            with closing(self._sqlite_conn()) as connection:
+                connection.execute("BEGIN")
+                connection.execute(
+                    """
+                    INSERT INTO RasterSnapshot (
+                        id, runId, district, origin, optimality, stale, totalConflicts,
+                        totalExcess, maxExcess, affectedClubs, objectiveBreakdown, createdAt
+                    ) VALUES (?, ?, ?, 'GENERATED', ?, 0, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                    """,
+                    (
+                        snapshot_id,
+                        run_id,
+                        district,
+                        optimality,
+                        len(overages),
+                        total_excess,
+                        max_excess,
+                        affected_clubs,
+                        objective_breakdown,
+                    ),
+                )
+                connection.executemany(
+                    """
+                    INSERT INTO RasterAssignment (
+                        id, snapshotId, league, "group", clubId, clubName, team, rasterzahl,
+                        status, weekday, hall, startTime, weekSlot
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    assignments,
+                )
+                connection.executemany(
+                    """
+                    INSERT INTO RasterConflict (
+                        id, snapshotId, matchWeek, clubId, clubName, weekday, hall,
+                        capacity, actualCount, excess, teams
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    _conflict_rows(snapshot_id, model, overages),
+                )
+                connection.execute(
+                    """
+                    UPDATE RasterOptimizationRun
+                    SET status = 'SUCCEEDED', outcome = ?, objectiveValue = ?,
+                        objectiveBreakdown = ?, solverStatus = ?, finishedAt = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                    """,
+                    (
+                        outcome,
+                        metadata.get("objective"),
+                        objective_breakdown,
+                        metadata.get("status"),
+                        run_id,
+                    ),
+                )
+                connection.commit()
+                return snapshot_id
+
+        with psycopg.connect(self._postgres_database_url) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    INSERT INTO "RasterSnapshot" (
+                        id, "runId", district, origin, optimality, stale, "totalConflicts",
+                        "totalExcess", "maxExcess", "affectedClubs", "objectiveBreakdown", "createdAt"
+                    ) VALUES (%s, %s, %s, 'GENERATED', %s, false, %s, %s, %s, %s, %s, NOW())
+                    """,
+                    (
+                        snapshot_id,
+                        run_id,
+                        district,
+                        optimality,
+                        len(overages),
+                        total_excess,
+                        max_excess,
+                        affected_clubs,
+                        objective_breakdown,
+                    ),
+                )
+                cursor.executemany(
+                    """
+                    INSERT INTO "RasterAssignment" (
+                        id, "snapshotId", league, "group", "clubId", "clubName", team, rasterzahl,
+                        status, weekday, hall, "startTime", "weekSlot"
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    assignments,
+                )
+                cursor.executemany(
+                    """
+                    INSERT INTO "RasterConflict" (
+                        id, "snapshotId", "matchWeek", "clubId", "clubName", weekday, hall,
+                        capacity, "actualCount", excess, teams
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    _conflict_rows(snapshot_id, model, overages),
+                )
+                cursor.execute(
+                    """
+                    UPDATE "RasterOptimizationRun"
+                    SET status = 'SUCCEEDED', outcome = %s, "objectiveValue" = %s,
+                        "objectiveBreakdown" = %s, "solverStatus" = %s, "finishedAt" = NOW()
+                    WHERE id = %s
+                    """,
+                    (
+                        outcome,
+                        metadata.get("objective"),
+                        objective_breakdown,
+                        metadata.get("status"),
+                        run_id,
+                    ),
+                )
+            connection.commit()
+            return snapshot_id
 
     def has_inbound_email(self, provider_message_id: str) -> bool:
         if self._is_sqlite:
@@ -1016,3 +1305,190 @@ def _parse_payload(value: str | None) -> dict[str, Any]:
 def _sqlite_timestamp_after_seconds(delay_seconds: float) -> str:
     scheduled_for = datetime.now(timezone.utc) + timedelta(seconds=delay_seconds)
     return scheduled_for.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _new_id() -> str:
+    return uuid.uuid4().hex
+
+
+def _objective_breakdown(overages: list[dict[str, Any]], weights: object) -> dict[str, int]:
+    parsed = weights if isinstance(weights, dict) else {}
+    over_usage_weight = int(parsed.get("overUsage") or 10)
+    fairness_weight = int(parsed.get("overUsageFairness") or 1)
+    over_usage = sum(int(row["excess"]) ** 2 for row in overages) * over_usage_weight
+    by_club: dict[str, int] = {}
+    for row in overages:
+        club_id = str(row["clubId"])
+        by_club[club_id] = by_club.get(club_id, 0) + int(row["excess"])
+    return {
+        "overUsage": over_usage,
+        "overUsageFairness": sum(excess**2 for excess in by_club.values()) * fairness_weight,
+        "wechsel": 0,
+        "zeitgleich": 0,
+        "sameClubDerbySt4": 0,
+        "spielwoche": 0,
+    }
+
+
+def _assignment_rows(
+    snapshot_id: str, model: dict[str, Any], assignment: dict[str, Any]
+) -> list[tuple[Any, ...]]:
+    teams = {str(team.get("id") or ""): team for team in _dicts(model.get("teams"))}
+    clubs = {str(club.get("id") or ""): club for club in _dicts(model.get("clubs"))}
+    rows: list[tuple[Any, ...]] = []
+    for group in _dicts(model.get("groups")):
+        ref_raw = group.get("ref")
+        ref: dict[str, Any] = ref_raw if isinstance(ref_raw, dict) else {}
+        league = str(ref.get("league") or "")
+        group_name = str(ref.get("name") or "")
+        for team_id in group.get("teamIds") or []:
+            team = teams.get(str(team_id))
+            if not team:
+                continue
+            club = clubs.get(str(team.get("clubId") or "")) or {}
+            rasterzahl = int(assignment.get(str(team_id)) or 0)
+            raster_raw = team.get("rasterzahl")
+            raster: dict[str, Any] = raster_raw if isinstance(raster_raw, dict) else {}
+            rows.append(
+                (
+                    _new_id(),
+                    snapshot_id,
+                    league,
+                    group_name,
+                    str(team.get("clubId") or ""),
+                    str(club.get("name") or team.get("clubId") or ""),
+                    str(team.get("name") or team.get("label") or team_id),
+                    rasterzahl,
+                    _assignment_status(str(raster.get("kind") or "")),
+                    _weekday_to_db(str(team.get("homeWeekday") or "")),
+                    str(team.get("hall") or "1"),
+                    team.get("startTime"),
+                    team.get("spielwochePref"),
+                )
+            )
+    return rows
+
+
+def _conflict_rows(
+    snapshot_id: str, model: dict[str, Any], overages: list[dict[str, Any]]
+) -> list[tuple[Any, ...]]:
+    clubs = {str(club.get("id") or ""): club for club in _dicts(model.get("clubs"))}
+    return [
+        (
+            _new_id(),
+            snapshot_id,
+            int(row["week"]),
+            str(row["clubId"]),
+            str(clubs.get(str(row["clubId"]), {}).get("name") or row["clubId"]),
+            _weekday_to_db(str(row["weekday"])),
+            str(row["hall"]),
+            int(row["capacity"]),
+            len(row["teams"]),
+            int(row["excess"]),
+            json.dumps(row["teams"]),
+        )
+        for row in overages
+    ]
+
+
+def _find_overage_rows(model: dict[str, Any], assignment: dict[str, Any]) -> list[dict[str, Any]]:
+    teams = _dicts(model.get("teams"))
+    groups = _dicts(model.get("groups"))
+    clubs = _dicts(model.get("clubs"))
+    team_group = {str(team_id): group for group in groups for team_id in group.get("teamIds", [])}
+    slots: dict[tuple[str, str, str, int], dict[str, Any]] = {}
+    for team in teams:
+        team_id = str(team.get("id") or "")
+        group = team_group.get(team_id)
+        rasterzahl = int(assignment.get(team_id) or 0)
+        if not group or not rasterzahl:
+            continue
+        capacity = _capacity_for(clubs, team)
+        if capacity is None:
+            continue
+        for week in _home_weeks(int(group.get("size") or 0), rasterzahl):
+            key = (
+                str(team.get("clubId") or ""),
+                str(team.get("hall") or "1"),
+                str(team.get("homeWeekday") or ""),
+                week,
+            )
+            slot = slots.setdefault(key, {"teams": [], "capacity": capacity})
+            slot["teams"].append(team_id)
+            slot["capacity"] = capacity
+    rows: list[dict[str, Any]] = []
+    for (club_id, hall, weekday, week), slot in slots.items():
+        excess = len(slot["teams"]) - int(slot["capacity"])
+        if excess > 0:
+            rows.append(
+                {
+                    "clubId": club_id,
+                    "hall": hall,
+                    "weekday": weekday,
+                    "week": week,
+                    "teams": slot["teams"],
+                    "capacity": slot["capacity"],
+                    "excess": excess,
+                }
+            )
+    return rows
+
+
+def _capacity_for(clubs: list[dict[str, Any]], team: dict[str, Any]) -> int | None:
+    club = next((row for row in clubs if row.get("id") == team.get("clubId")), None)
+    venues = club.get("venues") if club else None
+    if not isinstance(venues, list):
+        return None
+    venue = next(
+        (
+            row
+            for row in venues
+            if isinstance(row, dict) and str(row.get("hall") or "") == str(team.get("hall") or "")
+        ),
+        None,
+    )
+    if not venue:
+        return None
+    by_day = venue.get("capacityByWeekday")
+    weekday = str(team.get("homeWeekday") or "")
+    if isinstance(by_day, dict) and weekday in by_day:
+        return int(by_day[weekday])
+    if venue.get("capacity") is not None:
+        return int(venue["capacity"])
+    return None
+
+
+def _home_weeks(group_size: int, rasterzahl: int) -> list[int]:
+    weeks_by_rz = {
+        1: [1, 3, 5, 7, 9, 11, 13, 15, 17],
+        2: [2, 4, 6, 8, 10, 12, 14, 16, 18],
+        3: [1, 4, 5, 8, 9, 12, 13, 16, 17],
+        4: [2, 3, 6, 7, 10, 11, 14, 15, 18],
+        5: [1, 3, 6, 8, 9, 11, 14, 16, 17],
+        6: [2, 4, 5, 7, 10, 12, 13, 15, 18],
+        7: [1, 4, 6, 7, 9, 12, 14, 15, 17],
+        8: [2, 3, 5, 8, 10, 11, 13, 16, 18],
+        9: [1, 3, 5, 7, 10, 12, 14, 16, 17],
+        10: [],
+    }
+    if group_size not in (9, 10):
+        return []
+    return weeks_by_rz.get(rasterzahl, [])
+
+
+def _weekday_to_db(value: str) -> str:
+    return value.strip().upper()
+
+
+def _assignment_status(kind: str) -> str:
+    if kind == "fixed":
+        return "FIXED"
+    if kind == "pinned":
+        return "PINNED"
+    return "OPTIMIZED"
+
+
+def _dicts(value: object) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    return [row for row in value if isinstance(row, dict)]

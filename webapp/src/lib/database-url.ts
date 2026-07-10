@@ -19,9 +19,7 @@ export function resolveMigrationDatabaseUrl(env: DatabaseUrlEnv = process.env) {
   return firstConfiguredValue([env.MIGRATION_DATABASE_URL, env.DATABASE_URL]);
 }
 
-export function getDatabaseProviderForUrl(
-  databaseUrl: string,
-): "postgresql" {
+export function getDatabaseProviderForUrl(databaseUrl: string): "postgresql" {
   if (
     !databaseUrl.startsWith("postgresql://") &&
     !databaseUrl.startsWith("postgres://")

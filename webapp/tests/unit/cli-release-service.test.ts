@@ -23,8 +23,14 @@ describe("cli-release-service", () => {
 
   it("lists starterctl release archives and checksums", async () => {
     await writeFile(join(tempDir, "starterctl_1.2.3_windows_amd64.zip"), "win");
-    await writeFile(join(tempDir, "starterctl_1.2.3_linux_arm64.tar.gz"), "linux");
-    await writeFile(join(tempDir, "checksums.txt"), "abc  starterctl_1.2.3_windows_amd64.zip\n");
+    await writeFile(
+      join(tempDir, "starterctl_1.2.3_linux_arm64.tar.gz"),
+      "linux",
+    );
+    await writeFile(
+      join(tempDir, "checksums.txt"),
+      "abc  starterctl_1.2.3_windows_amd64.zip\n",
+    );
 
     await expect(readCliChecksums()).resolves.toContain("starterctl_1.2.3");
     await expect(listCliReleaseAssets()).resolves.toEqual(
@@ -44,8 +50,14 @@ describe("cli-release-service", () => {
   });
 
   it("reads only known release targets", async () => {
-    await writeFile(join(tempDir, "starterctl_1.2.2_linux_amd64.tar.gz"), "old");
-    await writeFile(join(tempDir, "starterctl_1.2.3_linux_amd64.tar.gz"), "bytes");
+    await writeFile(
+      join(tempDir, "starterctl_1.2.2_linux_amd64.tar.gz"),
+      "old",
+    );
+    await writeFile(
+      join(tempDir, "starterctl_1.2.3_linux_amd64.tar.gz"),
+      "bytes",
+    );
 
     await expect(readCliReleaseAsset("nope")).resolves.toBeNull();
     await expect(readCliReleaseAsset("linux-amd64")).resolves.toEqual(

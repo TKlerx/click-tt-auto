@@ -51,5 +51,7 @@ TypeScript 5.9 on Next.js 16 App Router (React 19): Follow standard conventions
 - 019-logging-standardization: Added TypeScript 5.9 on Next.js 16 App Router with React 19; Python 3.12 worker; PowerShell/Node validation scripts + Existing `src/lib/logger.ts`, `src/proxy.ts`, `src/instrumentation.ts`, Prisma-backed services, Python stdlib `logging`/`json`, Vitest, Playwright, existing validation scripts
 
 <!-- MANUAL ADDITIONS START -->
+
 @AI_TESTING.md
+
 <!-- MANUAL ADDITIONS END -->

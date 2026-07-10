@@ -35,7 +35,9 @@ SENSITIVE_KEYS = {
     "recipientName",
     "userName",
 }
-SENSITIVE_KEYS_NORMALIZED = {"".join(char for char in key.lower() if char.isalnum()) for key in SENSITIVE_KEYS}
+SENSITIVE_KEYS_NORMALIZED = {
+    "".join(char for char in key.lower() if char.isalnum()) for key in SENSITIVE_KEYS
+}
 
 
 def _normalize_key(key: str) -> str:

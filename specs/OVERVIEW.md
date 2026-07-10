@@ -1,6 +1,6 @@
 # click-TT Automation Specs Overview
 
-Last Updated: 2026-07-07
+Last Updated: 2026-07-10
 
 Purpose: Track the status of all planned features, their implementation progress, and next steps.
 
@@ -20,18 +20,20 @@ Purpose: Track the status of all planned features, their implementation progress
 
 | # | Feature | Status | Depends On | Est. Effort | Next Step |
 | --- | --- | --- | --- | --- | --- |
-| 001 | Match Report Auto-Approval | Partially Implemented | - | Large | Continue live validation and refine any remaining edge cases found in production use |
-| 002 | Rasterzahl Wish Optimizer | Fully Implemented | - | Large | All tasks checked; offline and click-TT ingest paths validated |
+| 001 | Match Report Auto-Approval | Partially Implemented | - | Large | Continue implementation and complete the remaining tasks |
+| 002 | Rasterzahl Wish Optimizer | Fully Implemented | Why this priority: Every downstream number depends on reading messy PDFs (misaligned tables, free-text notes) correctly. The relational wishes live in free-text "Besondere Wünsche" and must be extracted with human oversight. A wrong model silently invalidates everything. | Large | Review, commit, and propagate the finished feature |
+| 003 | Raster Generation & Review Webapp | Partially Implemented | - | Large | Continue implementation and complete the remaining tasks |
 
 ## Implementation Roadmap
 
 ### Complete
 
-- No numbered features are fully implemented yet
+- 002 Rasterzahl Wish Optimizer: fully implemented
 
 ### Begin Immediately
 
-- 001 Match Report Auto-Approval: Continue live validation and edge-case hardening during real season usage
+- 001 Match Report Auto-Approval: Continue implementation and complete the remaining tasks
+- 003 Raster Generation & Review Webapp: Continue implementation and complete the remaining tasks
 
 ### Blocked / Prep Needed
 

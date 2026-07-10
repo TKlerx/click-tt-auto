@@ -4,6 +4,7 @@ import {
   Activity,
   Bell,
   BookOpen,
+  CalendarRange,
   ChevronLeft,
   ChevronRight,
   Gauge,
@@ -31,6 +32,7 @@ export function Navigation({ user }: { user: SessionUser }) {
 
   const links = [
     { href: "/dashboard", label: t("dashboard"), icon: Gauge },
+    { href: "/raster", label: t("raster"), icon: CalendarRange },
     { href: "/settings/tokens", label: t("tokens"), icon: KeyRound },
     { href: "/docs/api", label: t("apiDocs"), icon: BookOpen },
   ];

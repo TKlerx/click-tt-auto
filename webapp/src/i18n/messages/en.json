@@ -12,6 +12,7 @@
   },
   "nav": {
     "dashboard": "Dashboard",
+    "raster": "Raster",
     "backgroundJobs": "Background Jobs",
     "users": "User Management",
     "auditTrail": "Audit Trail",
