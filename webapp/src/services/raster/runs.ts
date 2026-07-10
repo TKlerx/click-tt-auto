@@ -16,13 +16,30 @@ export async function getOptimizationRun(id: string) {
 }
 
 export async function cancelOptimizationRun(id: string) {
-  return prisma.rasterOptimizationRun.update({
-    where: { id },
-    data: {
-      status: "CANCELLED",
-      outcome: "CANCELLED",
-      finishedAt: new Date(),
-    },
+  return prisma.$transaction(async (tx) => {
+    const run = await tx.rasterOptimizationRun.update({
+      where: { id },
+      data: {
+        status: "CANCELLED",
+        outcome: "CANCELLED",
+        finishedAt: new Date(),
+      },
+    });
+    if (run.jobId) {
+      await tx.backgroundJob.updateMany({
+        where: {
+          id: run.jobId,
+          status: { in: ["PENDING", "IN_PROGRESS"] },
+        },
+        data: {
+          status: "FAILED",
+          error: "Raster optimization run cancelled.",
+          lockedAt: null,
+          finishedAt: new Date(),
+        },
+      });
+    }
+    return run;
   });
 }
 

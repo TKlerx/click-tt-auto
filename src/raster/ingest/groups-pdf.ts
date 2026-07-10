@@ -64,8 +64,8 @@ export function splitIntoSupportedGroupSizes(total: number): number[] {
   if (total <= 14) return [total];
 
   const minGroups = Math.ceil(total / 14);
-  const maxGroups = Math.floor(total / 9);
-  const preferred = Math.round(total / 12);
+  const maxGroups = Math.floor(total / 6);
+  const preferred = Math.round(total / 10);
   const candidates = Array.from(
     { length: maxGroups - minGroups + 1 },
     (_, index) => minGroups + index
@@ -74,14 +74,14 @@ export function splitIntoSupportedGroupSizes(total: number): number[] {
   for (const count of candidates) {
     const base = Math.floor(total / count);
     const extra = total % count;
-    if (base >= 9 && base + (extra > 0 ? 1 : 0) <= 14) {
+    if (base >= 6 && base + (extra > 0 ? 1 : 0) <= 14) {
       return Array.from({ length: count }, (_, index) =>
         index < extra ? base + 1 : base
       );
     }
   }
 
-  return Array.from({ length: Math.ceil(total / 12) }, (_, index) =>
-    Math.min(12, total - index * 12)
+  return Array.from({ length: Math.ceil(total / 10) }, (_, index) =>
+    Math.min(10, total - index * 10)
   ).filter((size) => size > 0);
 }

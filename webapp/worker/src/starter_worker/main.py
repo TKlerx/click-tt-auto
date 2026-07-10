@@ -81,14 +81,32 @@ def process_raster_run(store: JobStore, job: BackgroundJob) -> dict[str, object]
     if not run_id:
         raise ValueError("raster_run job payload is missing runId")
 
-    store.mark_raster_run_running(run_id, job.id)
     context = store.get_raster_run_context(run_id)
+    if str(context.get("status") or "") == "CANCELLED":
+        return {
+            "runId": run_id,
+            "status": "CANCELLED",
+            "processedAt": datetime.now(timezone.utc).isoformat(),
+        }
+    store.mark_raster_run_running(run_id, job.id)
+    if store.get_raster_run_status(run_id) == "CANCELLED":
+        return {
+            "runId": run_id,
+            "status": "CANCELLED",
+            "processedAt": datetime.now(timezone.utc).isoformat(),
+        }
     model = _model_with_capacity_overrides(
         _parse_json_object(context["seasonModelJson"], "seasonModelJson"),
         store.list_raster_hall_capacities(str(context["district"])),
     )
     settings = _parse_json_object(context.get("settings") or "{}", "settings")
     solver_output = _solve_raster_model(model, settings)
+    if store.get_raster_run_status(run_id) == "CANCELLED":
+        return {
+            "runId": run_id,
+            "status": "CANCELLED",
+            "processedAt": datetime.now(timezone.utc).isoformat(),
+        }
     snapshot_id = store.persist_raster_run_result(
         run_id=run_id,
         district=str(context["district"]),

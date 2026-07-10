@@ -1,4 +1,5 @@
 import homeRows from "./templates.json" with { type: "json" };
+import pairingRows from "./pairings.json" with { type: "json" };
 import crossSizeRows from "./cross-size.json" with { type: "json" };
 import spielwochen from "./spielwochen.json" with { type: "json" };
 import type {
@@ -6,18 +7,24 @@ import type {
   PairKey,
   Pairing,
   RasterSize,
+  RasterMode,
   Rasterzahl,
   Template
 } from "../types.js";
 
-const supportedSizes = [10, 12, 14] as const;
+const supportedSizes = [6, "6d", 8, 10, 12, 14] as const;
 
-export function rasterSizeForGroupSize(size: number): RasterSize {
+export function rasterSizeForGroupSize(
+  size: number,
+  mode: RasterMode = "single"
+): RasterSize {
+  if (size === 6) return mode === "double" ? "6d" : 6;
+  if (size === 7 || size === 8) return 8;
   if (size === 9 || size === 10) return 10;
   if (size === 11 || size === 12) return 12;
   if (size === 13 || size === 14) return 14;
   throw new Error(
-    `Unsupported group size ${size}; supported district sizes are 9..14.`
+    `Unsupported group size ${size}; supported district sizes are 6..14.`
   );
 }
 
@@ -26,16 +33,26 @@ export function pairKey(a: number, b: number): PairKey {
   return `${left}-${right}`;
 }
 
+function numericRasterSize(size: RasterSize): number {
+  return size === "6d" ? 6 : size;
+}
+
 function circlePairs(size: RasterSize): Pairing[][] {
-  const teams = Array.from({ length: size }, (_, index) => index + 1);
+  const override = (pairingRows as Partial<Record<RasterSize, Pairing[][]>>)[
+    size
+  ];
+  if (override) return override;
+
+  const numericSize = numericRasterSize(size);
+  const teams = Array.from({ length: numericSize }, (_, index) => index + 1);
   const rounds: Pairing[][] = [];
   let rotating = teams.slice(1);
 
-  for (let round = 0; round < size - 1; round += 1) {
+  for (let round = 0; round < numericSize - 1; round += 1) {
     const row = [teams[0]!, ...rotating];
     const rawPairs: Array<[number, number]> = [];
-    for (let index = 0; index < size / 2; index += 1) {
-      rawPairs.push([row[index]!, row[size - 1 - index]!]);
+    for (let index = 0; index < numericSize / 2; index += 1) {
+      rawPairs.push([row[index]!, row[numericSize - 1 - index]!]);
     }
     const homes = new Set(homeRows[size][round]);
     rounds.push(
@@ -64,7 +81,7 @@ export function deriveRaster(size: RasterSize): DerivedRaster {
   const derbySpieltag = new Map<PairKey, number>();
   const weeksByNumber = new Map<Rasterzahl, number[]>();
 
-  for (let number = 1; number <= size; number += 1) {
+  for (let number = 1; number <= numericRasterSize(size); number += 1) {
     homeSpieltage.set(number, []);
     weeksByNumber.set(number, []);
   }
@@ -78,13 +95,16 @@ export function deriveRaster(size: RasterSize): DerivedRaster {
       weeksByNumber.get(home)!.push(week);
     }
     for (const pairing of pairings) {
-      derbySpieltag.set(pairKey(pairing.home, pairing.away), spieltag);
+      const key = pairKey(pairing.home, pairing.away);
+      if (!derbySpieltag.has(key)) derbySpieltag.set(key, spieltag);
     }
   }
-  for (const [roundIndex, pairings] of template.matchdays.entries()) {
-    const week = weekMap[template.matchdays.length + roundIndex]!;
-    for (const pairing of pairings) {
-      weeksByNumber.get(pairing.away)!.push(week);
+  if (size !== "6d") {
+    for (const [roundIndex, pairings] of template.matchdays.entries()) {
+      const week = weekMap[template.matchdays.length + roundIndex]!;
+      for (const pairing of pairings) {
+        weeksByNumber.get(pairing.away)!.push(week);
+      }
     }
   }
 
@@ -94,9 +114,9 @@ export function deriveRaster(size: RasterSize): DerivedRaster {
 export function homeWeeks(
   size: RasterSize,
   rasterzahl: number,
-  groupSize: number = size
+  groupSize: number = numericRasterSize(size)
 ): number[] {
-  const bye = groupSize % 2 === 1 ? size : null;
+  const bye = groupSize % 2 === 1 ? numericRasterSize(size) : null;
   if (rasterzahl === bye) return [];
 
   const weeks: number[] = [];
@@ -117,13 +137,15 @@ export function homeWeeks(
       weeks.push(weekMap[roundIndex]!);
     }
   }
-  for (const [roundIndex, pairings] of template.matchdays.entries()) {
-    const pairing = pairings.find(
-      (candidate) =>
-        candidate.home === rasterzahl || candidate.away === rasterzahl
-    );
-    if (pairing && pairing.away === rasterzahl && pairing.home !== bye) {
-      weeks.push(weekMap[template.matchdays.length + roundIndex]!);
+  if (size !== "6d") {
+    for (const [roundIndex, pairings] of template.matchdays.entries()) {
+      const pairing = pairings.find(
+        (candidate) =>
+          candidate.home === rasterzahl || candidate.away === rasterzahl
+      );
+      if (pairing && pairing.away === rasterzahl && pairing.home !== bye) {
+        weeks.push(weekMap[template.matchdays.length + roundIndex]!);
+      }
     }
   }
   return weeks;

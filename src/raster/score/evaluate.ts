@@ -46,7 +46,7 @@ export function evaluate(
   let sameClubDerbySt4 = 0;
 
   for (const group of model.groups) {
-    const rasterSize = rasterSizeForGroupSize(group.size);
+    const rasterSize = rasterSizeForGroupSize(group.size, group.rasterMode);
     const values = group.teamIds.map((teamId) => assignment[teamId]);
     const assignedValues = values.filter(
       (value): value is number => value !== undefined
@@ -115,7 +115,7 @@ export function evaluate(
     );
     const rz = assignment[team.id];
     if (!group || rz === undefined) return [];
-    const got = deriveHomeWeeks(group.size, rz).slot;
+    const got = deriveHomeWeeks(group.size, rz, group.rasterMode).slot;
     return got === team.spielwochePref
       ? []
       : [{ teamId: team.id, want: team.spielwochePref, got }];

@@ -44,7 +44,7 @@ export function buildObjectiveBreakdown(
   const result = evaluate(model, assignment, weights);
   let sameClubDerbySt4 = 0;
   for (const group of model.groups) {
-    const rasterSize = rasterSizeForGroupSize(group.size);
+    const rasterSize = rasterSizeForGroupSize(group.size, group.rasterMode);
     for (const [leftIndex, leftId] of group.teamIds.entries()) {
       const left = model.teams.find((team) => team.id === leftId);
       const leftRz = result.assignment[leftId];

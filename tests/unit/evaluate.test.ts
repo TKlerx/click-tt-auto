@@ -19,7 +19,7 @@ describe("raster evaluation", () => {
     const baseModel = fixture.model as unknown as SeasonModel;
     const model = {
       ...baseModel,
-      groups: [{ ref: { league: "L", name: "Bad" }, size: 8, teamIds: ["a", "b"] }]
+      groups: [{ ref: { league: "L", name: "Bad" }, size: 5, teamIds: ["a", "b"] }]
     };
     expect(() => evaluate(model, fixture.assignment)).toThrow(/Unsupported group size/);
   });

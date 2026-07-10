@@ -22,18 +22,18 @@ Purpose: Track the status of all planned features, their implementation progress
 | --- | --- | --- | --- | --- | --- |
 | 001 | Match Report Auto-Approval | Partially Implemented | - | Large | Continue implementation and complete the remaining tasks |
 | 002 | Rasterzahl Wish Optimizer | Fully Implemented | Why this priority: Every downstream number depends on reading messy PDFs (misaligned tables, free-text notes) correctly. The relational wishes live in free-text "Besondere Wünsche" and must be extracted with human oversight. A wrong model silently invalidates everything. | Large | Review, commit, and propagate the finished feature |
-| 003 | Raster Generation & Review Webapp | Partially Implemented | - | Large | Continue implementation and complete the remaining tasks |
+| 003 | Raster Generation & Review Webapp | Fully Implemented | - | Large | Review, commit, and propagate the finished feature |
 
 ## Implementation Roadmap
 
 ### Complete
 
 - 002 Rasterzahl Wish Optimizer: fully implemented
+- 003 Raster Generation & Review Webapp: fully implemented
 
 ### Begin Immediately
 
 - 001 Match Report Auto-Approval: Continue implementation and complete the remaining tasks
-- 003 Raster Generation & Review Webapp: Continue implementation and complete the remaining tasks
 
 ### Blocked / Prep Needed
 

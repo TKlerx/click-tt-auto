@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { requireRasterSnapshot } from "@/lib/raster/route-context";
-import { listSnapshotConflicts } from "@/services/raster";
+import {
+  listSnapshotConflicts,
+  listSnapshotPenaltyEvents,
+} from "@/services/raster";
 
 export async function GET(
   request: Request,
@@ -24,5 +27,6 @@ export async function GET(
         ? Number(search.get("minExcess"))
         : null,
     }),
+    penalties: await listSnapshotPenaltyEvents(context.snapshot.id),
   });
 }

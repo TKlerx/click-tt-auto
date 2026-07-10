@@ -14,9 +14,11 @@ A named collection of inputs used for one generation run.
 | createdById     | string                | FK → User                                                                                            |
 | createdAt       | datetime              |                                                                                                      |
 | status          | enum(`draft`,`ready`) | `ready` = validated, runnable (FR-008)                                                               |
-| seasonModelJson | string?               | Validated structured season model (`clubs`, `teams`, `groups`, relational wishes) used by the solver |
+| seasonModelJson | string?               | Validated structured season model (`clubs`, `teams`, `groups` including reviewed `rasterMode`, relational wishes) used by the solver |
 
 Relations: has many Wish, HallCapacity, FixedRasterzahl; has many OptimizationRun.
+
+Group rows inside `seasonModelJson` include `size` and optional `rasterMode` (`single` or `double`). Six-team groups must be reviewed so that `rasterMode: "double"` selects the official 6er Doppelrunde table; missing mode blocks validation.
 
 ## Wish
 

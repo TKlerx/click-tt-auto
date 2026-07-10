@@ -13,6 +13,7 @@ Next.js App Router route handlers under `webapp/src/app/api/raster/`. All routes
 | POST | `/api/raster/input-sets/{id}/wishes/json` | admin | Submit pasted/structured wishes JSON → schema-validated (FR-002a/003); 422 on schema error |
 | PUT | `/api/raster/input-sets/{id}/wishes/{wishId}` | admin | Review/correct a wish (FR-003) |
 | POST | `/api/raster/input-sets/{id}/fixed-rasterzahlen` | admin | Add fixed upper-league Rasterzahlen (PDF/manual/structured) (FR-007) |
+| PUT | `/api/raster/input-sets/{id}/groups/{groupId}` | admin | Review/correct group metadata, including six-team normal 6er vs 6er Doppelrunde mode (FR-008a) |
 | POST | `/api/raster/input-sets/{id}/validate` | admin | Validate completeness/schema; returns errors or `ready` (FR-008) |
 
 ## Hall capacity
@@ -46,7 +47,7 @@ Viewer role: all GET only; every POST/PUT above returns 403 for viewer (FR-028).
 
 Handler in `webapp/worker/`. Input: `{ runId }`.
 
-1. Load InputSet (wishes, capacities, fixed Rasterzahlen); build solver input files.
+1. Load InputSet (wishes, capacities, fixed Rasterzahlen, reviewed group modes); build solver input files.
 2. Spawn `uv run --python 3.12 scripts/solve-raster-cpsat.py --input <in> --output <out> --settings <json>` as a subprocess.
 3. On exit: parse solver output; map CP-SAT status → `outcome` (`OPTIMAL`→`proven_optimal`, `FEASIBLE`→`feasible`, `INFEASIBLE`→`infeasible`, non-zero/timeout→`failed`/`cancelled`).
 4. Run `src/raster/report` + `src/raster/score` to derive conflicts/assignments/metrics.
@@ -57,7 +58,7 @@ Handler in `webapp/worker/`. Input: `{ runId }`.
 
 ## Solver I/O contract (worker ↔ Python)
 
-- **Input**: JSON file — teams (with club, weekday, hall, requested/fixed Rasterzahl), hall capacities, rulebook/spielwochen config.
+- **Input**: JSON file — teams (with club, weekday, hall, requested/fixed Rasterzahl), groups (including reviewed `rasterMode` for 6er Doppelrunde), hall capacities, rulebook/spielwochen config.
 - **Output**: JSON file — per-team assigned Rasterzahl + status, solver status, objective value, objective breakdown.
 - Exact schema pinned during implementation in `webapp/src/lib/raster/solver-io.ts` (zod) mirrored on the Python side.
 </content>

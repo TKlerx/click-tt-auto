@@ -44,7 +44,7 @@ export function findOverUsages(
     );
     const capacity = venue?.capacityByWeekday?.[team.homeWeekday] ?? venue?.capacity ?? (inferredCapacity || undefined);
     if (capacity === undefined) continue;
-    for (const week of new Set(deriveHomeWeeks(group.size, rz).weeks)) {
+    for (const week of new Set(deriveHomeWeeks(group.size, rz, group.rasterMode).weeks)) {
       const key = `${team.clubId}|${team.hall}|${team.homeWeekday}|${week}`;
       const bucket = slots.get(key) ?? { teams: [], capacity };
       bucket.teams.push(team.id);
@@ -91,9 +91,9 @@ export function evaluateWishes(
     if (!groupA || !groupB || rzA === undefined || rzB === undefined)
       return { wish, status: "unknown", reason: "missing group or assignment" };
     const actual = relation(
-      deriveHomeWeeks(groupA.size, rzA).rasterSize,
+      deriveHomeWeeks(groupA.size, rzA, groupA.rasterMode).rasterSize,
       rzA,
-      deriveHomeWeeks(groupB.size, rzB).rasterSize,
+      deriveHomeWeeks(groupB.size, rzB, groupB.rasterMode).rasterSize,
       rzB
     );
     if (actual === wish.relation) return { wish, status: "fulfilled" };

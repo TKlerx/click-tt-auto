@@ -1,4 +1,5 @@
-export type RasterSize = 10 | 12 | 14;
+export type RasterSize = 6 | "6d" | 8 | 10 | 12 | 14;
+export type RasterMode = "single" | "double";
 export type Weekday =
   | "monday"
   | "tuesday"
@@ -75,6 +76,7 @@ export interface Team {
 export interface Group {
   ref: GroupRef;
   size: number;
+  rasterMode?: RasterMode;
   teamIds: string[];
 }
 

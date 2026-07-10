@@ -48,6 +48,7 @@ An admin/scheduler provides the district inputs (club wishes, hall capacities, f
 6. **Given** a run reaches its configured limit before proof, **When** a scheduler opens the snapshot, **Then** it clearly states the assignment is feasible but not proven optimal.
 7. **Given** no valid assignment exists under the hard constraints, **When** the run finishes, **Then** the app reports that no feasible solution was found and shows the relevant blocking constraints where available.
 8. **Given** two same-club teams share one group, **When** a generated assignment uses the Spieltag-4 derby fallback, **Then** the snapshot shows that fallback in the objective breakdown; Spieltag 5 or later is treated as infeasible/invalid and is never persisted as a valid generated assignment.
+9. **Given** the parsed input set contains any six-team group, **When** an admin reviews the input set before starting a run, **Then** the app shows those groups on a confirmation step and lets the admin choose normal 6er or 6er Doppelrunde for each group; the run cannot start until every six-team group has an explicit mode.
 
 ---
 
@@ -137,6 +138,7 @@ An admin imports a snapshot produced by the legacy external optimizer into the s
 - Pasted wishes JSON (produced by the user's external LLM) does not match the expected schema or is incomplete — the app must report the validation errors and let the user fix it before a run.
 - Wishes conflict with a fixed upper-league Rasterzahl (the fixed value must win).
 - Same-club teams in one group cannot all meet by Spieltag 3 without worsening hall usage; Spieltag 4 is allowed with a high optimizer penalty and must be visible in the run breakdown, while Spieltag 5+ remains invalid.
+- A six-team group is ambiguous after parsing because click-TT may expose the roster size but not whether the official normal 6er or 6er Doppelrunde table should be used; the app must require explicit review before solving.
 - A club name differs between wishes, capacity, and assignment inputs.
 - Hall capacity is only a guessed/inferred default when a run starts.
 - A capacity edit would reduce capacity below the actual number of teams in an already reviewed conflict.
@@ -160,6 +162,7 @@ An admin imports a snapshot produced by the legacy external optimizer into the s
 - **FR-006**: The system MUST provide search over hall-capacity records by club, hall, and weekday.
 - **FR-007**: Authorized users MUST be able to provide the fixed upper-league Rasterzahlen as a PDF, manual entry, or structured upload, and the system MUST treat them as hard constraints that generated assignments never violate.
 - **FR-008**: The system MUST validate an input set for completeness and schema before a run and surface clear errors for missing or malformed inputs.
+- **FR-008a**: The system MUST include a group-review step before validation/run start. For every six-team group, an admin MUST explicitly select `normal 6er` or `6er Doppelrunde`; this selected group mode is persisted in the input set's season model and is passed to the optimizer.
 
 #### Generation / Optimization
 
@@ -169,6 +172,7 @@ An admin imports a snapshot produced by the legacy external optimizer into the s
 - **FR-012**: For proven-optimal and feasible runs, the system MUST create a review snapshot containing assignment output, conflict output, objective value, solver status, run settings, and a reference to the input set used.
 - **FR-013**: The system MUST clearly distinguish proven-optimal assignments from feasible-only or imported heuristic assignments in all snapshot and assignment views.
 - **FR-013a**: The system MUST preserve and display the optimizer objective breakdown, including hall overages, fairness, broken relational wishes, Spielwoche misses, and Spieltag-4 same-club derby fallback count. Same-club derbies on Spieltag 5 or later MUST be treated as hard invalid results and must not be persisted as valid generated snapshots.
+- **FR-013b**: The optimization pipeline MUST support official 6er, 6er Doppelrunde, and 7/8er groups in addition to 9/10er, 11/12er, and 13/14er groups, using the reviewed group mode and encoded WTTV rulebook tables.
 
 #### Snapshots & Review
 
@@ -199,6 +203,7 @@ An admin imports a snapshot produced by the legacy external optimizer into the s
 - **User**: A person who signs into the app, with permissions via a role.
 - **Role**: A permission level (admin, scheduler, viewer) governing upload, run, capacity edit, review, and user management.
 - **Input Set**: A named collection of the wishes, hall capacities, and fixed upper-league Rasterzahlen used for one generation run.
+- **Group Review**: A reviewed group roster and mode selection. Six-team groups require an explicit normal-vs-Doppelrunde mode before validation.
 - **Wish**: A club's scheduling preference/constraint for its teams (uploaded structured or extracted from PDF, reviewable/correctable).
 - **Fixed Rasterzahl (Upper League)**: A pre-set, immovable Rasterzahl an upper-league team already holds; a hard constraint on generation.
 - **Hall Capacity**: The reviewed, inferred/guessed, or missing maximum number of parallel home matches for one club, hall, and weekday.
@@ -224,6 +229,7 @@ An admin imports a snapshot produced by the legacy external optimizer into the s
 - **SC-009**: Role checks prevent 100% of non-authorized capacity edits, input uploads, run starts, and user-management actions during acceptance testing.
 - **SC-010**: After a capacity or input edit, all affected snapshot views visibly indicate stale review data before the user can treat the old conflicts as final.
 - **SC-011**: Input validation identifies mismatched or incomplete input sets before a run starts.
+- **SC-011a**: A run cannot start while any six-team group lacks a reviewed mode, and a generated six-team Doppelrunde assignment uses the Doppelrunde rulebook table for penalties, conflicts, and derby display.
 - **SC-012**: At least 95% of completed runs display their final outcome, objective value, and generated snapshot link without manual log inspection.
 - **SC-013**: Users can distinguish proven-optimal, feasible-only, and imported heuristic snapshots within 5 seconds of opening a snapshot.
 - **SC-014**: If a generated snapshot uses any Spieltag-4 same-club derby fallback, a scheduler can see the count and affected objective component within 5 seconds of opening the snapshot; no Spieltag-5-or-later same-club derby is stored as a valid generated snapshot.

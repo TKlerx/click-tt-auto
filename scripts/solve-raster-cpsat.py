@@ -22,6 +22,7 @@ def load_json(path: Path) -> Any:
 
 
 HOME_ROWS = load_json(RULEBOOK / "templates.json")
+PAIRING_ROWS = load_json(RULEBOOK / "pairings.json")
 SPIELWOCHEN = load_json(RULEBOOK / "spielwochen.json")
 CROSS_SIZE = load_json(RULEBOOK / "cross-size.json")
 DEFAULT_WEIGHTS = {
@@ -34,24 +35,44 @@ DEFAULT_WEIGHTS = {
 }
 
 
-def raster_size_for_group_size(size: int) -> int:
+def raster_key_for_group(group: dict[str, Any]) -> str:
+    size = int(group["size"])
+    if size == 6 and group.get("rasterMode") == "double":
+        return "6d"
+    if size == 6:
+        return "6"
+    if size in (7, 8):
+        return "8"
     if size in (9, 10):
-        return 10
+        return "10"
     if size in (11, 12):
-        return 12
+        return "12"
     if size in (13, 14):
-        return 14
-    raise ValueError(f"Unsupported group size {size}; supported district sizes are 9..14.")
+        return "14"
+    raise ValueError(f"Unsupported group size {size}; supported district sizes are 6..14.")
 
 
-def circle_pairs(size: int) -> list[list[dict[str, int]]]:
-    teams = list(range(1, size + 1))
+def raster_size_for_group_size(size: int) -> int:
+    key = raster_key_for_group({"size": size})
+    return 6 if key == "6d" else int(key)
+
+
+def numeric_raster_size(key: str) -> int:
+    return 6 if key == "6d" else int(key)
+
+
+def circle_pairs(size: str) -> list[list[dict[str, int]]]:
+    if size in PAIRING_ROWS:
+        return PAIRING_ROWS[size]
+
+    numeric_size = int(size)
+    teams = list(range(1, numeric_size + 1))
     rotating = teams[1:]
     rounds: list[list[dict[str, int]]] = []
-    for round_index in range(size - 1):
+    for round_index in range(numeric_size - 1):
         row = [teams[0], *rotating]
-        raw_pairs = [(row[index], row[size - 1 - index]) for index in range(size // 2)]
-        homes = set(HOME_ROWS[str(size)][round_index])
+        raw_pairs = [(row[index], row[numeric_size - 1 - index]) for index in range(numeric_size // 2)]
+        homes = set(HOME_ROWS[size][round_index])
         rounds.append(
             [{"home": a, "away": b} if a in homes else {"home": b, "away": a} for a, b in raw_pairs]
         )
@@ -59,13 +80,14 @@ def circle_pairs(size: int) -> list[list[dict[str, int]]]:
     return rounds
 
 
-def home_weeks(group_size: int, rasterzahl: int) -> list[int]:
-    size = raster_size_for_group_size(group_size)
-    bye = size if group_size % 2 == 1 else None
+def home_weeks_for_group(group: dict[str, Any], rasterzahl: int) -> list[int]:
+    size = raster_key_for_group(group)
+    group_size = int(group["size"])
+    bye = int(size) if group_size % 2 == 1 else None
     if rasterzahl == bye:
         return []
     weeks: list[int] = []
-    week_map = SPIELWOCHEN[str(size)]
+    week_map = SPIELWOCHEN[size]
     template = circle_pairs(size)
     for round_index, pairings in enumerate(template):
         pairing = next(
@@ -76,31 +98,36 @@ def home_weeks(group_size: int, rasterzahl: int) -> list[int]:
             ),
             None,
         )
-        homes = set(HOME_ROWS[str(size)][round_index])
+        homes = set(HOME_ROWS[size][round_index])
         if pairing and rasterzahl in homes and pairing["home"] != bye and pairing["away"] != bye:
             weeks.append(week_map[round_index])
-    for round_index, pairings in enumerate(template):
-        pairing = next(
-            (
-                candidate
-                for candidate in pairings
-                if candidate["home"] == rasterzahl or candidate["away"] == rasterzahl
-            ),
-            None,
-        )
-        if pairing and pairing["away"] == rasterzahl and pairing["home"] != bye:
-            weeks.append(week_map[len(template) + round_index])
+    if size != "6d":
+        for round_index, pairings in enumerate(template):
+            pairing = next(
+                (
+                    candidate
+                    for candidate in pairings
+                    if candidate["home"] == rasterzahl or candidate["away"] == rasterzahl
+                ),
+                None,
+            )
+            if pairing and pairing["away"] == rasterzahl and pairing["home"] != bye:
+                weeks.append(week_map[len(template) + round_index])
     return weeks
 
 
-def week_slot(group_size: int, rasterzahl: int) -> str:
-    weeks = home_weeks(group_size, rasterzahl)
+def home_weeks(group_size: int, rasterzahl: int) -> list[int]:
+    return home_weeks_for_group({"size": group_size}, rasterzahl)
+
+
+def week_slot_for_group(group: dict[str, Any], rasterzahl: int) -> str:
+    weeks = home_weeks_for_group(group, rasterzahl)
     odd = sum(1 for week in weeks if week % 2 == 1)
     return "A" if odd >= len(weeks) - odd else "B"
 
 
-def derby_spieltag(group_size: int, a: int, b: int) -> int | None:
-    size = raster_size_for_group_size(group_size)
+def derby_spieltag_for_group(group: dict[str, Any], a: int, b: int) -> int | None:
+    size = raster_key_for_group(group)
     key = tuple(sorted((a, b)))
     for round_index, pairings in enumerate(circle_pairs(size)):
         for pairing in pairings:
@@ -109,11 +136,11 @@ def derby_spieltag(group_size: int, a: int, b: int) -> int | None:
     return None
 
 
-def relation(group_size_a: int, rz_a: int, group_size_b: int, rz_b: int) -> str:
-    size_a = raster_size_for_group_size(group_size_a)
-    size_b = raster_size_for_group_size(group_size_b)
+def relation(group_a: dict[str, Any], rz_a: int, group_b: dict[str, Any], rz_b: int) -> str:
+    size_a = raster_key_for_group(group_a)
+    size_b = raster_key_for_group(group_b)
     if size_a == size_b:
-        rows = HOME_ROWS[str(size_a)]
+        rows = HOME_ROWS[size_a]
         a_home = {index + 1 for index, homes in enumerate(rows) if rz_a in homes}
         b_home = {index + 1 for index, homes in enumerate(rows) if rz_b in homes}
         overlap = len(a_home & b_home)
@@ -123,18 +150,18 @@ def relation(group_size_a: int, rz_a: int, group_size_b: int, rz_b: int) -> str:
             return "zeitgleich"
         return "neither"
     for row in CROSS_SIZE:
-        if row["a"] == size_a and row["b"] == size_b:
+        if row["a"] == numeric_raster_size(size_a) and row["b"] == numeric_raster_size(size_b):
             if [rz_a, rz_b] in row["imWechsel"]:
                 return "wechsel"
             if [rz_a, rz_b] in row["zeitgleich"]:
                 return "zeitgleich"
-        if row["a"] == size_b and row["b"] == size_a:
+        if row["a"] == numeric_raster_size(size_b) and row["b"] == numeric_raster_size(size_a):
             if [rz_b, rz_a] in row["imWechsel"]:
                 return "wechsel"
             if [rz_b, rz_a] in row["zeitgleich"]:
                 return "zeitgleich"
-    weeks_a = set(home_weeks(group_size_a, rz_a))
-    weeks_b = set(home_weeks(group_size_b, rz_b))
+    weeks_a = set(home_weeks_for_group(group_a, rz_a))
+    weeks_b = set(home_weeks_for_group(group_b, rz_b))
     overlap = len(weeks_a & weeks_b)
     if overlap == 0:
         return "wechsel"
@@ -218,7 +245,7 @@ def main() -> None:
                     for b in range(1, int(group["size"]) + 1):
                         if a == b:
                             continue
-                        day = derby_spieltag(int(group["size"]), a, b)
+                        day = derby_spieltag_for_group(group, a, b)
                         if day is None or day <= 4:
                             allowed.append((a, b, int(day == 4)))
                 model.add_allowed_assignments([rz[left_id], rz[right_id], is_st4], allowed)
@@ -229,10 +256,10 @@ def main() -> None:
         group = team_group.get(team_id)
         if not group:
             continue
-        all_weeks = sorted({week for value in range(1, int(group["size"]) + 1) for week in home_weeks(int(group["size"]), value)})
+        all_weeks = sorted({week for value in range(1, int(group["size"]) + 1) for week in home_weeks_for_group(group, value)})
         for week in all_weeks:
             var = model.new_bool_var(f"home_{team_id}_{week}")
-            table = [(value, int(week in home_weeks(int(group["size"]), value))) for value in range(1, int(group["size"]) + 1)]
+            table = [(value, int(week in home_weeks_for_group(group, value))) for value in range(1, int(group["size"]) + 1)]
             model.add_allowed_assignments([rz[team_id], var], table)
             home_bool[(team_id, week)] = var
 
@@ -241,7 +268,7 @@ def main() -> None:
         {
             (team["clubId"], team["hall"], team["homeWeekday"], week)
             for team in season["teams"]
-            for week in sorted({week for value in range(1, int(team_group.get(team["id"], {"size": 0})["size"]) + 1) for week in home_weeks(int(team_group.get(team["id"], {"size": 0})["size"]), value)})
+            for week in sorted({week for value in range(1, int(team_group.get(team["id"], {"size": 0})["size"]) + 1) for week in home_weeks_for_group(team_group.get(team["id"], {"size": 0}), value)})
             if capacity_for(season, team) is not None and team["id"] in team_group
         }
     )
@@ -285,7 +312,7 @@ def main() -> None:
         ok_pairs = []
         for a in range(1, int(group_a["size"]) + 1):
             for b in range(1, int(group_b["size"]) + 1):
-                if relation(int(group_a["size"]), a, int(group_b["size"]), b) == wish["relation"]:
+                if relation(group_a, a, group_b, b) == wish["relation"]:
                     ok_pairs.append((a, b, 0))
                 else:
                     ok_pairs.append((a, b, 1))
@@ -300,7 +327,7 @@ def main() -> None:
             if not pref or not group:
                 continue
             miss = model.new_bool_var(f"spielwoche_{team_id}")
-            table = [(value, int(week_slot(int(group["size"]), value) != pref)) for value in range(1, int(group["size"]) + 1)]
+            table = [(value, int(week_slot_for_group(group, value) != pref)) for value in range(1, int(group["size"]) + 1)]
             model.add_allowed_assignments([rz[team_id], miss], table)
             objective_terms.append(miss * int(weights["spielwoche"]))
 

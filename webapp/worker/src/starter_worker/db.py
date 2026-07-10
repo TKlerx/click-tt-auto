@@ -228,6 +228,7 @@ class JobStore:
                     SET status = 'RUNNING',
                         jobId = ?
                     WHERE id = ?
+                      AND status != 'CANCELLED'
                     """,
                     (job_id, run_id),
                 )
@@ -242,6 +243,7 @@ class JobStore:
                     SET status = 'RUNNING',
                         "jobId" = %s
                     WHERE id = %s
+                      AND status != 'CANCELLED'
                     """,
                     (job_id, run_id),
                 )
@@ -313,7 +315,7 @@ class JobStore:
                 connection.row_factory = sqlite3.Row
                 row = connection.execute(
                     """
-                    SELECT run.id, run.settings, input.district, input.seasonModelJson
+                    SELECT run.id, run.status, run.settings, input.district, input.seasonModelJson
                     FROM RasterOptimizationRun run
                     JOIN RasterInputSet input ON input.id = run.inputSetId
                     WHERE run.id = ?
@@ -328,7 +330,7 @@ class JobStore:
             with connection.cursor() as cursor:
                 cursor.execute(
                     """
-                    SELECT run.id, run.settings, input.district, input."seasonModelJson"
+                    SELECT run.id, run.status, run.settings, input.district, input."seasonModelJson"
                     FROM "RasterOptimizationRun" run
                     JOIN "RasterInputSet" input ON input.id = run."inputSetId"
                     WHERE run.id = %s
@@ -340,6 +342,29 @@ class JobStore:
             if row is None:
                 raise ValueError(f"Raster run {run_id} not found")
             return dict(row)
+
+    def get_raster_run_status(self, run_id: str) -> str:
+        if self._is_sqlite:
+            with closing(self._sqlite_conn()) as connection:
+                row = connection.execute(
+                    "SELECT status FROM RasterOptimizationRun WHERE id = ?",
+                    (run_id,),
+                ).fetchone()
+                if row is None:
+                    raise ValueError(f"Raster run {run_id} not found")
+                return str(row[0])
+
+        with psycopg.connect(self._postgres_database_url) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    'SELECT status FROM "RasterOptimizationRun" WHERE id = %s',
+                    (run_id,),
+                )
+                row = cursor.fetchone()
+            connection.commit()
+            if row is None:
+                raise ValueError(f"Raster run {run_id} not found")
+            return str(row[0])
 
     def list_raster_hall_capacities(self, district: str) -> list[dict[str, Any]]:
         if self._is_sqlite:
@@ -1406,7 +1431,7 @@ def _find_overage_rows(model: dict[str, Any], assignment: dict[str, Any]) -> lis
         capacity = _capacity_for(clubs, team)
         if capacity is None:
             continue
-        for week in _home_weeks(int(group.get("size") or 0), rasterzahl):
+        for week in _home_weeks(group, rasterzahl):
             key = (
                 str(team.get("clubId") or ""),
                 str(team.get("hall") or "1"),
@@ -1458,22 +1483,146 @@ def _capacity_for(clubs: list[dict[str, Any]], team: dict[str, Any]) -> int | No
     return None
 
 
-def _home_weeks(group_size: int, rasterzahl: int) -> list[int]:
-    weeks_by_rz = {
-        1: [1, 3, 5, 7, 9, 11, 13, 15, 17],
-        2: [2, 4, 6, 8, 10, 12, 14, 16, 18],
-        3: [1, 4, 5, 8, 9, 12, 13, 16, 17],
-        4: [2, 3, 6, 7, 10, 11, 14, 15, 18],
-        5: [1, 3, 6, 8, 9, 11, 14, 16, 17],
-        6: [2, 4, 5, 7, 10, 12, 13, 15, 18],
-        7: [1, 4, 6, 7, 9, 12, 14, 15, 17],
-        8: [2, 3, 5, 8, 10, 11, 13, 16, 18],
-        9: [1, 3, 5, 7, 10, 12, 14, 16, 17],
-        10: [],
-    }
-    if group_size not in (9, 10):
+def _home_weeks(group: dict[str, Any], rasterzahl: int) -> list[int]:
+    size = _raster_size_for_group(group)
+    group_size = int(group.get("size") or 0)
+    bye = size if group_size % 2 == 1 else None
+    if rasterzahl == bye:
         return []
-    return weeks_by_rz.get(rasterzahl, [])
+
+    weeks: list[int] = []
+    week_map = _SPIELWOCHEN[size]
+    template = _circle_pairs(size)
+    for round_index, pairings in enumerate(template):
+        pairing = next(
+            (
+                candidate
+                for candidate in pairings
+                if candidate["home"] == rasterzahl or candidate["away"] == rasterzahl
+            ),
+            None,
+        )
+        homes = set(_HOME_ROWS[size][round_index])
+        if pairing and rasterzahl in homes and pairing["home"] != bye and pairing["away"] != bye:
+            weeks.append(week_map[round_index])
+    if size != "6d":
+        for round_index, pairings in enumerate(template):
+            pairing = next(
+                (
+                    candidate
+                    for candidate in pairings
+                    if candidate["home"] == rasterzahl or candidate["away"] == rasterzahl
+                ),
+                None,
+            )
+            if pairing and pairing["away"] == rasterzahl and pairing["home"] != bye:
+                weeks.append(week_map[len(template) + round_index])
+    return weeks
+
+
+def _raster_size_for_group(group: dict[str, Any]) -> int | str:
+    group_size = int(group.get("size") or 0)
+    if group_size == 6 and group.get("rasterMode") == "double":
+        return "6d"
+    if group_size == 6:
+        return 6
+    if group_size in (7, 8):
+        return 8
+    if group_size in (9, 10):
+        return 10
+    if group_size in (11, 12):
+        return 12
+    if group_size in (13, 14):
+        return 14
+    raise ValueError(f"Unsupported group size {group_size}")
+
+
+def _circle_pairs(size: int | str) -> list[list[dict[str, int]]]:
+    if size in _PAIRING_ROWS:
+        return _PAIRING_ROWS[size]
+    size = int(size)
+    teams = list(range(1, size + 1))
+    rotating = teams[1:]
+    rounds: list[list[dict[str, int]]] = []
+    for round_index in range(size - 1):
+        row = [teams[0], *rotating]
+        raw_pairs = [(row[index], row[size - 1 - index]) for index in range(size // 2)]
+        homes = set(_HOME_ROWS[size][round_index])
+        rounds.append(
+            [{"home": a, "away": b} if a in homes else {"home": b, "away": a} for a, b in raw_pairs]
+        )
+        rotating = [rotating[-1], *rotating[:-1]]
+    return rounds
+
+
+_HOME_ROWS = {
+    6: [[1, 2, 3], [6, 5, 1], [2, 3, 4], [6, 1, 2], [3, 4, 5]],
+    "6d": [[1, 2, 3], [6, 5, 1], [2, 3, 4], [6, 1, 2], [3, 4, 5], [6, 5, 4], [4, 3, 2], [6, 1, 5], [5, 4, 3], [6, 2, 1]],
+    8: [[1, 2, 3, 4], [8, 6, 7, 1], [2, 3, 4, 5], [8, 7, 1, 2], [3, 4, 5, 6], [8, 1, 2, 3], [4, 5, 6, 7]],
+    10: [
+        [1, 2, 3, 4, 5],
+        [10, 7, 8, 9, 1],
+        [2, 3, 4, 5, 6],
+        [10, 8, 9, 1, 2],
+        [3, 4, 5, 6, 7],
+        [10, 9, 1, 2, 3],
+        [4, 5, 6, 7, 8],
+        [10, 1, 2, 3, 4],
+        [5, 6, 7, 8, 9],
+    ],
+    12: [
+        [1, 2, 3, 4, 5, 6],
+        [12, 8, 9, 10, 11, 1],
+        [2, 3, 4, 5, 6, 7],
+        [12, 9, 10, 11, 1, 2],
+        [3, 4, 5, 6, 7, 8],
+        [12, 10, 11, 1, 2, 3],
+        [4, 5, 6, 7, 8, 9],
+        [12, 11, 1, 2, 3, 4],
+        [5, 6, 7, 8, 9, 10],
+        [12, 1, 2, 3, 4, 5],
+        [6, 7, 8, 9, 10, 11],
+    ],
+    14: [
+        [1, 2, 3, 4, 5, 6, 7],
+        [14, 9, 10, 11, 12, 13, 1],
+        [2, 3, 4, 5, 6, 7, 8],
+        [14, 10, 11, 12, 13, 1, 2],
+        [3, 4, 5, 6, 7, 8, 9],
+        [14, 11, 12, 13, 1, 2, 3],
+        [4, 5, 6, 7, 8, 9, 10],
+        [14, 12, 13, 1, 2, 3, 4],
+        [5, 6, 7, 8, 9, 10, 11],
+        [14, 13, 1, 2, 3, 4, 5],
+        [6, 7, 8, 9, 10, 11, 12],
+        [14, 1, 2, 3, 4, 5, 6],
+        [7, 8, 9, 10, 11, 12, 13],
+    ],
+}
+
+_PAIRING_ROWS = {
+    "6d": [
+        [{"home": 1, "away": 6}, {"home": 2, "away": 5}, {"home": 3, "away": 4}],
+        [{"home": 6, "away": 4}, {"home": 5, "away": 3}, {"home": 1, "away": 2}],
+        [{"home": 2, "away": 6}, {"home": 3, "away": 1}, {"home": 4, "away": 5}],
+        [{"home": 6, "away": 5}, {"home": 1, "away": 4}, {"home": 2, "away": 3}],
+        [{"home": 3, "away": 6}, {"home": 4, "away": 2}, {"home": 5, "away": 1}],
+        [{"home": 6, "away": 1}, {"home": 5, "away": 2}, {"home": 4, "away": 3}],
+        [{"home": 4, "away": 6}, {"home": 3, "away": 5}, {"home": 2, "away": 1}],
+        [{"home": 6, "away": 2}, {"home": 1, "away": 3}, {"home": 5, "away": 4}],
+        [{"home": 5, "away": 6}, {"home": 4, "away": 1}, {"home": 3, "away": 2}],
+        [{"home": 6, "away": 3}, {"home": 2, "away": 4}, {"home": 1, "away": 5}],
+    ]
+}
+
+_SPIELWOCHEN = {
+    6: [1, 2, 5, 6, 9, 11, 12, 15, 16, 19],
+    "6d": [1, 2, 5, 6, 9, 11, 12, 15, 16, 19],
+    8: [1, 2, 3, 4, 5, 6, 7, 11, 12, 15, 16, 17, 18, 19],
+    10: [1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 18, 19],
+    12: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21],
+    14: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25],
+    }
 
 
 def _weekday_to_db(value: str) -> str:

@@ -202,6 +202,50 @@ class WorkerTests(unittest.TestCase):
         self.assertEqual(snapshot["totalConflicts"], 0)
         self.assertEqual([tuple(row) for row in assignments], [("I", 1), ("II", 2)])
 
+    def test_process_raster_run_skips_cancelled_run(self) -> None:
+        store = self._make_store()
+        with closing(sqlite3.connect(self.db_path)) as connection:
+            connection.execute(
+                """
+                INSERT INTO RasterInputSet (id, district, seasonModelJson)
+                VALUES ('input-1', 'OWL', '{}')
+                """
+            )
+            connection.execute(
+                """
+                INSERT INTO RasterOptimizationRun (id, inputSetId, status, outcome, settings)
+                VALUES ('run-1', 'input-1', 'CANCELLED', 'CANCELLED', '{}')
+                """
+            )
+            connection.commit()
+
+        with patch("starter_worker.main._solve_raster_model") as solve:
+            result = process_raster_run(
+                store,
+                type(
+                    "Job",
+                    (),
+                    {
+                        "id": "job-1",
+                        "job_type": "raster_run",
+                        "payload": {"runId": "run-1"},
+                    },
+                )(),
+            )
+
+        with closing(sqlite3.connect(self.db_path)) as connection:
+            row = connection.execute(
+                "SELECT status, outcome, jobId FROM RasterOptimizationRun WHERE id = 'run-1'",
+            ).fetchone()
+            snapshots = connection.execute(
+                "SELECT COUNT(*) FROM RasterSnapshot WHERE runId = 'run-1'",
+            ).fetchone()[0]
+
+        solve.assert_not_called()
+        self.assertEqual(result["status"], "CANCELLED")
+        self.assertEqual(row, ("CANCELLED", "CANCELLED", None))
+        self.assertEqual(snapshots, 0)
+
     def test_worker_runtime_has_ortools(self) -> None:
         result = subprocess.run(
             [sys.executable, "-c", "import ortools"],

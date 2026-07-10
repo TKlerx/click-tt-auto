@@ -1,12 +1,12 @@
 # Raster Open Points
 
-## Webapp Generation Gap
+## Webapp Generation Status
 
 - The webapp can collect/review wishes, fixed Rasterzahlen, hall capacities, imported snapshots, assignments, conflicts, and review decisions.
-- The `raster_run` worker job currently transitions status and has OR-Tools available, but generated runs are not complete yet.
-- To complete generated runs, the webapp still needs a persisted team/group context table or upload that answers: league, group, club, team label, division/category, and whether a row came from public click-TT or fixed upper-league data.
-- Once that context exists, T022 can build solver input by joining: input-set wishes + fixed Rasterzahlen + hall capacities + team/group context.
-- Until then, imported snapshots are the honest review path for webapp UI testing.
+- The `raster_run` worker job builds solver input from the reviewed season model, wishes, fixed Rasterzahlen, and hall capacities, then persists generated assignments and conflicts.
+- Six-team groups must be reviewed after click-TT parsing and marked as either normal 6er or 6er Doppelrunde before generated runs can start.
+- 6er Doppelrunde uses the ten first-half matchdays from the PDF template and is not expanded with a synthetic second half, because Rasterzahlen are reassigned at the mid-season break.
+- Imported snapshots remain available for review and comparison against generated runs.
 
 ## CSV Pipeline
 
@@ -20,4 +20,4 @@
 - The join review should have zero `missing-public-and-fixed` rows once public data plus fixed upper assignments cover every admin PDF team.
 - Review `missing-admin-pdf-team` rows; these usually mean the current admin PDF set is incomplete for the scraped public scope.
 - Add hall capacity rows only where capacity is constrained. Missing capacity means unlimited.
-- Run the optimizer after the review CSVs and fixed assignments have been checked by a human.
+- Run the optimizer after the review CSVs, fixed assignments, and 6er group modes have been checked by a human.

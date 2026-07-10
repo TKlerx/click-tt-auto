@@ -10,17 +10,47 @@ export type ConflictRow = {
   teams: string;
 };
 
-export function ConflictOverview({ conflicts }: { conflicts: ConflictRow[] }) {
-  if (!conflicts.length) {
+export type PenaltyEventRow = {
+  id: string;
+  severity: "PENALTY" | "HARD";
+  clubName: string;
+  league: string;
+  group: string;
+  spieltag: number;
+  teams: string[];
+};
+
+export function ConflictOverview({
+  conflicts,
+  penalties = [],
+}: {
+  conflicts: ConflictRow[];
+  penalties?: PenaltyEventRow[];
+}) {
+  if (!conflicts.length && !penalties.length) {
     return (
       <p className="rounded-lg border border-[var(--border)] px-4 py-6 text-sm text-[var(--muted-foreground)]">
-        No hall conflicts.
+        No penalty conflicts.
       </p>
     );
   }
 
   return (
     <div className="overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--panel)]">
+      {penalties.map((penalty) => (
+        <details
+          key={penalty.id}
+          className="border-b border-[var(--border)] px-4 py-3 last:border-b-0"
+        >
+          <summary className="cursor-pointer text-sm font-semibold">
+            Spieltag {penalty.spieltag}: {penalty.clubName}, {penalty.league}{" "}
+            {penalty.group}: {penalty.severity}
+          </summary>
+          <p className="mt-2 text-sm text-[var(--muted-foreground)]">
+            Same-club match after Spieltag 3: {penalty.teams.join(" / ")}
+          </p>
+        </details>
+      ))}
       {conflicts.map((conflict) => (
         <details
           key={conflict.id}

@@ -1,6 +1,17 @@
 import { requireSession } from "@/lib/auth";
 import { assertRasterAccess } from "@/lib/raster/access";
+import {
+  GroupModeReview,
+  type GroupModeReviewRow,
+} from "@/components/raster/group-mode-review";
 import { listInputSets } from "@/services/raster";
+
+type SeasonGroup = {
+  id?: string;
+  ref?: { league?: string; name?: string };
+  size?: number;
+  rasterMode?: "single" | "double";
+};
 
 export default async function RasterPage({
   searchParams,
@@ -40,17 +51,26 @@ export default async function RasterPage({
           <span>Runs</span>
         </div>
         {inputSets.length ? (
-          inputSets.map((inputSet) => (
-            <div
-              key={inputSet.id}
-              className="grid grid-cols-[minmax(12rem,1fr)_8rem_8rem_8rem] gap-3 border-b border-[var(--border)] px-4 py-3 text-sm last:border-b-0"
-            >
-              <span className="font-medium">{inputSet.name}</span>
-              <span>{inputSet.status}</span>
-              <span>{inputSet._count.wishes}</span>
-              <span>{inputSet._count.runs}</span>
-            </div>
-          ))
+          inputSets.map((inputSet) => {
+            const sixTeamGroups = extractSixTeamGroups(
+              inputSet.id,
+              inputSet.seasonModelJson,
+            );
+            return (
+              <div
+                key={inputSet.id}
+                className="border-b border-[var(--border)] px-4 py-3 text-sm last:border-b-0"
+              >
+                <div className="grid grid-cols-[minmax(12rem,1fr)_8rem_8rem_8rem] gap-3">
+                  <span className="font-medium">{inputSet.name}</span>
+                  <span>{inputSet.status}</span>
+                  <span>{inputSet._count.wishes}</span>
+                  <span>{inputSet._count.runs}</span>
+                </div>
+                <GroupModeReview groups={sixTeamGroups} />
+              </div>
+            );
+          })
         ) : (
           <p className="px-4 py-6 text-sm text-[var(--muted-foreground)]">
             No input sets.
@@ -59,4 +79,34 @@ export default async function RasterPage({
       </section>
     </div>
   );
+}
+
+function extractSixTeamGroups(
+  inputSetId: string,
+  seasonModelJson: string | null,
+): GroupModeReviewRow[] {
+  if (!seasonModelJson) return [];
+  let parsed: { groups?: SeasonGroup[] };
+  try {
+    parsed = JSON.parse(seasonModelJson) as { groups?: SeasonGroup[] };
+  } catch {
+    return [];
+  }
+  return (parsed.groups ?? [])
+    .filter((group) => Number(group.size) === 6)
+    .map((group) => {
+      const groupId =
+        group.id ??
+        [group.ref?.league, group.ref?.name].filter(Boolean).join("::");
+      return {
+        inputSetId,
+        groupId,
+        label:
+          [group.ref?.league, group.ref?.name].filter(Boolean).join(" / ") ||
+          groupId ||
+          "6-team group",
+        rasterMode: group.rasterMode ?? null,
+      };
+    })
+    .filter((group) => Boolean(group.groupId));
 }

@@ -2,6 +2,10 @@ import { prisma } from "@/lib/db";
 import { rasterDistrictWhere } from "@/lib/raster/access";
 import type { Prisma } from "../../../generated/prisma/client";
 import {
+  derbySpieltag,
+  rasterSizeForGroupSize,
+} from "../../../../src/raster/rulebook/index.js";
+import {
   SnapshotOptimality,
   SnapshotOrigin,
   type ReviewDecisionStatus,
@@ -15,6 +19,34 @@ type ImportedConflict = Omit<
   Prisma.RasterConflictCreateManyInput,
   "snapshotId"
 >;
+type AssignmentLike = {
+  id: string;
+  league: string;
+  group: string;
+  clubId: string;
+  clubName: string;
+  team: string;
+  rasterzahl: number;
+};
+type GroupModeLookup = Map<string, "single" | "double">;
+type SeasonModelGroups = {
+  groups?: Array<{
+    ref?: { league?: string; name?: string };
+    rasterMode?: "single" | "double";
+  }>;
+};
+
+export type SnapshotPenaltyEvent = {
+  id: string;
+  kind: "SAME_CLUB_AFTER_ST3";
+  severity: "PENALTY" | "HARD";
+  clubId: string;
+  clubName: string;
+  league: string;
+  group: string;
+  spieltag: number;
+  teams: string[];
+};
 
 export async function listSnapshots(district: string) {
   return prisma.rasterSnapshot.findMany({
@@ -48,6 +80,87 @@ export async function listSnapshotConflicts(
     },
     orderBy: [{ excess: "desc" }, { matchWeek: "asc" }],
   });
+}
+
+export async function listSnapshotPenaltyEvents(snapshotId: string) {
+  const snapshot = await prisma.rasterSnapshot.findUnique({
+    where: { id: snapshotId },
+    include: { run: { include: { inputSet: true } } },
+  });
+  return findSameClubMatchPenalties(
+    await prisma.rasterAssignment.findMany({
+      where: { snapshotId },
+      orderBy: [{ league: "asc" }, { group: "asc" }, { clubName: "asc" }],
+    }),
+    parseGroupModes(snapshot?.run?.inputSet.seasonModelJson),
+  );
+}
+
+export function findSameClubMatchPenalties(
+  assignments: AssignmentLike[],
+  groupModes: GroupModeLookup = new Map(),
+): SnapshotPenaltyEvent[] {
+  const byGroup = new Map<string, AssignmentLike[]>();
+  for (const row of assignments) {
+    const key = `${row.league}\u0000${row.group}`;
+    byGroup.set(key, [...(byGroup.get(key) ?? []), row]);
+  }
+  const events: SnapshotPenaltyEvent[] = [];
+
+  for (const groupAssignments of byGroup.values()) {
+    let rasterSize: ReturnType<typeof rasterSizeForGroupSize>;
+    try {
+      const group = groupAssignments[0]!;
+      rasterSize = rasterSizeForGroupSize(
+        groupAssignments.length,
+        groupModes.get(`${group.league}\u0000${group.group}`),
+      );
+    } catch {
+      continue;
+    }
+
+    for (const [leftIndex, left] of groupAssignments.entries()) {
+      for (const right of groupAssignments.slice(leftIndex + 1)) {
+        if (left.clubId !== right.clubId) continue;
+        const spieltag = derbySpieltag(
+          rasterSize,
+          left.rasterzahl,
+          right.rasterzahl,
+        );
+        if (spieltag === undefined || spieltag <= 3) continue;
+        events.push({
+          id: `${left.id}:${right.id}`,
+          kind: "SAME_CLUB_AFTER_ST3",
+          severity: spieltag === 4 ? "PENALTY" : "HARD",
+          clubId: left.clubId,
+          clubName: left.clubName,
+          league: left.league,
+          group: left.group,
+          spieltag,
+          teams: [left.team, right.team],
+        });
+      }
+    }
+  }
+
+  return events.sort((left, right) => left.spieltag - right.spieltag);
+}
+
+function parseGroupModes(seasonModelJson?: string | null): GroupModeLookup {
+  const modes: GroupModeLookup = new Map();
+  if (!seasonModelJson) return modes;
+  let parsed: SeasonModelGroups;
+  try {
+    parsed = JSON.parse(seasonModelJson) as SeasonModelGroups;
+  } catch {
+    return modes;
+  }
+  for (const group of parsed.groups ?? []) {
+    if (group.ref?.league && group.ref.name && group.rasterMode) {
+      modes.set(`${group.ref.league}\u0000${group.ref.name}`, group.rasterMode);
+    }
+  }
+  return modes;
 }
 
 export async function summarizeSnapshotConflicts(snapshotId: string) {

@@ -19,7 +19,7 @@ The scheduling math is a **table lookup over a pre-encoded constant** (the WTTV 
 **Project Type**: CLI tool (second subcommand family alongside `approve`)
 **Performance Goals**: none hard (SC-007) — correctness/optimality preferred; optimizer may run to convergence/exhaustion
 **Constraints**: only Rasterzahl is chosen (weekday/hall/time fixed); fixed higher-league Rasterzahlen immutable; each group is a permutation of `1..N`; same-club derby ≤ ST3 (fallback ST4)
-**Scale/Scope**: one district (~tens of groups, sizes 9–14 → 10/12/14er rasters, a few hundred teams); rulebook covers 6/8/10/12/14er but only 10/12/14er are in scope
+**Scale/Scope**: one district (~tens of groups, sizes 6–14 → 6/8/10/12/14er rasters, including explicit 6er Doppelrunde mode, a few hundred teams)
 
 ## Constitution Check
 
@@ -59,7 +59,7 @@ src/
 ├── raster-index.ts             # CLI entry for the `raster` subcommand family
 └── raster/
     ├── rulebook/
-    │   ├── templates.json       # per-size home/away grid (10/12/14er; 6/8er optional)
+    │   ├── templates.json       # per-size home/away grid (6/6d/8/10/12/14er)
     │   ├── cross-size.json      # korrespondierende Schlüsselzahlen (im Wechsel / zeitgleich)
     │   ├── spielwochen.json     # Spieltag → week-slot per size
     │   └── rulebook.ts          # typed loader + lookups (home weeks, derby ST, parity)
@@ -95,7 +95,7 @@ tests/
 
 ## Key Design Decisions
 
-1. **Rulebook as encoded constant.** Decode the five per-size templates, cross-size tables, and Spielwochen once into checked-in JSON; a unit test re-verifies each size against its published Gegenläufige/same-club tables the way `research.md` did for 12er. No runtime PDF parse of the rulebook (FR-021).
+1. **Rulebook as encoded constant.** Decode the per-size templates (including the official 6er Doppelrunde table), cross-size tables, and Spielwochen once into checked-in JSON; a unit test re-verifies each size against its published Gegenläufige/same-club tables the way `research.md` did for 12er. No runtime PDF parse of the rulebook (FR-021).
 2. **Scorer = pure lookups.** `derive.ts` turns (Rasterzahl, size) into a home-Spieltag set and, via Spielwochen, a home-week set; derby matchday and gegenläufig/gleichläufig are direct table reads. Cross-size sibling relations use `cross-size.json` (FR-005/008/009). Cheap and exact → satisfies SC-001/002/003.
 3. **Penalty model = weighted sum** (FR-018): configurable weights for hall over-usage, broken im Wechsel, broken zeitgleich, broken Spielwoche A/B. Hard constraints (permutation, fixed Rasterzahlen, derby ≤4) are enforced structurally, not penalized.
 4. **Optimizer exploits decomposition.** Clubs couple groups only where a club has related teams; the assignment problem splits into independent components. Solve each by branch-and-bound (no time limit → exact where the component is small), with a local-search fallback (simulated annealing) for any large component. Implemented in-house to avoid a heavy solver dependency.

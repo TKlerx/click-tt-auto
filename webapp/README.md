@@ -11,7 +11,9 @@ It currently supports:
 - uploading/pasting wishes as PDF-derived JSON or validated structured JSON;
 - uploading fixed upper-league Rasterzahlen as structured rows;
 - uploading and editing hall capacity as CSV rows;
+- reviewing six-team groups as normal 6er or 6er Doppelrunde before generation;
 - importing pre-computed snapshots with assignments and conflicts;
+- starting generated optimization runs backed by the Python CP-SAT worker;
 - reviewing assignments, hall-capacity conflicts, and review decisions;
 - auditing raster input uploads, run starts, capacity changes, and review decisions.
 
@@ -21,13 +23,13 @@ The permission mapping uses the baseline roles:
 - `SCOPE_ADMIN`: raster scheduler for assigned districts; can inspect data, edit capacity, and record review decisions, but cannot upload inputs, start runs, import snapshots, or manage users.
 - `SCOPE_USER`: viewer for assigned districts; read-only.
 
-The async `raster_run` worker job is scaffolded and the worker runtime includes OR-Tools. Generated optimization runs are not complete yet: the app still needs a persisted team/group context input, joined from public click-TT/fixed upper-league data, before it can build the CP-SAT solver input honestly. Imported snapshots are available for review while that gap is closed.
+The async `raster_run` worker job builds CP-SAT solver input from the reviewed season model, wishes, fixed Rasterzahlen, and hall capacities. Six-team groups are intentionally blocked until an admin confirms whether each group is a normal 6er or a 6er Doppelrunde; Doppelrunde uses the ten first-half matchdays from the PDF and is replanned after the mid-season break. Imported snapshots remain available for review and comparison.
 
 Focused checks used during Raster work:
 
 ```powershell
 pnpm --dir webapp run typecheck
-pnpm --dir webapp exec vitest run tests/unit/wishes-schema.test.ts tests/unit/run-outcome.test.ts tests/unit/fixed-constraint.test.ts tests/unit/raster-input-sets-route.test.ts tests/unit/background-jobs-route.test.ts
+pnpm --dir webapp exec vitest run tests/unit/wishes-schema.test.ts tests/unit/run-outcome.test.ts tests/unit/fixed-constraint.test.ts tests/unit/raster-input-sets-route.test.ts tests/unit/background-jobs-route.test.ts tests/unit/raster-input-sets-service.test.ts tests/unit/raster-penalties.test.ts
 pnpm --dir webapp exec playwright test tests/e2e/raster-roles.spec.ts
 cd webapp/worker; uv run python -m unittest tests.test_main.WorkerTests.test_worker_runtime_has_ortools tests.test_main.WorkerTests.test_process_raster_run_updates_run_status
 ```
