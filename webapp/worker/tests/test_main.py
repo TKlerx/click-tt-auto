@@ -19,6 +19,7 @@ from starter_worker.main import (
     _log_job_failed,
     _log_jobs_requeued_stale,
     _log_teams_poll_scheduled,
+    _solve_raster_model,
     process_inbound_mail_poll,
     process_job,
     process_raster_run,
@@ -255,6 +256,23 @@ class WorkerTests(unittest.TestCase):
         )
 
         self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_raster_solver_uses_worker_uv_project(self) -> None:
+        completed = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout="",
+            stderr="",
+        )
+        with (
+            patch.dict(os.environ, {"RASTER_SOLVER_SCRIPT": __file__}),
+            patch("starter_worker.main.subprocess.run", return_value=completed) as run,
+            patch("starter_worker.main.Path.read_text", side_effect=['{"team-a": 1}', '{"status": "OPTIMAL"}']),
+        ):
+            _solve_raster_model({"clubs": [], "teams": [], "groups": []}, {})
+
+        command = run.call_args.args[0]
+        self.assertEqual(command[:4], ["uv", "run", "--project", str(Path(__file__).parents[1])])
 
     def test_process_inbound_mail_poll_stores_bounces_and_entity_links(self) -> None:
         with (

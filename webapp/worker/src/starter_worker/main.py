@@ -197,6 +197,8 @@ def _solve_raster_model(model: dict[str, object], settings: dict[str, object]) -
         command = [
             "uv",
             "run",
+            "--project",
+            str(Path(__file__).resolve().parents[2]),
             "python",
             str(solver_script),
             "--model",

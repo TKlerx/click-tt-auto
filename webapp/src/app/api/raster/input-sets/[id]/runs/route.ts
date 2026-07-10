@@ -25,13 +25,20 @@ export async function POST(
     );
   }
 
-  const settings = runSettingsSchema.parse(
+  const parsed = runSettingsSchema.safeParse(
     await request.json().catch(() => ({})),
   );
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "Invalid run settings", issues: parsed.error.issues },
+      { status: 422 },
+    );
+  }
+
   const run = await startOptimizationRun({
     inputSetId: context.inputSet.id,
     startedById: context.user.id,
-    settings,
+    settings: parsed.data,
   });
   await logRasterAudit({
     action: AuditAction.RASTER_RUN_STARTED,
@@ -41,7 +48,7 @@ export async function POST(
     entityId: run.id,
     details: {
       inputSetId: context.inputSet.id,
-      settings,
+      settings: parsed.data,
     },
   });
 
