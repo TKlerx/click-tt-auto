@@ -57,7 +57,7 @@ async function SessionLayout({
   children: React.ReactNode;
 }) {
   const user = await sessionPromise;
-  const initialTheme = user?.themePreference ?? "LIGHT";
+  const initialTheme = user?.themePreference ?? "DARK";
   const messages = await getMessages();
 
   return (
