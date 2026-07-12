@@ -292,7 +292,8 @@ class WorkerTests(unittest.TestCase):
             )
 
         command = run.call_args.args[0]
-        self.assertEqual(command[:3], ["pnpm", "exec", "tsx"])
+        self.assertTrue(Path(command[0]).name.lower().startswith("pnpm"))
+        self.assertEqual(command[1:3], ["exec", "tsx"])
 
     def test_process_inbound_mail_poll_stores_bounces_and_entity_links(self) -> None:
         with (

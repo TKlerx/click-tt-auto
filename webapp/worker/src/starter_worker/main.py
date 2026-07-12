@@ -7,6 +7,7 @@ import json
 import subprocess
 import tempfile
 import time
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -242,7 +243,7 @@ def _raster_solver_command(
             os.environ.get("RASTER_HEURISTIC_SOLVER_SCRIPT")
             or repo_root / "scripts" / "solve-raster-heuristic.ts"
         )
-        return ["pnpm", "exec", "tsx", str(solver_script), *common]
+        return [_executable("pnpm"), "exec", "tsx", str(solver_script), *common]
     if strategy != "cp_sat":
         raise ValueError(f"Unsupported raster optimizer strategy: {strategy}")
     solver_script = Path(
@@ -259,6 +260,13 @@ def _raster_solver_command(
         "--time-limit",
         str(time_limit),
     ]
+
+
+def _executable(name: str) -> str:
+    found = shutil.which(name) or (shutil.which(f"{name}.cmd") if os.name == "nt" else None)
+    if not found:
+        raise ValueError(f"Required executable not found: {name}")
+    return found
 
 
 def _solver_weights(value: object) -> dict[str, int]:

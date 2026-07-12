@@ -1,5 +1,6 @@
 "use client";
 
+import { RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { withBasePath } from "@/lib/base-path";
@@ -20,6 +21,7 @@ type RasterRunRow = {
   status: string;
   outcome: string | null;
   objectiveValue: number | null;
+  settings?: string | null;
   createdAt: Date | string;
   finishedAt: Date | string | null;
   snapshot: { id: string } | null;
@@ -312,6 +314,16 @@ export function InputSetRunActions({
             {message}
           </span>
         ) : null}
+        <button
+          aria-label="Refresh runs"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-[var(--border)] text-[var(--muted-foreground)]"
+          disabled={busy !== null}
+          onClick={() => router.refresh()}
+          title="Refresh runs"
+          type="button"
+        >
+          <RefreshCw aria-hidden="true" className="h-4 w-4" />
+        </button>
       </div>
       {runs.length ? (
         <div className="grid gap-2 text-sm">
@@ -328,9 +340,12 @@ export function InputSetRunActions({
               className="grid gap-2 rounded-md border border-[var(--border)] px-3 py-2"
               key={run.id}
             >
-              <div className="grid gap-2 md:grid-cols-[9rem_12rem_minmax(8rem,1fr)_auto]">
+              <div className="grid gap-2 md:grid-cols-[9rem_12rem_10rem_minmax(8rem,1fr)_auto]">
                 <span className="font-medium">{run.status}</span>
                 <span>{run.outcome ?? runStatusLabel(run.status)}</span>
+                <span className="text-[var(--muted-foreground)]">
+                  {runStrategyLabel(run.settings)}
+                </span>
                 <span className="text-[var(--muted-foreground)]">
                   {new Date(run.createdAt).toLocaleString()}
                 </span>
@@ -371,6 +386,17 @@ function runStatusLabel(status: string) {
   if (status === "RUNNING") return "Worker is processing";
   if (status === "CANCELLED") return "Cancelled";
   return "No outcome yet";
+}
+
+function runStrategyLabel(settings: string | null | undefined) {
+  try {
+    const parsed = JSON.parse(settings ?? "{}") as { strategy?: unknown };
+    if (parsed.strategy === "initial_heuristic") return "Initial heuristic";
+    if (parsed.strategy === "manual") return "Manual";
+    return "CP-SAT";
+  } catch {
+    return "CP-SAT";
+  }
 }
 
 function RunPhaseBar({
