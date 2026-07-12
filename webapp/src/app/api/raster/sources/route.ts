@@ -2,11 +2,13 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireApiUser } from "@/lib/route-auth";
 import { assertRasterAccess } from "@/lib/raster/access";
+import { normalizeRasterSeason } from "@/lib/raster/season";
 import { prisma } from "@/lib/db";
 import { listRasterSourcesForDistrict, upsertRasterSource } from "@/services/raster";
 
 const sourceBodySchema = z.object({
   scopeCode: z.string().trim().min(1),
+  season: z.string().trim().optional(),
   sourceType: z.string().trim().min(1),
   sourceRef: z.string().trim().min(1),
   displayName: z.string().trim().min(1),
@@ -20,6 +22,7 @@ export async function GET(request: Request) {
 
   const search = new URL(request.url).searchParams;
   const district = search.get("district")?.trim();
+  const season = normalizeRasterSeason(search.get("season"));
   if (!district) {
     return NextResponse.json(
       { error: "district is required" },
@@ -33,6 +36,7 @@ export async function GET(request: Request) {
   return NextResponse.json({
     sources: await listRasterSourcesForDistrict(
       district,
+      season,
       search.get("sourceType")?.trim() || undefined,
     ),
   });
@@ -66,6 +70,7 @@ export async function POST(request: Request) {
     {
       source: await upsertRasterSource({
         scopeId: scope.id,
+        season: normalizeRasterSeason(parsed.data.season),
         sourceType: parsed.data.sourceType,
         sourceRef: parsed.data.sourceRef,
         displayName: parsed.data.displayName,

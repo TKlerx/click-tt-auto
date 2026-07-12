@@ -50,6 +50,58 @@ const demoRasterUsers = [
   },
 ] as const;
 
+const wttvDistricts = [
+  ["NIEDERRHEIN", "Niederrhein"],
+  ["RHEIN_RUHR", "Rhein-Ruhr"],
+  ["RHEIN_WUPPER", "Rhein-Wupper"],
+  ["KOELN", "Köln"],
+  ["RHEIN_ERFT_SIEG", "Rhein-Erft-Sieg"],
+  ["AACHEN_EUREGIO", "Aachen/Euregio"],
+  ["MUENSTERLAND", "Münsterland"],
+  ["MUENSTERLAND_HOHE_MARK", "Münsterland/Hohe Mark"],
+  ["OSTWESTFALEN_NORD", "Ostwestfalen-Nord"],
+  ["OWL", "Ostwestfalen/Lippe"],
+  ["MITTLERES_RUHRGEBIET", "Mittleres Ruhrgebiet"],
+  ["WESTFALEN_MITTE", "Westfalen-Mitte"],
+  ["SUEDWESTFALEN", "Südwestfalen"],
+] as const;
+
+async function seedRasterScopes() {
+  const germanyScope = await prisma.scope.upsert({
+    where: { code: "DE" },
+    update: { name: "Germany", parentId: null },
+    create: { code: "DE", name: "Germany" },
+  });
+  const wttvScope = await prisma.scope.upsert({
+    where: { code: "WTTV" },
+    update: {
+      name: "Westdeutscher Tischtennis-Verband",
+      parentId: germanyScope.id,
+    },
+    create: {
+      code: "WTTV",
+      name: "Westdeutscher Tischtennis-Verband",
+      parentId: germanyScope.id,
+    },
+  });
+
+  const districts = await Promise.all(
+    wttvDistricts.map(([code, name]) =>
+      prisma.scope.upsert({
+        where: { code },
+        update: { name, parentId: wttvScope.id },
+        create: { code, name, parentId: wttvScope.id },
+      }),
+    ),
+  );
+
+  return {
+    germanyScope,
+    wttvScope,
+    demoScope: districts.find((scope) => scope.code === "OWL") ?? districts[0],
+  };
+}
+
 async function main() {
   const rawEmail = process.env.INITIAL_ADMIN_EMAIL;
   const password = process.env.INITIAL_ADMIN_PASSWORD;
@@ -73,6 +125,7 @@ async function main() {
     );
   }
 
+  const { demoScope } = await seedRasterScopes();
   const existingCount = await prisma.user.count();
 
   if (existingCount > 0) {
@@ -113,27 +166,6 @@ async function main() {
     },
   });
 
-  const germanyScope = await prisma.scope.create({
-    data: {
-      code: "DE",
-      name: "Germany",
-    },
-  });
-  const wttvScope = await prisma.scope.create({
-    data: {
-      code: "WTTV",
-      name: "Westdeutscher Tischtennis-Verband",
-      parentId: germanyScope.id,
-    },
-  });
-  const demoScope = await prisma.scope.create({
-    data: {
-      code: "OWL",
-      name: "Ostwestfalen-Lippe",
-      parentId: wttvScope.id,
-    },
-  });
-
   for (const demoUser of demoRasterUsers) {
     await prisma.user.create({
       data: {
@@ -163,7 +195,7 @@ async function main() {
   }
 
   console.log(`Seeded initial admin user ${email}.`);
-  console.log("Seeded demo Raster hierarchy DE > WTTV > OWL and review users.");
+  console.log("Seeded WTTV Raster districts and review users.");
 }
 
 main()

@@ -19,9 +19,19 @@ describe("raster evaluation", () => {
     const baseModel = fixture.model as unknown as SeasonModel;
     const model = {
       ...baseModel,
-      groups: [{ ref: { league: "L", name: "Bad" }, size: 5, teamIds: ["a", "b"] }]
+      groups: [{ ref: { league: "L", name: "Bad" }, size: 4, teamIds: ["a", "b"] }]
     };
     expect(() => evaluate(model, fixture.assignment)).toThrow(/Unsupported group size/);
+  });
+
+  it("accepts a 5-team group as a 6er raster with any unused slot", () => {
+    const baseModel = fixture.model as unknown as SeasonModel;
+    const model = {
+      ...baseModel,
+      groups: [{ ref: { league: "L", name: "G5" }, size: 5, teamIds: ["a", "b"] }]
+    };
+    expect(() => evaluate(model, { a: 1, b: 2 })).not.toThrow();
+    expect(evaluate(model, { a: 5, b: 6 }).hardViolations).toHaveLength(0);
   });
 
   it("reports Spielwoche misses without default penalty", () => {

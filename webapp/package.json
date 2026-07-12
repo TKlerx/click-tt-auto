@@ -23,6 +23,7 @@
     "quality:ts": "pnpm run lint && pnpm run architecture && pnpm run duplication",
     "quality:python": "node scripts/check-python-quality.mjs",
     "quality:cli": "node scripts/check-cli-quality.mjs",
+    "worker:dev": "cd worker && uv run starter-worker",
     "check:text": "node scripts/check-text-conventions.mjs",
     "logging:guard": "node scripts/check-logging-guard.mjs",
     "smoke:azure": "node scripts/run-azure-deploy-smoke.mjs",

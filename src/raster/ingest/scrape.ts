@@ -7,6 +7,7 @@ import { assignmentRowsToCsv } from "./assignment-table.js";
 import {
   scrapePublicLeagueAssignments,
   scrapeTeamRasterAssignments,
+  type TeamRasterAssignmentScrapeOptions,
   type TeamRasterAssignmentRow
 } from "./clicktt-assignments.js";
 import { buildSeasonModel, buildSeasonModelFromAssignments } from "./model.js";
@@ -246,7 +247,13 @@ export async function scrapeSeasonModel(
 
 export async function scrapeCurrentTeamRasterAssignments(): Promise<
   TeamRasterAssignmentRow[]
-> {
+>;
+export async function scrapeCurrentTeamRasterAssignments(
+  options: TeamRasterAssignmentScrapeOptions
+): Promise<TeamRasterAssignmentRow[]>;
+export async function scrapeCurrentTeamRasterAssignments(
+  options: TeamRasterAssignmentScrapeOptions = {}
+): Promise<TeamRasterAssignmentRow[]> {
   const config = loadConfig();
   const browser = await chromium.launch({
     headless: !config.headed,
@@ -257,7 +264,26 @@ export async function scrapeCurrentTeamRasterAssignments(): Promise<
 
   try {
     await login(page, config.baseUrl, config.username, config.password);
-    return await scrapeTeamRasterAssignments(page);
+    return await scrapeTeamRasterAssignments(page, options);
+  } finally {
+    await context.close();
+    await browser.close();
+  }
+}
+
+export async function scrapePublicLeagueAssignmentsFromUrl(
+  leaguePageUrl: string
+): Promise<TeamRasterAssignmentRow[]> {
+  const config = loadConfig();
+  const browser = await chromium.launch({
+    headless: !config.headed,
+    slowMo: config.slowMoMs
+  });
+  const context = await browser.newContext();
+  const page = await context.newPage();
+
+  try {
+    return await scrapePublicLeagueAssignments(page, leaguePageUrl);
   } finally {
     await context.close();
     await browser.close();

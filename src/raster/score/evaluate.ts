@@ -1,5 +1,9 @@
-import { derbySpieltag, rasterSizeForGroupSize } from "../rulebook/rulebook.js";
-import { deriveHomeWeeks } from "./derive.js";
+import {
+  derbySpieltag,
+  numericRasterSize,
+  rasterSizeForGroupSize
+} from "../rulebook/rulebook.js";
+import { deriveHomeWeeks, unusedRasterzahl } from "./derive.js";
 import { evaluateWishes, findOverUsages } from "./penalties.js";
 import type {
   Assignment,
@@ -47,18 +51,25 @@ export function evaluate(
 
   for (const group of model.groups) {
     const rasterSize = rasterSizeForGroupSize(group.size, group.rasterMode);
+    const maxRasterzahl = numericRasterSize(rasterSize);
     const values = group.teamIds.map((teamId) => assignment[teamId]);
     const assignedValues = values.filter(
       (value): value is number => value !== undefined
     );
+    const bye =
+      group.size % 2 === 1
+        ? Array.from({ length: maxRasterzahl }, (_, index) => index + 1).find(
+            (value) => !assignedValues.includes(value)
+          )
+        : null;
     const valid =
       assignedValues.length === values.length &&
       new Set(assignedValues).size === assignedValues.length &&
-      assignedValues.every((value) => value >= 1 && value <= group.size);
+      assignedValues.every((value) => value >= 1 && value <= maxRasterzahl);
     if (!valid)
       hardViolations.push({
         kind: "permutation",
-        detail: `${group.ref.league} ${group.ref.name} is not a valid 1..${group.size} permutation`
+        detail: `${group.ref.league} ${group.ref.name} is not a valid 1..${maxRasterzahl} permutation`
       });
     perGroup.push({
       group: group.ref,
@@ -77,6 +88,7 @@ export function evaluate(
         const rightRz = assignment[rightId];
         if (!right || rightRz === undefined || left.clubId !== right.clubId)
           continue;
+        if (leftRz === bye || rightRz === bye) continue;
         const spieltag = derbySpieltag(rasterSize, leftRz, rightRz);
         if (spieltag !== undefined && spieltag > 4)
           hardViolations.push({
@@ -115,7 +127,8 @@ export function evaluate(
     );
     const rz = assignment[team.id];
     if (!group || rz === undefined) return [];
-    const got = deriveHomeWeeks(group.size, rz, group.rasterMode).slot;
+    const bye = unusedRasterzahl(group, assignment);
+    const got = deriveHomeWeeks(group.size, rz, group.rasterMode, bye).slot;
     return got === team.spielwochePref
       ? []
       : [{ teamId: team.id, want: team.spielwochePref, got }];

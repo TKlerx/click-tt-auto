@@ -1,4 +1,4 @@
-import { mkdir, stat, writeFile } from "node:fs/promises";
+import { mkdir, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 
@@ -40,4 +40,8 @@ export function getFilePath(storedPath: string) {
 
 export async function assertStoredFileExists(storedPath: string) {
   await stat(getFilePath(storedPath));
+}
+
+export async function deleteStoredFile(storedPath: string) {
+  await rm(getFilePath(storedPath), { force: true });
 }

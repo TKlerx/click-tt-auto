@@ -6,8 +6,8 @@ Next.js App Router route handlers under `webapp/src/app/api/raster/`. All routes
 
 | Method | Path | Role | Purpose |
 |--------|------|------|---------|
-| POST | `/api/raster/input-sets` | admin | Create an InputSet (name, district) |
-| GET | `/api/raster/input-sets?district=` | any | List input sets |
+| POST | `/api/raster/input-sets` | admin | Create an InputSet (`name`, `district`, `season`) |
+| GET | `/api/raster/input-sets?district=&season=` | any | List input sets for a district/scope and season |
 | POST | `/api/raster/input-sets/{id}/wishes/pdf` | admin | Upload wishes PDF → deterministic parse (FR-002); returns parsed Wishes marked `confidence` |
 | GET | `/api/raster/input-sets/{id}/wishes/prompt` | admin | Get the ready-made LLM extraction prompt (embedded PDF text + JSON schema) — fallback (FR-002a) |
 | POST | `/api/raster/input-sets/{id}/wishes/json` | admin | Submit pasted/structured wishes JSON → schema-validated (FR-002a/003); 422 on schema error |
@@ -21,11 +21,18 @@ Next.js App Router route handlers under `webapp/src/app/api/raster/`. All routes
 | Method | Path | Role | Purpose |
 |--------|------|------|---------|
 | GET | `/api/raster/sources?district=&sourceType=` | any | List source documents/links/caches visible to a district, including ancestor scope sources (e.g. OWL + WTTV + DE) |
-| POST | `/api/raster/sources` | admin | Register or update a source for a scope (`scopeCode`, `sourceType`, `sourceRef`, `displayName`, optional `contentHash`, optional `parsedJson`) |
-| POST | `/api/raster/sources/upload` | admin | Upload a replacement source file for a scope and register it as a `RasterSource` |
+| POST | `/api/raster/sources` | admin | Register or update a source for a scope/season (`scopeCode`, `season`, `sourceType`, `sourceRef`, `displayName`, optional `contentHash`, optional `parsedJson`) |
+| POST | `/api/raster/sources/upload` | admin | Upload one or more source files for a scope/season and register each as a `RasterSource`; `*_PDF` uploads must be valid PDF files |
+| DELETE | `/api/raster/sources/{id}` | admin | Delete a source; also deletes the app-stored upload file when `sourceRef` points inside app-controlled upload storage |
 | POST | `/api/raster/sources/{id}/refresh` | admin | Explicitly parse/refresh a stored source cache for supported source types such as `GROUP_ASSIGNMENT` and `WISHES_PDF` |
 
-Source records belong to the hierarchy level where the source is valid. For example, a WTTV-wide group PDF is stored under WTTV and inherited by OWL flows. Registering a source does not reparse it; parse/cache refresh happens only when explicitly requested by a parser/upload flow.
+Source records belong to the hierarchy level where the source is valid and to one season. For example, a WTTV-wide click-TT group-assignment URL is stored under WTTV for `2026/27` and inherited by OWL flows for that season. Registering a source does not reparse it; parse/cache refresh happens only when explicitly requested by a parser/upload flow.
+
+Normal guided source flow:
+
+- group assignment: register a click-TT league page URL as `GROUP_ASSIGNMENT`
+- wish PDFs: upload one or more PDFs as `WISHES_PDF`
+- fixed schedule numbers: edit optional fixed rows on an InputSet, not as a normal source URL
 
 ## Hall capacity
 

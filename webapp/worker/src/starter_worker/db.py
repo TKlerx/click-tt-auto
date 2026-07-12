@@ -1421,6 +1421,7 @@ def _find_overage_rows(model: dict[str, Any], assignment: dict[str, Any]) -> lis
     groups = _dicts(model.get("groups"))
     clubs = _dicts(model.get("clubs"))
     team_group = {str(team_id): group for group in groups for team_id in group.get("teamIds", [])}
+    group_byes = {_group_key(group): _unused_rasterzahl(group, assignment) for group in groups}
     slots: dict[tuple[str, str, str, int], dict[str, Any]] = {}
     for team in teams:
         team_id = str(team.get("id") or "")
@@ -1431,7 +1432,7 @@ def _find_overage_rows(model: dict[str, Any], assignment: dict[str, Any]) -> lis
         capacity = _capacity_for(clubs, team)
         if capacity is None:
             continue
-        for week in _home_weeks(group, rasterzahl):
+        for week in _home_weeks(group, rasterzahl, group_byes.get(_group_key(group))):
             key = (
                 str(team.get("clubId") or ""),
                 str(team.get("hall") or "1"),
@@ -1483,10 +1484,29 @@ def _capacity_for(clubs: list[dict[str, Any]], team: dict[str, Any]) -> int | No
     return None
 
 
-def _home_weeks(group: dict[str, Any], rasterzahl: int) -> list[int]:
+def _group_key(group: dict[str, Any]) -> str:
+    ref = group.get("ref") if isinstance(group.get("ref"), dict) else {}
+    return f"{ref.get('league') or ''}::{ref.get('name') or ''}"
+
+
+def _unused_rasterzahl(group: dict[str, Any], assignment: dict[str, Any]) -> int | None:
+    group_size = int(group.get("size") or 0)
+    if group_size % 2 == 0:
+        return None
+    size = _numeric_raster_size(_raster_size_for_group(group))
+    used = {int(assignment.get(str(team_id)) or 0) for team_id in group.get("teamIds", [])}
+    return next((value for value in range(1, size + 1) if value not in used), None)
+
+
+def _numeric_raster_size(size: int | str) -> int:
+    return 6 if size == "6d" else int(size)
+
+
+def _home_weeks(group: dict[str, Any], rasterzahl: int, bye: int | None = None) -> list[int]:
     size = _raster_size_for_group(group)
     group_size = int(group.get("size") or 0)
-    bye = size if group_size % 2 == 1 else None
+    if bye is None and group_size % 2 == 1:
+        bye = _numeric_raster_size(size)
     if rasterzahl == bye:
         return []
 
@@ -1522,6 +1542,8 @@ def _home_weeks(group: dict[str, Any], rasterzahl: int) -> list[int]:
 
 def _raster_size_for_group(group: dict[str, Any]) -> int | str:
     group_size = int(group.get("size") or 0)
+    if group_size == 5:
+        return 6
     if group_size == 6 and group.get("rasterMode") == "double":
         return "6d"
     if group_size == 6:

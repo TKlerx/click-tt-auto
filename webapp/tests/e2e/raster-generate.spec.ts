@@ -118,24 +118,29 @@ test("admin can generate and review a raster snapshot", async ({ page }) => {
   );
   expect(wishesResponse.status()).toBe(200);
 
-  const validateResponse = await page.request.post(
-    `${appBasePath}/api/raster/input-sets/${inputSetId}/validate`,
-  );
-  expect(validateResponse.status()).toBe(200);
-  const validation = (await validateResponse.json()) as { errors: string[] };
-  expect(validation.errors).toEqual([]);
+  await page.goto(`${appBasePath}/raster?district=${district}`);
+  await expect(page.getByText(`E2E generated ${suffix}`)).toBeVisible();
+  await page.getByRole("button", { name: "Validate" }).click();
+  await expect(page.getByText("Validate done")).toBeVisible();
+  await page.getByRole("button", { name: "Start run" }).click();
+  await expect(page.getByText("Run done")).toBeVisible();
 
-  const runResponse = await page.request.post(
-    `${appBasePath}/api/raster/input-sets/${inputSetId}/runs`,
-    { data: { timeLimitSeconds: 30 } },
+  const runListResponse = await page.request.get(
+    `${appBasePath}/api/raster/input-sets?district=${district}`,
   );
-  expect(runResponse.status()).toBe(202);
-  const runBody = (await runResponse.json()) as { run: { id: string } };
+  expect(runListResponse.status()).toBe(200);
+  const runList = (await runListResponse.json()) as {
+    inputSets: Array<{ id: string; runs: Array<{ id: string }> }>;
+  };
+  const runBody = runList.inputSets
+    .find((inputSet) => inputSet.id === inputSetId)
+    ?.runs.at(0);
+  expect(runBody?.id).toBeTruthy();
 
   processNextWorkerJob();
 
   const runStatusResponse = await page.request.get(
-    `${appBasePath}/api/raster/runs/${runBody.run.id}`,
+    `${appBasePath}/api/raster/runs/${runBody?.id}`,
   );
   expect(runStatusResponse.status()).toBe(200);
   const runStatus = (await runStatusResponse.json()) as {
@@ -164,8 +169,62 @@ test("admin can generate and review a raster snapshot", async ({ page }) => {
   expect(conflictsResponse.status()).toBe(200);
 
   await page.goto(`${appBasePath}/raster?district=${district}`);
-  await expect(page.getByText(`E2E generated ${suffix}`)).toBeVisible();
-  await expect(page.getByText("READY")).toBeVisible();
+  await page.getByRole("link", { name: "Results" }).click();
+  await expect(page.getByRole("heading", { name: "Raster results" })).toBeVisible();
+  await expect(page.getByText("Assignments")).toBeVisible();
+});
+
+test("admin can use the guided source workflow", async ({ page }) => {
+  const suffix = Date.now();
+  const email = `e2e-raster-flow-${suffix}@example.com`;
+  const password = "RasterFlow123";
+  const urlName = `E2E click-TT groups ${suffix}`;
+  const wishName = `wrong-${suffix}.pdf`;
+
+  await seedRasterScopeHierarchy();
+  await seedLocalUser({
+    email,
+    name: "E2E Raster Flow Admin",
+    role: Role.PLATFORM_ADMIN,
+    password,
+    mustChangePassword: false,
+  });
+
+  await loginWithPassword(page, email, password);
+  await expectOnDashboard(page);
+  await page.goto(`${appBasePath}/raster?district=${district}&season=2026%2F27`);
+
+  await page.getByText("Advanced: register external source").click();
+  await page
+    .getByPlaceholder("Example: WTTV group assignment 2026")
+    .last()
+    .fill(urlName);
+  await page
+    .getByPlaceholder(
+      "https://wttv.click-tt.de/.../leaguePage?championship=WTTV%2026/27",
+    )
+    .fill(
+      "https://wttv.click-tt.de/cgi-bin/WebObjects/nuLigaTTDE.woa/wa/leaguePage?championship=WTTV%2026/27",
+    );
+  await page.getByRole("button", { name: "Save external source" }).click();
+  await expect(page.getByText(urlName)).toBeVisible();
+  await expect(page.getByText("Needs parse")).toBeVisible();
+
+  await page
+    .locator('input[name="file"][multiple]')
+    .setInputFiles([
+      {
+        name: wishName,
+        mimeType: "application/pdf",
+        buffer: Buffer.from("%PDF-1.4\n% e2e"),
+      },
+    ]);
+  await page.getByRole("button", { name: "Upload wish PDFs" }).click();
+  await expect(page.getByText(wishName)).toBeVisible();
+
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByLabel(`Delete ${wishName}`).click();
+  await expect(page.getByText(wishName)).not.toBeVisible();
 });
 
 function buildSeasonModel() {

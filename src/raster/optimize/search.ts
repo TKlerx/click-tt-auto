@@ -1,4 +1,8 @@
 import { evaluate } from "../score/evaluate.js";
+import {
+  numericRasterSize,
+  rasterSizeForGroupSize
+} from "../rulebook/rulebook.js";
 import type {
   Assignment,
   EvaluationResult,
@@ -80,7 +84,11 @@ export function optimize(
         .map((teamId) => best.assignment[teamId])
     );
     const available = Array.from(
-      { length: group.size },
+      {
+        length: numericRasterSize(
+          rasterSizeForGroupSize(group.size, group.rasterMode)
+        )
+      },
       (_, index) => index + 1
     ).filter((value) => !used.has(value));
 

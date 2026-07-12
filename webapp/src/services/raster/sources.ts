@@ -3,11 +3,13 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { prisma } from "@/lib/db";
-import { getFilePath } from "@/lib/file-storage";
+import { deleteStoredFile, getFilePath } from "@/lib/file-storage";
 import { rasterIngest } from "@/lib/raster/pipeline";
+import { normalizeRasterSeason } from "@/lib/raster/season";
 
 export async function listRasterSourcesForDistrict(
   district: string,
+  season = normalizeRasterSeason(undefined),
   sourceType?: string,
 ) {
   const scope = await prisma.scope.findFirst({
@@ -33,6 +35,7 @@ export async function listRasterSourcesForDistrict(
   return prisma.rasterSource.findMany({
     where: {
       scopeId: { in: scopeIds },
+      season: normalizeRasterSeason(season),
       ...(sourceType ? { sourceType } : {}),
     },
     orderBy: [{ updatedAt: "desc" }, { displayName: "asc" }],
@@ -41,6 +44,7 @@ export async function listRasterSourcesForDistrict(
 
 export async function upsertRasterSource(params: {
   scopeId: string;
+  season: string;
   sourceType: string;
   sourceRef: string;
   displayName: string;
@@ -49,8 +53,9 @@ export async function upsertRasterSource(params: {
 }) {
   return prisma.rasterSource.upsert({
     where: {
-      scopeId_sourceType_sourceRef: {
+      scopeId_season_sourceType_sourceRef: {
         scopeId: params.scopeId,
+        season: normalizeRasterSeason(params.season),
         sourceType: params.sourceType,
         sourceRef: params.sourceRef,
       },
@@ -60,7 +65,7 @@ export async function upsertRasterSource(params: {
       contentHash: params.contentHash,
       parsedJson: params.parsedJson,
     },
-    create: params,
+    create: { ...params, season: normalizeRasterSeason(params.season) },
   });
 }
 
@@ -82,13 +87,33 @@ export async function refreshRasterSource(id: string) {
   });
 }
 
+export async function deleteRasterSource(id: string) {
+  const source = await prisma.rasterSource.delete({
+    where: { id },
+    include: { scope: true },
+  });
+  if (!/^https?:\/\//i.test(source.sourceRef)) {
+    await deleteStoredFile(source.sourceRef);
+  }
+  return source;
+}
+
 async function parseSource(sourceType: string, sourceRef: string) {
   const normalizedType = sourceType.trim().toUpperCase();
   if (
     normalizedType === "GROUP_ASSIGNMENT" &&
     /^clicktt:\/\//i.test(sourceRef)
   ) {
-    const assignments = await rasterIngest.scrapeClickTtAssignments();
+    const assignments = await scrapeClickTtGroupAssignments(sourceRef);
+    const payload = { assignments };
+    return {
+      contentHash: hash(Buffer.from(JSON.stringify(payload))),
+      value: payload,
+    };
+  }
+  if (normalizedType === "GROUP_ASSIGNMENT" && isClickTtLeaguePage(sourceRef)) {
+    const assignments =
+      await rasterIngest.scrapeClickTtPublicLeagueAssignments(sourceRef);
     const payload = { assignments };
     return {
       contentHash: hash(Buffer.from(JSON.stringify(payload))),
@@ -116,6 +141,28 @@ async function parseSource(sourceType: string, sourceRef: string) {
   } finally {
     if (file.cleanup) await file.cleanup();
   }
+}
+
+async function scrapeClickTtGroupAssignments(sourceRef: string) {
+  const url = new URL(sourceRef);
+  const publicLeagueUrl = url.searchParams.get("publicLeagueUrl")?.trim();
+  if (publicLeagueUrl) {
+    return rasterIngest.scrapeClickTtPublicLeagueAssignments(publicLeagueUrl);
+  }
+
+  const groupNamePattern = url.searchParams.get("groupNamePattern")?.trim();
+  return groupNamePattern
+    ? rasterIngest.scrapeClickTtAssignments({ groupNamePattern })
+    : rasterIngest.scrapeClickTtAssignments();
+}
+
+function isClickTtLeaguePage(sourceRef: string) {
+  if (!/^https?:\/\//i.test(sourceRef)) return false;
+  const url = new URL(sourceRef);
+  return (
+    /(?:^|\.)click-tt\.de$/i.test(url.hostname) &&
+    /\/wa\/leaguePage$/i.test(url.pathname)
+  );
 }
 
 async function readSourceFile(sourceRef: string) {

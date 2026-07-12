@@ -5,6 +5,15 @@ import { Role } from "../../../generated/prisma/enums";
 import type { RouteErrorResult } from "@/services/api/types";
 
 export type RasterAccessLevel = "viewer" | "scheduler" | "admin";
+export type RasterScopeOption = {
+  code: string;
+  name: string;
+  parent: {
+    code: string;
+    name: string;
+    parent: { code: string; name: string } | null;
+  } | null;
+};
 
 const levelRoles: Record<RasterAccessLevel, Role[]> = {
   viewer: [Role.PLATFORM_ADMIN, Role.SCOPE_ADMIN, Role.SCOPE_USER],
@@ -21,6 +30,49 @@ export function canUseRasterLevel(
   level: RasterAccessLevel,
 ) {
   return levelRoles[level].includes(user.role);
+}
+
+export async function listAccessibleRasterScopes(
+  user: Pick<SessionUser, "id" | "role">,
+): Promise<RasterScopeOption[]> {
+  const scopes = await prisma.scope.findMany({
+    where:
+      user.role === Role.PLATFORM_ADMIN
+        ? undefined
+        : {
+            OR: [
+              { userAssignments: { some: { userId: user.id } } },
+              { parent: { userAssignments: { some: { userId: user.id } } } },
+              {
+                parent: {
+                  parent: { userAssignments: { some: { userId: user.id } } },
+                },
+              },
+            ],
+          },
+    select: {
+      code: true,
+      name: true,
+      parent: {
+        select: {
+          code: true,
+          name: true,
+          parent: { select: { code: true, name: true } },
+        },
+      },
+    },
+  });
+
+  return [...scopes].sort((left, right) =>
+    rasterScopePath(left).localeCompare(rasterScopePath(right), "de"),
+  );
+}
+
+export function rasterScopePath(scope: RasterScopeOption) {
+  return [scope.parent?.parent, scope.parent, scope]
+    .filter((item): item is { code: string; name: string } => Boolean(item))
+    .map((item) => item.name)
+    .join(" / ");
 }
 
 export async function canAccessRasterDistrict(

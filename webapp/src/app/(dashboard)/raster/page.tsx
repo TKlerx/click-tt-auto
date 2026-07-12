@@ -1,9 +1,22 @@
 import { requireSession } from "@/lib/auth";
-import { assertRasterAccess } from "@/lib/raster/access";
+import {
+  assertRasterAccess,
+  listAccessibleRasterScopes,
+  rasterScopePath,
+} from "@/lib/raster/access";
+import {
+  normalizeRasterSeason,
+  rasterSeasonOptions,
+} from "@/lib/raster/season";
 import {
   GroupModeReview,
   type GroupModeReviewRow,
 } from "@/components/raster/group-mode-review";
+import {
+  CreateInputSetForm,
+  FixedScheduleNumbersForm,
+  InputSetRunActions,
+} from "@/components/raster/input-set-actions";
 import { RasterSourcesPanel } from "@/components/raster/sources/raster-sources-panel";
 import { Role } from "../../../../generated/prisma/enums";
 import { listInputSets, listRasterSourcesForDistrict } from "@/services/raster";
@@ -18,10 +31,22 @@ type SeasonGroup = {
 export default async function RasterPage({
   searchParams,
 }: {
-  searchParams: Promise<{ district?: string }>;
+  searchParams: Promise<{ district?: string; season?: string }>;
 }) {
   const user = await requireSession();
-  const district = (await searchParams).district?.trim() || "OWL";
+  const scopes = await listAccessibleRasterScopes(user);
+  const params = await searchParams;
+  const district = params.district?.trim() || scopes[0]?.code;
+  const season = normalizeRasterSeason(params.season);
+
+  if (!district) {
+    return (
+      <div className="rounded-lg border border-[var(--border)] px-4 py-6 text-sm text-[var(--muted-foreground)]">
+        No Raster districts are configured for your account.
+      </div>
+    );
+  }
+
   const access = await assertRasterAccess(user, district, "viewer");
 
   if (access !== true) {
@@ -33,8 +58,8 @@ export default async function RasterPage({
   }
 
   const [inputSets, sources] = await Promise.all([
-    listInputSets(district),
-    listRasterSourcesForDistrict(district),
+    listInputSets(district, season),
+    listRasterSourcesForDistrict(district, season),
   ]);
 
   return (
@@ -46,15 +71,66 @@ export default async function RasterPage({
         <h1 className="mt-3 text-3xl font-semibold leading-tight tracking-tight sm:text-5xl">
           Raster
         </h1>
+        <form className="mt-5 flex max-w-xl gap-2" action="/raster">
+          <label className="grid flex-1 gap-1 text-sm font-medium">
+            District
+            <select
+              className="h-10 rounded-md border border-[var(--border)] bg-transparent px-3 text-sm font-normal"
+              defaultValue={district}
+              name="district"
+            >
+              {scopes.map((scope) => (
+                <option key={scope.code} value={scope.code}>
+                  {rasterScopePath(scope)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="grid w-36 gap-1 text-sm font-medium">
+            Season
+            <select
+              className="h-10 rounded-md border border-[var(--border)] bg-transparent px-3 text-sm font-normal"
+              defaultValue={season}
+              name="season"
+            >
+              {rasterSeasonOptions().map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            className="mt-6 h-10 rounded-md border border-[var(--border)] px-4 text-sm font-medium"
+            type="submit"
+          >
+            Open
+          </button>
+        </form>
       </section>
 
       <RasterSourcesPanel
         canEdit={user.role === Role.PLATFORM_ADMIN}
         district={district}
+        season={season}
+        scopes={scopes}
         sources={sources}
       />
 
       <section className="overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--panel)]">
+        <div className="border-b border-[var(--border)] px-4 py-3">
+          <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
+            Input sets
+          </h2>
+          <p className="mt-2 text-sm text-[var(--muted-foreground)]">
+            Fixed Rasterzahlen are optional. You can run a full {district}{" "}
+            {season} plan without fixing any team; the optimizer will assign
+            Rasterzahlen.
+          </p>
+        </div>
+        {user.role === Role.PLATFORM_ADMIN ? (
+          <CreateInputSetForm district={district} season={season} />
+        ) : null}
         <div className="grid grid-cols-[minmax(12rem,1fr)_8rem_8rem_8rem] gap-3 border-b border-[var(--border)] px-4 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
           <span>Name</span>
           <span>Status</span>
@@ -67,6 +143,7 @@ export default async function RasterPage({
               inputSet.id,
               inputSet.seasonModelJson,
             );
+            const warnings = extractModelWarnings(inputSet.seasonModelJson);
             return (
               <div
                 key={inputSet.id}
@@ -78,7 +155,21 @@ export default async function RasterPage({
                   <span>{inputSet._count.wishes}</span>
                   <span>{inputSet._count.runs}</span>
                 </div>
+                {user.role === Role.PLATFORM_ADMIN ? (
+                  <FixedScheduleNumbersForm
+                    inputSetId={inputSet.id}
+                    rows={inputSet.fixedRasterzahlen}
+                  />
+                ) : null}
+                <ModelWarnings warnings={warnings} />
                 <GroupModeReview groups={sixTeamGroups} />
+                {user.role === Role.PLATFORM_ADMIN ? (
+                  <InputSetRunActions
+                    inputSetId={inputSet.id}
+                    runs={inputSet.runs}
+                    status={inputSet.status}
+                  />
+                ) : null}
               </div>
             );
           })
@@ -90,6 +181,34 @@ export default async function RasterPage({
       </section>
     </div>
   );
+}
+
+function ModelWarnings({ warnings }: { warnings: string[] }) {
+  if (!warnings.length) return null;
+  return (
+    <details className="mt-3 border-t border-[var(--border)] pt-3 text-sm">
+      <summary className="cursor-pointer font-medium">
+        Model warnings ({warnings.length})
+      </summary>
+      <ul className="mt-2 list-disc space-y-1 pl-5 text-[var(--muted-foreground)]">
+        {warnings.map((warning) => (
+          <li key={warning}>{warning}</li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
+function extractModelWarnings(seasonModelJson: string | null): string[] {
+  if (!seasonModelJson) return [];
+  try {
+    const parsed = JSON.parse(seasonModelJson) as { warnings?: unknown[] };
+    return (parsed.warnings ?? []).filter(
+      (warning): warning is string => typeof warning === "string",
+    );
+  } catch {
+    return [];
+  }
 }
 
 function extractSixTeamGroups(

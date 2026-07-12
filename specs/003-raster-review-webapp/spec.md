@@ -27,7 +27,16 @@ Raw inputs arrive today mostly as PDFs; the app must accept structured versions 
 - Q: In what form do the fixed upper-league Rasterzahlen arrive? → A: PDF or manual entry (volume is small), structured import also acceptable. They are treated as hard constraints the optimizer must not violate.
 - Q: How does the app run the optimization? → A: Wrap the existing Rasterzahl optimizer as an asynchronous background job. The app prepares the reviewed input set, invokes the existing optimizer, and ingests its output into the snapshot model. It does not reimplement the solver.
 - Q: What data scale must the app handle? → A: ~100–1,000 assignments and up to a few hundred conflicts per district snapshot. The system may later hold county-wide data (~1,400 clubs/teams), but review views remain scoped to a selected district, so a single view stays at the hundreds scale.
-- Q: How should shared documents and links be scoped if OWL is only one WTTV district? → A: Model a hierarchy of scopes, initially Germany → WTTV → OWL. Input sets still target a district such as OWL, but source documents/links and parsed caches belong to the scope where they are valid. An OWL input set may use OWL sources plus ancestor sources from WTTV and Germany.
+- Q: How should shared documents and links be scoped if OWL is only one WTTV district? → A: Model a hierarchy of scopes: Germany → WTTV → configured WTTV districts. Input sets still target a district such as OWL, but source documents/links and parsed caches belong to the scope where they are valid. A district input set may use district sources plus ancestor sources from WTTV and Germany.
+
+### Session 2026-07-11
+
+- Q: Is a group assignment the same as fixed Rasterzahlen? → A: No. Group assignment means which teams play in which league/group. Fixed Rasterzahlen are optional preassigned schedule numbers inside a group and are hard constraints if provided. In English UI copy, use "schedule number" or "fixed schedule number" for Rasterzahl where a non-German term is needed.
+- Q: Should group assignments be uploaded as PDFs? → A: Not in the primary flow. The primary group-assignment source is a click-TT league page URL for the selected season/scope. Group-assignment file upload may remain as a hidden/advanced fallback, but the visible flow must not suggest it as the normal path.
+- Q: How should wish PDFs be handled? → A: Wish PDFs are independent of group assignment and must support multi-file upload. Each uploaded PDF is stored as a separate source and later parsed/refreshed explicitly.
+- Q: Can the app run without any fixed Rasterzahlen? → A: Yes. Fixed schedule numbers are optional. A full WTTV or district run may proceed with zero fixed numbers; the optimizer assigns schedule numbers subject to the available group, wish, and capacity inputs.
+- Q: How should districts and seasons be selected? → A: District/scope selection must come from configured scope data, not free text, and should show or sort by hierarchy. The seeded WTTV hierarchy includes WTTV plus all listed WTTV districts. Season is part of the input-set/source identity and must be selectable in the UI.
+- Q: How are wrong uploads handled? → A: Admins must be able to delete wrongly registered sources. PDF uploads must at least be checked as real PDF files before storage, and explicit parser refresh must report when a document cannot be parsed as the expected source type.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -51,6 +60,11 @@ An admin/scheduler provides the district inputs (club wishes, hall capacities, f
 8. **Given** two same-club teams share one group, **When** a generated assignment uses the Spieltag-4 derby fallback, **Then** the snapshot shows that fallback in the objective breakdown; Spieltag 5 or later is treated as infeasible/invalid and is never persisted as a valid generated assignment.
 9. **Given** the parsed input set contains any six-team group, **When** an admin reviews the input set before starting a run, **Then** the app shows those groups on a confirmation step and lets the admin choose normal 6er or 6er Doppelrunde for each group; the run cannot start until every six-team group has an explicit mode.
 10. **Given** a WTTV-level group document or link exists, **When** an admin prepares an OWL input set, **Then** the app offers that WTTV source as an inherited source without copying or reclassifying it as OWL-only.
+11. **Given** an admin prepares group assignments, **When** they enter a click-TT league page URL for a season/scope, **Then** the app registers it as a group-assignment source without requiring a PDF upload or free-text source type.
+12. **Given** an admin uploads club wishes, **When** they select multiple wish PDFs, **Then** each PDF is stored as its own wish source and can be refreshed/parsed independently.
+13. **Given** an admin accidentally uploads or registers the wrong source, **When** they delete it, **Then** the source is removed from the preparation flow and any stored upload file is removed from app-controlled storage.
+14. **Given** an input set has no fixed schedule numbers, **When** the admin validates and starts a run, **Then** validation does not fail solely because fixed schedule numbers are absent.
+15. **Given** a source has been uploaded or registered but not parsed, **When** the admin views the preparation page, **Then** the app clearly shows that parsing/refresh is still needed before the source can contribute to a runnable input set.
 
 ---
 
@@ -148,6 +162,7 @@ An admin imports a snapshot produced by the legacy external optimizer into the s
 - A new snapshot is generated/imported after users already reviewed an older one.
 - An optimization run is still pending, fails, times out, is cancelled, or returns a feasible assignment without proof of optimality.
 - (Import path) A snapshot has assignments but no conflict file, or a conflict references a team missing from the assignment table.
+- A user uploads a non-PDF or a PDF whose content does not match the selected source type; upload/refresh must fail with a clear message and must not silently mark the source as parsed.
 
 ## Requirements *(mandatory)*
 
@@ -156,6 +171,8 @@ An admin imports a snapshot produced by the legacy external optimizer into the s
 #### Input Ingestion
 
 - **FR-001**: Authorized users MUST be able to provide club scheduling wishes either as a structured upload (JSON/CSV) or as a PDF.
+- **FR-001a**: The primary guided input flow MUST separate source types by user intent: click-TT league URL for group assignments, multi-file upload for wish PDFs, and optional fixed schedule number entry on an input set. Users MUST NOT have to type arbitrary source type strings in the normal flow.
+- **FR-001b**: Raster sources and input sets MUST be season-specific. Users MUST be able to select the season in the Raster UI, and data for one season MUST NOT overwrite or hide data for another season.
 - **FR-002**: For PDF wishes, the system MUST parse the known fixed-layout wishes PDF deterministically in-app (text extraction via `pdfjs-dist` + layout patterns, per the existing `src/raster/ingest/wishes-pdf.ts`), producing structured clubs/teams marked for user review. The system MUST NOT run an LLM itself. (First release assumes digital/text-based PDFs; OCR for scanned PDFs is out of scope.)
 - **FR-002a**: As an optional fallback when the deterministic parser is low-confidence or the PDF layout has drifted, the system MUST offer a ready-made, copyable prompt embedding the extracted PDF text plus the expected JSON schema and instructions, and MUST accept and schema-validate the JSON the user pastes back after running it in an external LLM.
 - **FR-003**: The system MUST let a user review and correct wishes — whether parsed from PDF, pasted as JSON, or uploaded structured — before they are used in a generation run, and MUST clearly report schema-validation errors on pasted JSON.
@@ -163,19 +180,25 @@ An admin imports a snapshot produced by the legacy external optimizer into the s
 - **FR-005**: The system MUST allow a hall capacity value to start as an inferred/guessed default and be corrected later, and MUST distinguish reviewed capacity from inferred/guessed or missing capacity.
 - **FR-006**: The system MUST provide search over hall-capacity records by club, hall, and weekday.
 - **FR-007**: Authorized users MUST be able to provide the fixed upper-league Rasterzahlen as a PDF, manual entry, or structured upload, and the system MUST treat them as hard constraints that generated assignments never violate.
+- **FR-007a**: Fixed Rasterzahlen / fixed schedule numbers are optional. Validation and run start MUST support zero fixed numbers when all other required inputs are present.
 - **FR-008**: The system MUST validate an input set for completeness and schema before a run and surface clear errors for missing or malformed inputs.
 - **FR-008a**: The system MUST include a group-review step before validation/run start. For every six-team group, an admin MUST explicitly select `normal 6er` or `6er Doppelrunde`; this selected group mode is persisted in the input set's season model and is passed to the optimizer.
-- **FR-008b**: The system MUST model raster geography as a hierarchy of scopes, initially Germany → WTTV → OWL, so users and source material can be assigned at the level where they are valid.
+- **FR-008b**: The system MUST model raster geography as a hierarchy of scopes, initially Germany → WTTV → configured WTTV districts, so users and source material can be assigned at the level where they are valid.
 - **FR-008c**: The system MUST store raster source documents/links and parsed source caches with an owning scope. A district input set MUST be able to list and use sources from its own district scope and ancestor scopes.
 - **FR-008d**: The system MUST allow authorized admins to register or update source metadata and parsed cache content for a selected scope without reparsing or rescraping existing sources.
 - **FR-008e**: The system MUST only refresh group assignment and wishes caches when an authorized user explicitly requests a click-TT parse/refresh or uploads/replaces source PDFs or structured source data.
+- **FR-008f**: The system MUST let authorized admins delete wrongly registered raster sources. If the source references an app-stored upload, the stored file MUST be removed as part of deletion.
+- **FR-008g**: The system MUST validate source files enough to catch obvious mismatches: wish PDF uploads MUST be real PDF files, and explicit parser refresh MUST fail clearly when a source cannot be parsed as its selected source type.
+- **FR-008h**: District/scope selection in the UI MUST come from configured Scope records, show or sort by hierarchy, and include WTTV plus all configured WTTV districts rather than relying on free-text district entry.
 
 #### Generation / Optimization
 
 - **FR-009**: Admin users MUST be able to start an optimization run from a reviewed input set.
+- **FR-009a**: The Raster preparation UI MUST guide admins through the next required action: register/refresh group source, upload/refresh wishes, create input set, review optional fixed schedule numbers, validate, start run, and open results.
 - **FR-010**: The system MUST process optimization runs asynchronously — by invoking the existing Rasterzahl optimizer as a background job (not a reimplemented solver) — so users can continue reviewing existing snapshots while a run is pending. The app prepares the optimizer's input from the reviewed input set and ingests its output into the snapshot model.
 - **FR-011**: Each completed run MUST report one of these outcomes: proven optimal, feasible but not proven optimal, infeasible, failed, or cancelled.
 - **FR-012**: For proven-optimal and feasible runs, the system MUST create a review snapshot containing assignment output, conflict output, objective value, solver status, run settings, and a reference to the input set used.
+- **FR-012a**: Completed runs MUST be reachable from the Raster UI through visible status/result links; users MUST NOT need to inspect logs or call APIs manually to find the generated snapshot.
 - **FR-013**: The system MUST clearly distinguish proven-optimal assignments from feasible-only or imported heuristic assignments in all snapshot and assignment views.
 - **FR-013a**: The system MUST preserve and display the optimizer objective breakdown, including hall overages, fairness, broken relational wishes, Spielwoche misses, and Spieltag-4 same-club derby fallback count. Same-club derbies on Spieltag 5 or later MUST be treated as hard invalid results and must not be persisted as valid generated snapshots.
 - **FR-013b**: The optimization pipeline MUST support official 6er, 6er Doppelrunde, and 7/8er groups in addition to 9/10er, 11/12er, and 13/14er groups, using the reviewed group mode and encoded WTTV rulebook tables.
@@ -210,7 +233,7 @@ An admin imports a snapshot produced by the legacy external optimizer into the s
 - **User**: A person who signs into the app, with permissions via a role.
 - **Role**: A permission level (admin, scheduler, viewer) governing upload, run, capacity edit, review, and user management.
 - **Input Set**: A named collection of the wishes, hall capacities, and fixed upper-league Rasterzahlen used for one generation run.
-- **Scope**: A hierarchy node such as Germany, WTTV, or OWL. Users and raster source material may be assigned at the level where they are valid.
+- **Scope**: A hierarchy node such as Germany, WTTV, or a WTTV district. Users and raster source material may be assigned at the level where they are valid.
 - **Raster Source**: A document, link, or parsed cache attached to a Scope, such as a WTTV group PDF or an OWL wishes PDF. Input sets can consume sources from their district and ancestors.
 - **Group Review**: A reviewed group roster and mode selection. Six-team groups require an explicit normal-vs-Doppelrunde mode before validation.
 - **Wish**: A club's scheduling preference/constraint for its teams (uploaded structured or extracted from PDF, reviewable/correctable).
@@ -241,6 +264,9 @@ An admin imports a snapshot produced by the legacy external optimizer into the s
 - **SC-011a**: A run cannot start while any six-team group lacks a reviewed mode, and a generated six-team Doppelrunde assignment uses the Doppelrunde rulebook table for penalties, conflicts, and derby display.
 - **SC-011b**: An OWL admin can see WTTV-level source material in the OWL preparation flow within 5 seconds, while source records remain visibly associated with WTTV.
 - **SC-011c**: Reopening an existing input set does not reparse click-TT or PDF sources unless the user explicitly requests refresh or uploads replacement source material.
+- **SC-011d**: An admin can select any configured WTTV district from a hierarchy-sorted selector without typing the district code by hand.
+- **SC-011e**: An admin can remove an incorrectly uploaded source in under 30 seconds, and the source no longer appears in the preparation flow after refresh.
+- **SC-011f**: A non-PDF file selected as a wish PDF is rejected before it becomes a stored raster source.
 - **SC-012**: At least 95% of completed runs display their final outcome, objective value, and generated snapshot link without manual log inspection.
 - **SC-013**: Users can distinguish proven-optimal, feasible-only, and imported heuristic snapshots within 5 seconds of opening a snapshot.
 - **SC-014**: If a generated snapshot uses any Spieltag-4 same-club derby fallback, a scheduler can see the count and affected objective component within 5 seconds of opening the snapshot; no Spieltag-5-or-later same-club derby is stored as a valid generated snapshot.
@@ -257,7 +283,9 @@ An admin imports a snapshot produced by the legacy external optimizer into the s
 - User login, user administration, and basic role management are provided by the existing internal application baseline (webapp-template).
 - Reviewed capacity and input data are maintained separately from snapshots so old snapshots remain historically understandable.
 - First release targets district scale (hundreds of assignments/conflicts per snapshot). The data model should not preclude later county-wide scale (~1,400 clubs/teams) with district-scoped views.
-- WTTV-level documents may apply to multiple districts. Source ownership follows the administrative level where the document is valid; input sets consume inherited sources instead of duplicating them per district.
+- WTTV-level sources may apply to multiple districts. Source ownership follows the administrative level where the document or link is valid; input sets consume inherited sources instead of duplicating them per district.
+- Group assignments normally come from click-TT league page URLs for a selected season. Group-assignment file upload is an advanced fallback, not the expected admin path.
+- Fixed Rasterzahlen are optional hard constraints, not required input. The app can optimize a season/district with no pre-fixed schedule numbers.
 - Desktop/tablet review is the primary workflow for the first release; mobile is useful but secondary.
 - A new snapshot is required after capacity/input edits before conflict counts can be considered final.
 </content>

@@ -40,7 +40,10 @@ describe("raster sources route", () => {
     expect(response.status).toBe(200);
     expect(prismaMock.rasterSource.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { scopeId: { in: ["owl", "wttv", "de"] } },
+        where: expect.objectContaining({
+          scopeId: { in: ["owl", "wttv", "de"] },
+          season: "2026/27",
+        }),
       }),
     );
   });
@@ -74,6 +77,7 @@ describe("raster sources route", () => {
       expect.objectContaining({
         create: expect.objectContaining({
           scopeId: "wttv",
+          season: "2026/27",
           sourceType: "GROUP_ASSIGNMENT",
         }),
       }),
