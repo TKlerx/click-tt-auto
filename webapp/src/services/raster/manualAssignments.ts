@@ -4,10 +4,7 @@ import {
   validateManualAssignmentRows,
   type ManualAssignmentRow,
 } from "@/lib/raster/manualAssignments";
-import {
-  assertPersistableSnapshot,
-  buildObjectiveBreakdown,
-} from "@/lib/raster/run-outcome";
+import { rasterIngest } from "@/lib/raster/pipeline";
 import {
   AssignmentStatus,
   OptimizationRunOutcome,
@@ -77,10 +74,16 @@ export async function scoreManualAssignmentDraft(id: string, userId: string) {
   );
   if (validation.issues.length) return { issues: validation.issues, run: null };
 
-  const result = assertPersistableSnapshot(model, validation.assignment);
-  const objectiveBreakdown = JSON.stringify(
-    buildObjectiveBreakdown(model, validation.assignment),
+  const result = await rasterIngest.scoreAssignment(
+    model,
+    validation.assignment,
   );
+  if (result.hardViolations.length) {
+    throw new Error(
+      result.hardViolations.map((violation) => violation.detail).join("; "),
+    );
+  }
+  const objectiveBreakdown = JSON.stringify(result.objectiveBreakdown);
   const conflicts = result.overUsages.filter((row) => row.excess > 0);
 
   const run = await prisma.$transaction(async (tx) => {

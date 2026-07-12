@@ -7,7 +7,7 @@ import type {
   TeamRasterAssignmentRow,
   WishParseResult,
 } from "../../../../src/raster/ingest/index.js";
-import type { SeasonModel } from "../../../../src/raster/types.js";
+import type { Assignment, SeasonModel } from "../../../../src/raster/types.js";
 
 const execFileAsync = promisify(execFile);
 const repoRoot = path.resolve(process.cwd(), "..");
@@ -20,6 +20,29 @@ const ingestScrapeUrl = pathToFileURL(
 const ingestWishesPdfUrl = pathToFileURL(
   path.join(repoRoot, "src/raster/ingest/wishes-pdf.ts"),
 ).href;
+const scoreEvaluateUrl = pathToFileURL(
+  path.join(repoRoot, "src/raster/score/evaluate.ts"),
+).href;
+const rulebookUrl = pathToFileURL(
+  path.join(repoRoot, "src/raster/rulebook/rulebook.ts"),
+).href;
+const typesUrl = pathToFileURL(path.join(repoRoot, "src/raster/types.ts")).href;
+
+type RasterAssignmentScore = {
+  assignment: Assignment;
+  objective: number;
+  hardViolations: Array<{ detail: string }>;
+  overUsages: Array<{
+    clubId: string;
+    hall: string;
+    weekday: string;
+    week: number;
+    teams: string[];
+    capacity: number;
+    excess: number;
+  }>;
+  objectiveBreakdown: Record<string, number>;
+};
 
 function parseCsvLine(line: string): string[] {
   const result: string[] = [];
@@ -86,6 +109,55 @@ async function scrapeClickTtPublicLeagueAssignments(
   `);
 }
 
+async function scoreAssignment(
+  model: SeasonModel,
+  assignment: Assignment,
+): Promise<RasterAssignmentScore> {
+  return runRasterTs<RasterAssignmentScore>(`
+    const { evaluate, overUsageFairnessCost } = await import(${JSON.stringify(scoreEvaluateUrl)});
+    const { derbySpieltag, rasterSizeForGroupSize } = await import(${JSON.stringify(rulebookUrl)});
+    const { defaultWeights } = await import(${JSON.stringify(typesUrl)});
+    const model = ${JSON.stringify(model)};
+    const assignment = ${JSON.stringify(assignment)};
+    const result = evaluate(model, assignment, defaultWeights);
+    let sameClubDerbySt4 = 0;
+    for (const group of model.groups) {
+      const rasterSize = rasterSizeForGroupSize(group.size, group.rasterMode);
+      for (const [leftIndex, leftId] of group.teamIds.entries()) {
+        const left = model.teams.find((team) => team.id === leftId);
+        const leftRz = result.assignment[leftId];
+        if (!left || leftRz === undefined) continue;
+        for (const rightId of group.teamIds.slice(leftIndex + 1)) {
+          const right = model.teams.find((team) => team.id === rightId);
+          const rightRz = result.assignment[rightId];
+          if (!right || rightRz === undefined || left.clubId !== right.clubId) continue;
+          if (derbySpieltag(rasterSize, leftRz, rightRz) === 4) sameClubDerbySt4 += 1;
+        }
+      }
+    }
+    const brokenWechsel = result.wishResults.filter(
+      (entry) => entry.status === "unfulfilled" && entry.wish.relation === "wechsel"
+    ).length;
+    const brokenZeitgleich = result.wishResults.filter(
+      (entry) => entry.status === "unfulfilled" && entry.wish.relation === "zeitgleich"
+    ).length;
+    emit({
+      assignment: result.assignment,
+      objective: result.objective,
+      hardViolations: result.hardViolations,
+      overUsages: result.overUsages,
+      objectiveBreakdown: {
+        overUsage: result.overUsages.reduce((sum, usage) => sum + usage.excess ** 2, 0) * defaultWeights.overUsage,
+        overUsageFairness: overUsageFairnessCost(result.overUsages) * defaultWeights.overUsageFairness,
+        wechsel: brokenWechsel * defaultWeights.wechsel,
+        zeitgleich: brokenZeitgleich * defaultWeights.zeitgleich,
+        sameClubDerbySt4: sameClubDerbySt4 * defaultWeights.sameClubDerbySt4,
+        spielwoche: result.spielwocheMisses.length * defaultWeights.spielwoche,
+      },
+    });
+  `);
+}
+
 async function runRasterTs<T>(code: string): Promise<T> {
   const command =
     process.platform === "win32" ? process.env.ComSpec ?? "cmd.exe" : "pnpm";
@@ -142,4 +214,5 @@ export const rasterIngest = {
   buildSeasonModelFromAssignments,
   scrapeClickTtAssignments,
   scrapeClickTtPublicLeagueAssignments,
+  scoreAssignment,
 };
