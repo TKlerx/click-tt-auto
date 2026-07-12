@@ -1429,6 +1429,7 @@ def _find_overage_rows(model: dict[str, Any], assignment: dict[str, Any]) -> lis
     clubs = _dicts(model.get("clubs"))
     team_group = {str(team_id): group for group in groups for team_id in group.get("teamIds", [])}
     group_byes = {_group_key(group): _unused_rasterzahl(group, assignment) for group in groups}
+    inferred_capacities = _inferred_capacities(teams)
     slots: dict[tuple[str, str, str, int], dict[str, Any]] = {}
     for team in teams:
         team_id = str(team.get("id") or "")
@@ -1436,7 +1437,7 @@ def _find_overage_rows(model: dict[str, Any], assignment: dict[str, Any]) -> lis
         rasterzahl = int(assignment.get(team_id) or 0)
         if not group or not rasterzahl:
             continue
-        capacity = _capacity_for(clubs, team)
+        capacity = _capacity_for(clubs, team, inferred_capacities)
         if capacity is None:
             continue
         for week in _home_weeks(group, rasterzahl, group_byes.get(_group_key(group))):
@@ -1467,28 +1468,57 @@ def _find_overage_rows(model: dict[str, Any], assignment: dict[str, Any]) -> lis
     return rows
 
 
-def _capacity_for(clubs: list[dict[str, Any]], team: dict[str, Any]) -> int | None:
+def _capacity_for(
+    clubs: list[dict[str, Any]],
+    team: dict[str, Any],
+    inferred_capacities: dict[tuple[str, str, str, str], int] | None = None,
+) -> int | None:
     club = next((row for row in clubs if row.get("id") == team.get("clubId")), None)
     venues = club.get("venues") if club else None
-    if not isinstance(venues, list):
-        return None
-    venue = next(
-        (
-            row
-            for row in venues
-            if isinstance(row, dict) and str(row.get("hall") or "") == str(team.get("hall") or "")
-        ),
-        None,
+    venue = (
+        next(
+            (
+                row
+                for row in venues
+                if isinstance(row, dict)
+                and str(row.get("hall") or "") == str(team.get("hall") or "")
+            ),
+            None,
+        )
+        if isinstance(venues, list)
+        else None
+    )
+    weekday = str(team.get("homeWeekday") or "")
+    hall = str(team.get("hall") or "1")
+    club_id = str(team.get("clubId") or "")
+    inferred_capacity = max(
+        (inferred_capacities or {}).get((club_id, hall, weekday, "A"), 0),
+        (inferred_capacities or {}).get((club_id, hall, weekday, "B"), 0),
     )
     if not venue:
-        return None
+        return inferred_capacity or None
     by_day = venue.get("capacityByWeekday")
-    weekday = str(team.get("homeWeekday") or "")
     if isinstance(by_day, dict) and weekday in by_day:
         return int(by_day[weekday])
     if venue.get("capacity") is not None:
         return int(venue["capacity"])
-    return None
+    return inferred_capacity or None
+
+
+def _inferred_capacities(teams: list[dict[str, Any]]) -> dict[tuple[str, str, str, str], int]:
+    inferred: dict[tuple[str, str, str, str], int] = {}
+    for team in teams:
+        pref = team.get("spielwochePref")
+        if not pref:
+            continue
+        key = (
+            str(team.get("clubId") or ""),
+            str(team.get("hall") or "1"),
+            str(team.get("homeWeekday") or ""),
+            str(pref),
+        )
+        inferred[key] = inferred.get(key, 0) + 1
+    return inferred
 
 
 def _group_key(group: dict[str, Any]) -> str:

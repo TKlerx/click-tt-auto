@@ -12,7 +12,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from starter_worker.config import WorkerConfig, load_config
-from starter_worker.db import JobStore, normalize_postgres_database_url
+from starter_worker.db import JobStore, _find_overage_rows, normalize_postgres_database_url
 from starter_worker.main import (
     _log_job_claimed,
     _log_job_completed,
@@ -294,6 +294,41 @@ class WorkerTests(unittest.TestCase):
         command = run.call_args.args[0]
         self.assertTrue(Path(command[0]).name.lower().startswith("pnpm"))
         self.assertEqual(command[1:3], ["exec", "tsx"])
+
+    def test_persisted_overages_use_inferred_capacity(self) -> None:
+        model = {
+            "clubs": [{"id": "club", "name": "Club", "venues": [{"hall": "1"}]}],
+            "teams": [
+                {
+                    "id": "team-a",
+                    "clubId": "club",
+                    "hall": "1",
+                    "homeWeekday": "friday",
+                    "spielwochePref": "A",
+                    "rasterzahl": {"kind": "assignable"},
+                },
+                {
+                    "id": "team-b",
+                    "clubId": "club",
+                    "hall": "1",
+                    "homeWeekday": "friday",
+                    "spielwochePref": "B",
+                    "rasterzahl": {"kind": "assignable"},
+                },
+            ],
+            "groups": [
+                {
+                    "ref": {"league": "L", "name": "G"},
+                    "size": 6,
+                    "teamIds": ["team-a", "team-b"],
+                }
+            ],
+        }
+
+        rows = _find_overage_rows(model, {"team-a": 1, "team-b": 1})
+
+        self.assertTrue(rows)
+        self.assertEqual(rows[0]["capacity"], 1)
 
     def test_process_inbound_mail_poll_stores_bounces_and_entity_links(self) -> None:
         with (
