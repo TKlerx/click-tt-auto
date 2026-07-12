@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { requireApiUser } from "@/lib/route-auth";
 import { assertRasterAccess } from "@/lib/raster/access";
+import { logRasterAudit } from "@/lib/raster/audit";
 import { prisma } from "@/lib/db";
 import { deleteRasterSource } from "@/services/raster";
+import { AuditAction } from "../../../../../../generated/prisma/enums";
 
 export async function PATCH(
   request: Request,
@@ -34,11 +36,25 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid parsed JSON" }, { status: 422 });
   }
 
+  const updated = await prisma.rasterSource.update({
+    where: { id: source.id },
+    data: { parsedJson: body.parsedJson },
+  });
+  await logRasterAudit({
+    action: AuditAction.RASTER_INPUT_UPLOADED,
+    actorId: auth.user.id,
+    district: source.scope.code,
+    entityType: "RasterSource",
+    entityId: source.id,
+    details: {
+      change: "parsed_source_corrected",
+      sourceType: source.sourceType,
+      displayName: source.displayName,
+    },
+  });
+
   return NextResponse.json({
-    source: await prisma.rasterSource.update({
-      where: { id: source.id },
-      data: { parsedJson: body.parsedJson },
-    }),
+    source: updated,
   });
 }
 

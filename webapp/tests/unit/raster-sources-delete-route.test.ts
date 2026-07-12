@@ -37,6 +37,8 @@ describe("raster source delete route", () => {
     });
     prismaMock.rasterSource.findUnique.mockResolvedValue({
       id: "source-1",
+      sourceType: "WISHES_PDF",
+      displayName: "Wishes",
       scope: { code: "WTTV" },
     } as never);
     deleteRasterSource.mockResolvedValue({ id: "source-1" });
@@ -103,6 +105,17 @@ describe("raster source delete route", () => {
       where: { id: "source-1" },
       data: { parsedJson: '{"wishes":[]}' },
     });
+    expect(prismaMock.auditEntry.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          action: "RASTER_INPUT_UPLOADED",
+          entityType: "RasterSource",
+          entityId: "source-1",
+          actorId: "admin-1",
+          details: expect.stringContaining("parsed_source_corrected"),
+        }),
+      }),
+    );
   });
 
   it("rejects invalid parsed JSON corrections", async () => {
