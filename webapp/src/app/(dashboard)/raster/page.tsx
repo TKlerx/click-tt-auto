@@ -21,11 +21,13 @@ import {
   ManualAssignmentForm,
   type ManualAssignmentTeamRow,
 } from "@/components/raster/manual-assignment-form";
+import { CapacityTable } from "@/components/raster/capacity/capacity-table";
 import { ScenarioComparison } from "@/components/raster/scenario-comparison";
 import { RasterSourcesPanel } from "@/components/raster/sources/raster-sources-panel";
 import { Role } from "../../../../generated/prisma/enums";
 import {
   listInputSets,
+  listHallCapacities,
   listRasterSourcesForDistrict,
   listScenarios,
   reviewHallCapacitiesForInputSet,
@@ -67,10 +69,11 @@ export default async function RasterPage({
     );
   }
 
-  const [inputSets, sources, scenarios] = await Promise.all([
+  const [inputSets, sources, scenarios, capacities] = await Promise.all([
     listInputSets(district, season),
     listRasterSourcesForDistrict(district, season),
     listScenarios({ district, season }),
+    listHallCapacities(district),
   ]);
   const capacityReviews = new Map(
     await Promise.all(
@@ -135,6 +138,15 @@ export default async function RasterPage({
         scopes={scopes}
         sources={sources}
       />
+
+      <details className="overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--panel)]">
+        <summary className="cursor-pointer border-b border-[var(--border)] px-4 py-3 text-sm font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
+          Hall capacities ({capacities.length})
+        </summary>
+        <div className="p-4">
+          <CapacityTable rows={capacities} />
+        </div>
+      </details>
 
       <section className="overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--panel)]">
         <div className="border-b border-[var(--border)] px-4 py-3">
