@@ -155,10 +155,12 @@ export function InputSetRunActions({
   inputSetId,
   status,
   runs,
+  capacityCount,
 }: {
   inputSetId: string;
   status: string;
   runs: RasterRunRow[];
+  capacityCount: number;
 }) {
   const router = useRouter();
   const [message, setMessage] = useState<string | null>(null);
@@ -271,6 +273,29 @@ export function InputSetRunActions({
     }
   }
 
+  async function inferCapacities() {
+    setBusy("Capacity");
+    setMessage(null);
+    try {
+      const response = await fetch(
+        withBasePath(`/api/raster/input-sets/${inputSetId}/capacities/infer`),
+        { method: "POST" },
+      );
+      const body = (await response.json().catch(() => ({}))) as {
+        result?: { count?: number };
+        error?: string;
+      };
+      if (!response.ok) {
+        setMessage(body.error ?? `Capacity inference failed (${response.status})`);
+        return;
+      }
+      setMessage(`Capacity rows inferred: ${body.result?.count ?? 0}. Review them before running.`);
+      router.refresh();
+    } finally {
+      setBusy(null);
+    }
+  }
+
   return (
     <div className="mt-3 space-y-3 border-t border-[var(--border)] pt-3">
       <RunSettingsFields
@@ -296,7 +321,7 @@ export function InputSetRunActions({
         </button>
         <button
           className="h-9 rounded-md border border-[var(--border)] px-3 text-sm font-medium disabled:opacity-50"
-          disabled={busy !== null || status !== "READY"}
+          disabled={busy !== null || status !== "READY" || capacityCount === 0}
           onClick={() =>
             void post(`/api/raster/input-sets/${inputSetId}/runs`, "Run")
           }
@@ -308,6 +333,21 @@ export function InputSetRunActions({
           <span className="text-sm text-[var(--muted-foreground)]">
             Validate before starting a run.
           </span>
+        ) : null}
+        {capacityCount === 0 ? (
+          <>
+            <button
+              className="h-9 rounded-md border border-[var(--border)] px-3 text-sm font-medium"
+              disabled={busy !== null}
+              onClick={() => void inferCapacities()}
+              type="button"
+            >
+              {busy === "Capacity" ? "..." : "Infer capacities"}
+            </button>
+            <span className="text-sm text-[var(--muted-foreground)]">
+              Review hall capacities before queueing an optimizer run.
+            </span>
+          </>
         ) : null}
         {message ? (
           <span className="text-sm text-[var(--muted-foreground)]">

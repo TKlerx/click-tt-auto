@@ -26,6 +26,7 @@ import { RasterSourcesPanel } from "@/components/raster/sources/raster-sources-p
 import { Role } from "../../../../generated/prisma/enums";
 import {
   listInputSets,
+  listHallCapacities,
   listRasterSourcesForDistrict,
   listScenarios,
 } from "@/services/raster";
@@ -66,10 +67,11 @@ export default async function RasterPage({
     );
   }
 
-  const [inputSets, sources, scenarios] = await Promise.all([
+  const [inputSets, sources, scenarios, capacities] = await Promise.all([
     listInputSets(district, season),
     listRasterSourcesForDistrict(district, season),
     listScenarios({ district, season }),
+    listHallCapacities(district),
   ]);
 
   return (
@@ -175,6 +177,7 @@ export default async function RasterPage({
                 <GroupModeReview groups={sixTeamGroups} />
                 {user.role === Role.PLATFORM_ADMIN ? (
                   <InputSetRunActions
+                    capacityCount={capacities.length}
                     inputSetId={inputSet.id}
                     runs={inputSet.runs}
                     status={inputSet.status}
