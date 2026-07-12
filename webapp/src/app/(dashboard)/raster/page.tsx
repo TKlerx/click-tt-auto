@@ -22,6 +22,7 @@ import {
   type ManualAssignmentTeamRow,
 } from "@/components/raster/manual-assignment-form";
 import { CapacityTable } from "@/components/raster/capacity/capacity-table";
+import { InferCapacitiesButton } from "@/components/raster/capacity/infer-capacities-button";
 import { ScenarioComparison } from "@/components/raster/scenario-comparison";
 import { RasterSourcesPanel } from "@/components/raster/sources/raster-sources-panel";
 import { Role } from "../../../../generated/prisma/enums";
@@ -143,7 +144,32 @@ export default async function RasterPage({
         <summary className="cursor-pointer border-b border-[var(--border)] px-4 py-3 text-sm font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
           Hall capacities ({capacities.length})
         </summary>
-        <div className="p-4">
+        <div className="grid gap-3 p-4">
+          {user.role === Role.PLATFORM_ADMIN ? (
+            <div className="grid gap-2">
+              {inputSets.map((inputSet) => {
+                const review = capacityReviews.get(inputSet.id);
+                if (!review?.blockingCount) return null;
+                return (
+                  <div
+                    className="rounded-md border border-[var(--border)] p-3"
+                    key={inputSet.id}
+                  >
+                    <p className="mb-2 text-sm text-[var(--muted-foreground)]">
+                      {inputSet.name}: {review.missingCount} missing,{" "}
+                      {review.insufficientCount} lower than inferred.
+                    </p>
+                    {review.missingCount ? (
+                      <InferCapacitiesButton
+                        inputSetId={inputSet.id}
+                        label={`Infer missing capacities for ${inputSet.name}`}
+                      />
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
           <CapacityTable rows={capacities} />
         </div>
       </details>
