@@ -27,6 +27,13 @@ type RasterRunRow = {
   snapshot: { id: string } | null;
 };
 
+type HallCapacityReview = {
+  inferredCount: number;
+  missingCount: number;
+  insufficientCount: number;
+  blockingCount: number;
+};
+
 export function CreateInputSetForm({
   district,
   season,
@@ -155,18 +162,19 @@ export function InputSetRunActions({
   inputSetId,
   status,
   runs,
-  capacityCount,
+  capacityReview,
 }: {
   inputSetId: string;
   status: string;
   runs: RasterRunRow[];
-  capacityCount: number;
+  capacityReview?: HallCapacityReview;
 }) {
   const router = useRouter();
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [strategy, setStrategy] = useState<RasterRunStrategy>("cp_sat");
   const [timeLimitSeconds, setTimeLimitSeconds] = useState(300);
+  const capacityBlocked = (capacityReview?.blockingCount ?? 0) > 0;
 
   async function post(path: string, label: string) {
     setBusy(label);
@@ -282,14 +290,20 @@ export function InputSetRunActions({
         { method: "POST" },
       );
       const body = (await response.json().catch(() => ({}))) as {
-        result?: { count?: number };
+        result?: { count?: number; needsReview?: number };
         error?: string;
       };
       if (!response.ok) {
         setMessage(body.error ?? `Capacity inference failed (${response.status})`);
         return;
       }
-      setMessage(`Capacity rows inferred: ${body.result?.count ?? 0}. Review them before running.`);
+      const count = body.result?.count ?? 0;
+      const needsReview = body.result?.needsReview ?? 0;
+      setMessage(
+        needsReview > 0
+          ? `Capacity rows inferred: ${count}. ${needsReview} stored capacities look too low and need review.`
+          : `Capacity rows inferred: ${count}. You can queue a run after refresh.`,
+      );
       router.refresh();
     } finally {
       setBusy(null);
@@ -321,7 +335,7 @@ export function InputSetRunActions({
         </button>
         <button
           className="h-9 rounded-md border border-[var(--border)] px-3 text-sm font-medium disabled:opacity-50"
-          disabled={busy !== null || status !== "READY" || capacityCount === 0}
+          disabled={busy !== null || status !== "READY" || capacityBlocked}
           onClick={() =>
             void post(`/api/raster/input-sets/${inputSetId}/runs`, "Run")
           }
@@ -334,18 +348,22 @@ export function InputSetRunActions({
             Validate before starting a run.
           </span>
         ) : null}
-        {capacityCount === 0 ? (
+        {capacityBlocked ? (
           <>
-            <button
-              className="h-9 rounded-md border border-[var(--border)] px-3 text-sm font-medium"
-              disabled={busy !== null}
-              onClick={() => void inferCapacities()}
-              type="button"
-            >
-              {busy === "Capacity" ? "..." : "Infer capacities"}
-            </button>
+            {capacityReview?.missingCount ? (
+              <button
+                className="h-9 rounded-md border border-[var(--border)] px-3 text-sm font-medium"
+                disabled={busy !== null}
+                onClick={() => void inferCapacities()}
+                type="button"
+              >
+                {busy === "Capacity" ? "..." : "Infer missing capacities"}
+              </button>
+            ) : null}
             <span className="text-sm text-[var(--muted-foreground)]">
-              Review hall capacities before queueing an optimizer run.
+              Capacity review needed: {capacityReview?.missingCount ?? 0}{" "}
+              missing, {capacityReview?.insufficientCount ?? 0} lower than
+              inferred.
             </span>
           </>
         ) : null}

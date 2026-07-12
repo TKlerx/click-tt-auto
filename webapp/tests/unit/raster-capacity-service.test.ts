@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { prismaMock } from "@/lib/__mocks__/db";
-import { inferHallCapacitiesFromInputSet } from "@/services/raster";
+import {
+  inferHallCapacitiesFromInputSet,
+  reviewHallCapacitiesForInputSet,
+} from "@/services/raster";
 import { HallCapacityBasis } from "../../generated/prisma/enums";
 
 vi.mock("@/lib/db", () => ({
@@ -32,14 +35,96 @@ describe("raster capacity service", () => {
         ],
       }),
     } as never);
-    prismaMock.rasterHallCapacity.findUnique.mockResolvedValue({
-      basis: HallCapacityBasis.REVIEWED,
-    } as never);
+    prismaMock.rasterHallCapacity.findMany.mockResolvedValue([
+      {
+        district: "OWL",
+        clubId: "club-a",
+        hall: "1",
+        weekday: "FRIDAY",
+        capacity: 1,
+      },
+    ] as never);
 
     await expect(
       inferHallCapacitiesFromInputSet("input-1", "admin-1"),
-    ).resolves.toEqual({ count: 0 });
+    ).resolves.toEqual({ count: 0, needsReview: 0 });
 
-    expect(prismaMock.rasterHallCapacity.upsert).not.toHaveBeenCalled();
+    expect(prismaMock.rasterHallCapacity.create).not.toHaveBeenCalled();
+  });
+
+  it("does not block when stored capacity is equal or larger than inferred capacity", async () => {
+    prismaMock.rasterInputSet.findUnique.mockResolvedValue({
+      district: "OWL",
+      seasonModelJson: JSON.stringify({
+        teams: [
+          {
+            clubId: "club-a",
+            hall: "1",
+            homeWeekday: "friday",
+            spielwochePref: "A",
+          },
+        ],
+      }),
+    } as never);
+    prismaMock.rasterHallCapacity.findMany.mockResolvedValue([
+      {
+        district: "OWL",
+        clubId: "club-a",
+        hall: "1",
+        weekday: "FRIDAY",
+        capacity: 2,
+        basis: HallCapacityBasis.REVIEWED,
+      },
+    ] as never);
+
+    await expect(
+      reviewHallCapacitiesForInputSet("input-1"),
+    ).resolves.toEqual({
+      inferredCount: 1,
+      missingCount: 0,
+      insufficientCount: 0,
+      blockingCount: 0,
+    });
+  });
+
+  it("blocks when inferred capacity exceeds the stored capacity", async () => {
+    prismaMock.rasterInputSet.findUnique.mockResolvedValue({
+      district: "OWL",
+      seasonModelJson: JSON.stringify({
+        teams: [
+          {
+            clubId: "club-a",
+            hall: "1",
+            homeWeekday: "friday",
+            spielwochePref: "A",
+          },
+          {
+            clubId: "club-a",
+            hall: "1",
+            homeWeekday: "friday",
+            spielwochePref: "A",
+          },
+        ],
+      }),
+    } as never);
+    prismaMock.rasterHallCapacity.findMany.mockResolvedValue([
+      {
+        district: "OWL",
+        clubId: "club-a",
+        hall: "1",
+        weekday: "FRIDAY",
+        capacity: 1,
+        basis: HallCapacityBasis.REVIEWED,
+      },
+    ] as never);
+
+    await expect(
+      reviewHallCapacitiesForInputSet("input-1"),
+    ).resolves.toEqual({
+      inferredCount: 1,
+      missingCount: 0,
+      insufficientCount: 1,
+      blockingCount: 1,
+    });
   });
 });

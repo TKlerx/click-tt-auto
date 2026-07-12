@@ -26,9 +26,9 @@ import { RasterSourcesPanel } from "@/components/raster/sources/raster-sources-p
 import { Role } from "../../../../generated/prisma/enums";
 import {
   listInputSets,
-  listHallCapacities,
   listRasterSourcesForDistrict,
   listScenarios,
+  reviewHallCapacitiesForInputSet,
 } from "@/services/raster";
 
 type SeasonGroup = {
@@ -67,12 +67,19 @@ export default async function RasterPage({
     );
   }
 
-  const [inputSets, sources, scenarios, capacities] = await Promise.all([
+  const [inputSets, sources, scenarios] = await Promise.all([
     listInputSets(district, season),
     listRasterSourcesForDistrict(district, season),
     listScenarios({ district, season }),
-    listHallCapacities(district),
   ]);
+  const capacityReviews = new Map(
+    await Promise.all(
+      inputSets.map(async (inputSet) => [
+        inputSet.id,
+        await reviewHallCapacitiesForInputSet(inputSet.id),
+      ] as const),
+    ),
+  );
 
   return (
     <div className="space-y-7">
@@ -177,7 +184,7 @@ export default async function RasterPage({
                 <GroupModeReview groups={sixTeamGroups} />
                 {user.role === Role.PLATFORM_ADMIN ? (
                   <InputSetRunActions
-                    capacityCount={capacities.length}
+                    capacityReview={capacityReviews.get(inputSet.id)}
                     inputSetId={inputSet.id}
                     runs={inputSet.runs}
                     status={inputSet.status}
