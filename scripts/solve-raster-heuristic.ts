@@ -1,6 +1,6 @@
 import { readFile, writeFile } from "node:fs/promises";
 
-import { optimize } from "../src/raster/optimize/search.js";
+import { startingAssignment } from "../src/raster/optimize/search.js";
 import {
   evaluate,
   overUsageFairnessCost,
@@ -46,7 +46,7 @@ async function main() {
     ? mergeWeights(await readJson(args.weights))
     : defaultWeights;
   const startedAt = performance.now();
-  const assignment = optimize(model, undefined, weights);
+  const assignment = startingAssignment(model);
   const result = evaluate(model, assignment, weights);
   const overUsage =
     result.overUsages.reduce((sum, usage) => sum + usage.excess ** 2, 0) *
