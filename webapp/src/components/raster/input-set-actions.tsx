@@ -3,6 +3,10 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { withBasePath } from "@/lib/base-path";
+import {
+  RunSettingsFields,
+  type RasterRunStrategy,
+} from "@/components/raster/run-controls";
 
 type FixedScheduleNumber = {
   clubId: string;
@@ -157,6 +161,8 @@ export function InputSetRunActions({
   const router = useRouter();
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [strategy, setStrategy] = useState<RasterRunStrategy>("cp_sat");
+  const [timeLimitSeconds, setTimeLimitSeconds] = useState(300);
 
   async function post(path: string, label: string) {
     setBusy(label);
@@ -196,7 +202,10 @@ export function InputSetRunActions({
       const response = await fetch(withBasePath(path), {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: "{}",
+        body:
+          label === "Run"
+            ? JSON.stringify({ strategy, timeLimitSeconds })
+            : "{}",
       });
       const body = (await response.json().catch(() => ({}))) as {
         error?: string;
@@ -262,12 +271,22 @@ export function InputSetRunActions({
 
   return (
     <div className="mt-3 space-y-3 border-t border-[var(--border)] pt-3">
+      <RunSettingsFields
+        disabled={busy !== null || status !== "READY"}
+        setStrategy={setStrategy}
+        setTimeLimitSeconds={setTimeLimitSeconds}
+        strategy={strategy}
+        timeLimitSeconds={timeLimitSeconds}
+      />
       <div className="flex flex-wrap items-center gap-2">
         <button
           className="h-9 rounded-md border border-[var(--border)] px-3 text-sm font-medium"
           disabled={busy !== null}
           onClick={() =>
-            void post(`/api/raster/input-sets/${inputSetId}/validate`, "Validate")
+            void post(
+              `/api/raster/input-sets/${inputSetId}/validate`,
+              "Validate",
+            )
           }
           type="button"
         >
@@ -296,7 +315,9 @@ export function InputSetRunActions({
       </div>
       {runs.length ? (
         <div className="grid gap-2 text-sm">
-          {runs.some((run) => run.status === "PENDING" || run.status === "RUNNING") ? (
+          {runs.some(
+            (run) => run.status === "PENDING" || run.status === "RUNNING",
+          ) ? (
             <p className="text-sm text-[var(--muted-foreground)]">
               A run is queued or running in the background. Refresh this page to
               update the status; results appear here when the worker finishes.
@@ -317,7 +338,9 @@ export function InputSetRunActions({
                   {run.snapshot ? (
                     <a
                       className="text-[var(--primary)]"
-                      href={withBasePath(`/raster/snapshots/${run.snapshot.id}`)}
+                      href={withBasePath(
+                        `/raster/snapshots/${run.snapshot.id}`,
+                      )}
                     >
                       Results
                     </a>
@@ -393,7 +416,11 @@ function RunPhaseBar({
       <div className="flex justify-between gap-2 text-xs text-[var(--muted-foreground)]">
         {steps.map((step, index) => (
           <span
-            className={index === activeIndex ? "font-medium text-[var(--foreground)]" : ""}
+            className={
+              index === activeIndex
+                ? "font-medium text-[var(--foreground)]"
+                : ""
+            }
             key={step}
           >
             {failed && index === activeIndex ? status.toLowerCase() : step}

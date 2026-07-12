@@ -14,7 +14,11 @@ export const solverSeasonModelSchema = seasonModelSchema;
 
 export const solverInputSchema = z.object({
   model: solverSeasonModelSchema,
-  settings: runSettingsSchema.default({ timeLimitSeconds: 60, weights: {} }),
+  settings: runSettingsSchema.default({
+    strategy: "cp_sat",
+    timeLimitSeconds: 60,
+    weights: {},
+  }),
   weights: solverWeightsSchema.partial().default({}),
 });
 
@@ -39,7 +43,7 @@ export const objectiveBreakdownSchema = z
   .default({});
 
 export const solverMetadataSchema = z.object({
-  solver: z.literal("ortools-cpsat"),
+  solver: z.enum(["ortools-cpsat", "initial-heuristic"]),
   status: solverStatusSchema,
   objective: z.number().nullable(),
   bestBound: z.number().nullable(),

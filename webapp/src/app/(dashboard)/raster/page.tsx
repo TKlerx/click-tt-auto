@@ -17,9 +17,18 @@ import {
   FixedScheduleNumbersForm,
   InputSetRunActions,
 } from "@/components/raster/input-set-actions";
+import {
+  ManualAssignmentForm,
+  type ManualAssignmentTeamRow,
+} from "@/components/raster/manual-assignment-form";
+import { ScenarioComparison } from "@/components/raster/scenario-comparison";
 import { RasterSourcesPanel } from "@/components/raster/sources/raster-sources-panel";
 import { Role } from "../../../../generated/prisma/enums";
-import { listInputSets, listRasterSourcesForDistrict } from "@/services/raster";
+import {
+  listInputSets,
+  listRasterSourcesForDistrict,
+  listScenarios,
+} from "@/services/raster";
 
 type SeasonGroup = {
   id?: string;
@@ -57,9 +66,10 @@ export default async function RasterPage({
     );
   }
 
-  const [inputSets, sources] = await Promise.all([
+  const [inputSets, sources, scenarios] = await Promise.all([
     listInputSets(district, season),
     listRasterSourcesForDistrict(district, season),
+    listScenarios({ district, season }),
   ]);
 
   return (
@@ -170,6 +180,19 @@ export default async function RasterPage({
                     status={inputSet.status}
                   />
                 ) : null}
+                {user.role === Role.PLATFORM_ADMIN ? (
+                  <ManualAssignmentForm
+                    inputSetId={inputSet.id}
+                    teams={extractManualAssignmentTeams(
+                      inputSet.seasonModelJson,
+                    )}
+                  />
+                ) : null}
+                <ScenarioComparison
+                  scenarios={scenarios.filter(
+                    (scenario) => scenario.inputSetId === inputSet.id,
+                  )}
+                />
               </div>
             );
           })
@@ -181,6 +204,25 @@ export default async function RasterPage({
       </section>
     </div>
   );
+}
+
+function extractManualAssignmentTeams(
+  seasonModelJson: string | null,
+): ManualAssignmentTeamRow[] {
+  if (!seasonModelJson) return [];
+  try {
+    const parsed = JSON.parse(seasonModelJson) as {
+      teams?: Array<{ id?: string; label?: string; name?: string }>;
+    };
+    return (parsed.teams ?? [])
+      .filter((team) => team.id && (team.label || team.name))
+      .map((team) => ({
+        teamId: team.id!,
+        label: team.label ?? team.name ?? team.id!,
+      }));
+  } catch {
+    return [];
+  }
 }
 
 function ModelWarnings({ warnings }: { warnings: string[] }) {

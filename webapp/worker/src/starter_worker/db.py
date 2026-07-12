@@ -409,8 +409,8 @@ class JobStore:
         total_excess = sum(int(row["excess"]) for row in overages)
         affected_clubs = len({str(row["clubId"]) for row in overages})
         max_excess = max([int(row["excess"]) for row in overages], default=0)
-        optimality = "PROVEN_OPTIMAL" if metadata.get("status") == "OPTIMAL" else "FEASIBLE"
-        outcome = "PROVEN_OPTIMAL" if metadata.get("status") == "OPTIMAL" else "FEASIBLE"
+        optimality = _raster_success_outcome(str(metadata.get("status") or ""))
+        outcome = optimality
         assignments = _assignment_rows(snapshot_id, model, assignment)
         objective_breakdown = json.dumps(
             metadata.get("objectiveBreakdown")
@@ -1353,6 +1353,13 @@ def _objective_breakdown(overages: list[dict[str, Any]], weights: object) -> dic
         "sameClubDerbySt4": 0,
         "spielwoche": 0,
     }
+
+
+def _raster_success_outcome(status: str) -> str:
+    normalized = status.strip().upper()
+    if normalized == "OPTIMAL":
+        return "PROVEN_OPTIMAL"
+    return "FEASIBLE"
 
 
 def _assignment_rows(

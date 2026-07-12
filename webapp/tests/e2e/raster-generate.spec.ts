@@ -170,7 +170,9 @@ test("admin can generate and review a raster snapshot", async ({ page }) => {
 
   await page.goto(`${appBasePath}/raster?district=${district}`);
   await page.getByRole("link", { name: "Results" }).click();
-  await expect(page.getByRole("heading", { name: "Raster results" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Raster results" }),
+  ).toBeVisible();
   await expect(page.getByText("Assignments")).toBeVisible();
 });
 
@@ -192,7 +194,9 @@ test("admin can use the guided source workflow", async ({ page }) => {
 
   await loginWithPassword(page, email, password);
   await expectOnDashboard(page);
-  await page.goto(`${appBasePath}/raster?district=${district}&season=2026%2F27`);
+  await page.goto(
+    `${appBasePath}/raster?district=${district}&season=2026%2F27`,
+  );
 
   await page.getByText("Advanced: register external source").click();
   await page
@@ -210,21 +214,105 @@ test("admin can use the guided source workflow", async ({ page }) => {
   await expect(page.getByText(urlName)).toBeVisible();
   await expect(page.getByText("Needs parse")).toBeVisible();
 
-  await page
-    .locator('input[name="file"][multiple]')
-    .setInputFiles([
-      {
-        name: wishName,
-        mimeType: "application/pdf",
-        buffer: Buffer.from("%PDF-1.4\n% e2e"),
-      },
-    ]);
+  await page.locator('input[name="file"][multiple]').setInputFiles([
+    {
+      name: wishName,
+      mimeType: "application/pdf",
+      buffer: Buffer.from("%PDF-1.4\n% e2e"),
+    },
+  ]);
   await page.getByRole("button", { name: "Upload wish PDFs" }).click();
   await expect(page.getByText(wishName)).toBeVisible();
 
   page.once("dialog", (dialog) => dialog.accept());
   await page.getByLabel(`Delete ${wishName}`).click();
   await expect(page.getByText(wishName)).not.toBeVisible();
+});
+
+test("admin can score and compare manual raster scenarios", async ({
+  page,
+}) => {
+  const suffix = Date.now();
+  const email = `e2e-raster-manual-${suffix}@example.com`;
+  const password = "RasterManual123";
+
+  await seedLocalUser({
+    email,
+    name: "E2E Raster Manual",
+    role: Role.PLATFORM_ADMIN,
+    password,
+    mustChangePassword: false,
+  });
+
+  await loginWithPassword(page, email, password);
+  await expectOnDashboard(page);
+
+  const inputSetResponse = await page.request.post(
+    `${appBasePath}/api/raster/input-sets`,
+    {
+      data: { district, name: `E2E manual ${suffix}` },
+    },
+  );
+  expect(inputSetResponse.status()).toBe(201);
+  const inputSetBody = (await inputSetResponse.json()) as {
+    inputSet: { id: string };
+  };
+  const inputSetId = inputSetBody.inputSet.id;
+  const model = buildSeasonModel();
+
+  const modelResponse = await page.request.post(
+    `${appBasePath}/api/raster/input-sets/${inputSetId}/season-model`,
+    { data: model },
+  );
+  expect(modelResponse.status()).toBe(200);
+
+  const scenarioIds: string[] = [];
+  for (const offset of [0, 1]) {
+    const draftResponse = await page.request.post(
+      `${appBasePath}/api/raster/input-sets/${inputSetId}/manual-assignments`,
+      {
+        data: {
+          name: `Manual ${offset}`,
+          rows: model.teams.map((team, index) => ({
+            teamId: team.id,
+            rasterzahl: ((index + offset) % model.teams.length) + 1,
+          })),
+        },
+      },
+    );
+    expect(draftResponse.status()).toBe(201);
+    const draftBody = (await draftResponse.json()) as {
+      draft: { id: string };
+    };
+    const scoreResponse = await page.request.post(
+      `${appBasePath}/api/raster/manual-assignments/${draftBody.draft.id}/score`,
+    );
+    expect(scoreResponse.status()).toBe(201);
+    const scoreBody = (await scoreResponse.json()) as {
+      run: { id: string };
+    };
+    scenarioIds.push(scoreBody.run.id);
+  }
+
+  const compareResponse = await page.request.post(
+    `${appBasePath}/api/raster/scenarios/compare`,
+    {
+      data: {
+        scenarioIds,
+        baselineScenarioId: scenarioIds[0],
+      },
+    },
+  );
+  expect(compareResponse.status()).toBe(200);
+  const compareBody = (await compareResponse.json()) as {
+    baselineScenarioId: string;
+    scenarios: Array<{ origin: string; strategy: string }>;
+  };
+  expect(compareBody.baselineScenarioId).toBe(scenarioIds[0]);
+  expect(compareBody.scenarios).toHaveLength(2);
+  expect(
+    compareBody.scenarios.every((scenario) => scenario.origin === "manual"),
+  ).toBe(true);
 });
 
 function buildSeasonModel() {

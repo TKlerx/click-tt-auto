@@ -181,9 +181,7 @@ def _repo_root() -> Path:
 
 def _solve_raster_model(model: dict[str, object], settings: dict[str, object]) -> dict[str, Any]:
     repo_root = _repo_root()
-    solver_script = Path(
-        os.environ.get("RASTER_SOLVER_SCRIPT") or repo_root / "scripts" / "solve-raster-cpsat.py"
-    )
+    strategy = str(settings.get("strategy") or "cp_sat")
     time_limit = _as_int(settings.get("timeLimitSeconds"), 60)
     weights = _solver_weights(settings.get("weights"))
     with tempfile.TemporaryDirectory(prefix="raster-run-") as tmp:
@@ -194,24 +192,15 @@ def _solve_raster_model(model: dict[str, object], settings: dict[str, object]) -
         metadata_path = tmp_path / "metadata.json"
         model_path.write_text(json.dumps({"model": model}), encoding="utf-8")
         weights_path.write_text(json.dumps(weights), encoding="utf-8")
-        command = [
-            "uv",
-            "run",
-            "--project",
-            str(Path(__file__).resolve().parents[2]),
-            "python",
-            str(solver_script),
-            "--model",
-            str(model_path),
-            "--weights",
-            str(weights_path),
-            "--out",
-            str(out_path),
-            "--metadata",
-            str(metadata_path),
-            "--time-limit",
-            str(time_limit),
-        ]
+        command = _raster_solver_command(
+            repo_root,
+            strategy,
+            model_path,
+            weights_path,
+            out_path,
+            metadata_path,
+            time_limit,
+        )
         completed = subprocess.run(
             command,
             cwd=repo_root,
@@ -225,8 +214,51 @@ def _solve_raster_model(model: dict[str, object], settings: dict[str, object]) -
         assignment = json.loads(out_path.read_text(encoding="utf-8"))
         metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     if not isinstance(assignment, dict) or not isinstance(metadata, dict):
-        raise ValueError("CP-SAT returned invalid JSON")
+        raise ValueError("Raster solver returned invalid JSON")
     return {"assignment": assignment, "metadata": metadata}
+
+
+def _raster_solver_command(
+    repo_root: Path,
+    strategy: str,
+    model_path: Path,
+    weights_path: Path,
+    out_path: Path,
+    metadata_path: Path,
+    time_limit: int,
+) -> list[str]:
+    common = [
+        "--model",
+        str(model_path),
+        "--weights",
+        str(weights_path),
+        "--out",
+        str(out_path),
+        "--metadata",
+        str(metadata_path),
+    ]
+    if strategy == "initial_heuristic":
+        solver_script = Path(
+            os.environ.get("RASTER_HEURISTIC_SOLVER_SCRIPT")
+            or repo_root / "scripts" / "solve-raster-heuristic.ts"
+        )
+        return ["pnpm", "exec", "tsx", str(solver_script), *common]
+    if strategy != "cp_sat":
+        raise ValueError(f"Unsupported raster optimizer strategy: {strategy}")
+    solver_script = Path(
+        os.environ.get("RASTER_SOLVER_SCRIPT") or repo_root / "scripts" / "solve-raster-cpsat.py"
+    )
+    return [
+        "uv",
+        "run",
+        "--project",
+        str(Path(__file__).resolve().parents[2]),
+        "python",
+        str(solver_script),
+        *common,
+        "--time-limit",
+        str(time_limit),
+    ]
 
 
 def _solver_weights(value: object) -> dict[str, int]:

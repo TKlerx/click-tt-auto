@@ -274,6 +274,26 @@ class WorkerTests(unittest.TestCase):
         command = run.call_args.args[0]
         self.assertEqual(command[:4], ["uv", "run", "--project", str(Path(__file__).parents[1])])
 
+    def test_raster_solver_can_use_initial_heuristic(self) -> None:
+        completed = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout="",
+            stderr="",
+        )
+        with (
+            patch.dict(os.environ, {"RASTER_HEURISTIC_SOLVER_SCRIPT": __file__}),
+            patch("starter_worker.main.subprocess.run", return_value=completed) as run,
+            patch("starter_worker.main.Path.read_text", side_effect=['{"team-a": 1}', '{"status": "FEASIBLE"}']),
+        ):
+            _solve_raster_model(
+                {"clubs": [], "teams": [], "groups": []},
+                {"strategy": "initial_heuristic"},
+            )
+
+        command = run.call_args.args[0]
+        self.assertEqual(command[:3], ["pnpm", "exec", "tsx"])
+
     def test_process_inbound_mail_poll_stores_bounces_and_entity_links(self) -> None:
         with (
             patch(
