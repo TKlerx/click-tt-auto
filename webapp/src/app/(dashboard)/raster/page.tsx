@@ -149,28 +149,30 @@ export default async function RasterPage({
             <div className="grid gap-2">
               {inputSets.map((inputSet) => {
                 const review = capacityReviews.get(inputSet.id);
-                if (!review?.blockingCount) return null;
+                if (!review) return null;
                 return (
                   <div
                     className="rounded-md border border-[var(--border)] p-3"
                     key={inputSet.id}
                   >
                     <p className="mb-2 text-sm text-[var(--muted-foreground)]">
-                      {inputSet.name}: {review.missingCount} missing,{" "}
-                      {review.insufficientCount} lower than inferred.
+                      {inputSet.name}: {review.inferredCount} inferred,{" "}
+                      {review.missingCount} missing, {review.insufficientCount}{" "}
+                      lower than inferred.
                     </p>
-                    {review.missingCount ? (
-                      <InferCapacitiesButton
-                        inputSetId={inputSet.id}
-                        label={`Infer missing capacities for ${inputSet.name}`}
-                      />
-                    ) : null}
+                    <InferCapacitiesButton
+                      inputSetId={inputSet.id}
+                      label={`Recheck capacities for ${inputSet.name}`}
+                    />
                   </div>
                 );
               })}
             </div>
           ) : null}
-          <CapacityTable rows={capacities} />
+          <CapacityTable
+            canEdit={user.role === Role.PLATFORM_ADMIN}
+            rows={capacities}
+          />
         </div>
       </details>
 

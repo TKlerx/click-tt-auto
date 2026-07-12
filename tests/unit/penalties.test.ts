@@ -71,6 +71,14 @@ describe("raster scoring", () => {
     expect(evaluate(unlimited, { a: 6, b: 7 }).overUsages).toHaveLength(0);
   });
 
+  it("does not count same-day matches as excess when start times do not overlap", () => {
+    const staggered = model();
+    staggered.teams[0]!.startTime = "17:00";
+    staggered.teams[1]!.startTime = "20:00";
+
+    expect(evaluate(staggered, { a: 6, b: 7 }).overUsages).toHaveLength(0);
+  });
+
   it("infers hall-day capacity from Spielwoche wishes", () => {
     const inferred = model();
     inferred.clubs[0]!.venues = [{ hall: "1", name: "Hall" }];

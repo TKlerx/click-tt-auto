@@ -14,6 +14,13 @@ type InferredHallCapacity = {
   capacity: number;
 };
 
+type CapacitySlot = {
+  clubId: string;
+  hall: string;
+  weekday: RasterWeekday;
+  startMinutes: number | null;
+};
+
 export type HallCapacityReviewRow = InferredHallCapacity & {
   id: string | null;
   storedCapacity: number | null;
@@ -196,6 +203,7 @@ async function inferCapacityRows(
           clubId: true,
           hall: true,
           homeWeekday: true,
+          startTime: true,
           spielwochePref: true,
         },
       },
@@ -203,15 +211,18 @@ async function inferCapacityRows(
   });
   if (!inputSet) return [];
 
-  const model = inputSet.seasonModelJson ? JSON.parse(inputSet.seasonModelJson) as {
-    teams?: Array<{
-      clubId?: string;
-      hall?: string;
-      homeWeekday?: string;
-      spielwochePref?: string;
-    }>;
-  } : { teams: [] };
-  const bySlot = new Map<string, number>();
+  const model = inputSet.seasonModelJson
+    ? (JSON.parse(inputSet.seasonModelJson) as {
+        teams?: Array<{
+          clubId?: string;
+          hall?: string;
+          homeWeekday?: string;
+          startTime?: string;
+          spielwochePref?: string;
+        }>;
+      })
+    : { teams: [] };
+  const bySlot = new Map<string, CapacitySlot[]>();
   for (const team of model.teams ?? []) {
     addCapacitySlot(bySlot, team);
   }
@@ -220,7 +231,7 @@ async function inferCapacityRows(
   }
 
   const inferred = new Map<string, InferredHallCapacity>();
-  for (const [key, count] of bySlot) {
+  for (const [key, slots] of bySlot) {
     const [clubId, hall, weekday] = key.split("\0") as [
       string,
       string,
@@ -234,18 +245,19 @@ async function inferCapacityRows(
       clubId,
       hall,
       weekday,
-      capacity: Math.max(current?.capacity ?? 0, count),
+      capacity: Math.max(current?.capacity ?? 0, requiredCapacity(slots)),
     });
   }
   return [...inferred.values()];
 }
 
 function addCapacitySlot(
-  bySlot: Map<string, number>,
+  bySlot: Map<string, CapacitySlot[]>,
   row: {
     clubId?: string | null;
     hall?: string | null;
     homeWeekday?: string | null;
+    startTime?: string | null;
     spielwochePref?: string | null;
   },
 ) {
@@ -257,7 +269,45 @@ function addCapacitySlot(
     weekday,
     row.spielwochePref,
   ].join("\0");
-  bySlot.set(key, (bySlot.get(key) ?? 0) + 1);
+  bySlot.set(key, [
+    ...(bySlot.get(key) ?? []),
+    {
+      clubId: row.clubId,
+      hall: row.hall || "1",
+      weekday,
+      startMinutes: parseStartMinutes(row.startTime),
+    },
+  ]);
+}
+
+function requiredCapacity(slots: CapacitySlot[]) {
+  const unknownTimes = slots.filter((slot) => slot.startMinutes === null).length;
+  const events = slots
+    .filter((slot): slot is CapacitySlot & { startMinutes: number } =>
+      Number.isInteger(slot.startMinutes),
+    )
+    .flatMap((slot) => [
+      { minute: slot.startMinutes, delta: 1 },
+      { minute: slot.startMinutes + 180, delta: -1 },
+    ])
+    .sort((a, b) => a.minute - b.minute || a.delta - b.delta);
+
+  let concurrent = 0;
+  let maxConcurrent = 0;
+  for (const event of events) {
+    concurrent += event.delta;
+    maxConcurrent = Math.max(maxConcurrent, concurrent);
+  }
+  return maxConcurrent + unknownTimes;
+}
+
+function parseStartMinutes(value: string | null | undefined) {
+  const match = value?.trim().match(/^(\d{1,2})[:.](\d{2})$/);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours > 23 || minutes > 59) return null;
+  return hours * 60 + minutes;
 }
 
 async function existingCapacityMap(inferred: InferredHallCapacity[]) {

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import uuid
 from contextlib import closing
@@ -1448,11 +1449,14 @@ def _find_overage_rows(model: dict[str, Any], assignment: dict[str, Any]) -> lis
                 week,
             )
             slot = slots.setdefault(key, {"teams": [], "capacity": capacity})
-            slot["teams"].append(team_id)
+            slot["teams"].append(
+                {"id": team_id, "start_minutes": _parse_start_minutes(team.get("startTime"))}
+            )
             slot["capacity"] = capacity
     rows: list[dict[str, Any]] = []
     for (club_id, hall, weekday, week), slot in slots.items():
-        excess = len(slot["teams"]) - int(slot["capacity"])
+        actual_count = _required_capacity(slot["teams"])
+        excess = actual_count - int(slot["capacity"])
         if excess > 0:
             rows.append(
                 {
@@ -1460,12 +1464,40 @@ def _find_overage_rows(model: dict[str, Any], assignment: dict[str, Any]) -> lis
                     "hall": hall,
                     "weekday": weekday,
                     "week": week,
-                    "teams": slot["teams"],
+                    "teams": [str(team["id"]) for team in slot["teams"]],
                     "capacity": slot["capacity"],
                     "excess": excess,
                 }
             )
     return rows
+
+
+def _required_capacity(teams: list[dict[str, Any]]) -> int:
+    unknown_times = sum(1 for team in teams if team.get("start_minutes") is None)
+    events: list[tuple[int, int]] = []
+    for team in teams:
+        start = team.get("start_minutes")
+        if isinstance(start, int):
+            events.append((start, 1))
+            events.append((start + 180, -1))
+    events.sort(key=lambda event: (event[0], event[1]))
+    concurrent = 0
+    max_concurrent = 0
+    for _, delta in events:
+        concurrent += delta
+        max_concurrent = max(max_concurrent, concurrent)
+    return max_concurrent + unknown_times
+
+
+def _parse_start_minutes(value: Any) -> int | None:
+    match = re.match(r"^(\d{1,2})[:.](\d{2})$", str(value or "").strip())
+    if not match:
+        return None
+    hours = int(match.group(1))
+    minutes = int(match.group(2))
+    if hours > 23 or minutes > 59:
+        return None
+    return hours * 60 + minutes
 
 
 def _capacity_for(

@@ -21,6 +21,7 @@ describe("raster district-scale views", () => {
     }));
     const capacities = Array.from({ length: 600 }, (_, index) => ({
       id: `capacity-${index}`,
+      district: "OWL",
       clubId: `club-${index % 120}`,
       hall: String((index % 3) + 1),
       weekday: "FRIDAY",

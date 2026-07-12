@@ -194,4 +194,35 @@ describe("raster capacity service", () => {
       ],
     });
   });
+
+  it("does not infer extra capacity for non-overlapping same-day start times", async () => {
+    prismaMock.rasterInputSet.findUnique.mockResolvedValue({
+      district: "OWL",
+      seasonModelJson: JSON.stringify({ teams: [] }),
+      wishes: [
+        {
+          clubId: "club-a",
+          hall: "1",
+          homeWeekday: "FRIDAY",
+          startTime: "17:00",
+          spielwochePref: "A",
+        },
+        {
+          clubId: "club-a",
+          hall: "1",
+          homeWeekday: "FRIDAY",
+          startTime: "20:00",
+          spielwochePref: "A",
+        },
+      ],
+    } as never);
+    prismaMock.rasterHallCapacity.findMany.mockResolvedValue([] as never);
+
+    await expect(
+      reviewHallCapacitiesForInputSet("input-1"),
+    ).resolves.toMatchObject({
+      inferredCount: 1,
+      rows: [expect.objectContaining({ capacity: 1 })],
+    });
+  });
 });
