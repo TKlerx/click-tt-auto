@@ -188,29 +188,35 @@ async function inferCapacityRows(
 ): Promise<InferredHallCapacity[]> {
   const inputSet = await prisma.rasterInputSet.findUnique({
     where: { id: inputSetId },
-    select: { district: true, seasonModelJson: true },
+    select: {
+      district: true,
+      seasonModelJson: true,
+      wishes: {
+        select: {
+          clubId: true,
+          hall: true,
+          homeWeekday: true,
+          spielwochePref: true,
+        },
+      },
+    },
   });
-  if (!inputSet?.seasonModelJson) return [];
+  if (!inputSet) return [];
 
-  const model = JSON.parse(inputSet.seasonModelJson) as {
+  const model = inputSet.seasonModelJson ? JSON.parse(inputSet.seasonModelJson) as {
     teams?: Array<{
       clubId?: string;
       hall?: string;
       homeWeekday?: string;
       spielwochePref?: string;
     }>;
-  };
+  } : { teams: [] };
   const bySlot = new Map<string, number>();
   for (const team of model.teams ?? []) {
-    const weekday = normalizeWeekday(team.homeWeekday);
-    if (!team.clubId || !weekday || !team.spielwochePref) continue;
-    const key = [
-      team.clubId,
-      team.hall || "1",
-      weekday,
-      team.spielwochePref,
-    ].join("\0");
-    bySlot.set(key, (bySlot.get(key) ?? 0) + 1);
+    addCapacitySlot(bySlot, team);
+  }
+  for (const wish of inputSet.wishes) {
+    addCapacitySlot(bySlot, wish);
   }
 
   const inferred = new Map<string, InferredHallCapacity>();
@@ -232,6 +238,26 @@ async function inferCapacityRows(
     });
   }
   return [...inferred.values()];
+}
+
+function addCapacitySlot(
+  bySlot: Map<string, number>,
+  row: {
+    clubId?: string | null;
+    hall?: string | null;
+    homeWeekday?: string | null;
+    spielwochePref?: string | null;
+  },
+) {
+  const weekday = normalizeWeekday(row.homeWeekday ?? undefined);
+  if (!row.clubId || !weekday || !row.spielwochePref) return;
+  const key = [
+    row.clubId,
+    row.hall || "1",
+    weekday,
+    row.spielwochePref,
+  ].join("\0");
+  bySlot.set(key, (bySlot.get(key) ?? 0) + 1);
 }
 
 async function existingCapacityMap(inferred: InferredHallCapacity[]) {
