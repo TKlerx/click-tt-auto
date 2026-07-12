@@ -1,5 +1,5 @@
 import { relation } from "../rulebook/rulebook.js";
-import { deriveHomeWeeks } from "./derive.js";
+import { deriveHomeWeeks, unusedRasterzahl } from "./derive.js";
 import type {
   Assignment,
   OverUsage,
@@ -44,7 +44,8 @@ export function findOverUsages(
     );
     const capacity = venue?.capacityByWeekday?.[team.homeWeekday] ?? venue?.capacity ?? (inferredCapacity || undefined);
     if (capacity === undefined) continue;
-    for (const week of new Set(deriveHomeWeeks(group.size, rz, group.rasterMode).weeks)) {
+    const bye = unusedRasterzahl(group, assignment);
+    for (const week of new Set(deriveHomeWeeks(group.size, rz, group.rasterMode, bye).weeks)) {
       const key = `${team.clubId}|${team.hall}|${team.homeWeekday}|${week}`;
       const bucket = slots.get(key) ?? { teams: [], capacity };
       bucket.teams.push(team.id);
@@ -90,12 +91,14 @@ export function evaluateWishes(
     const rzB = assigned(teamB.id, assignment, model);
     if (!groupA || !groupB || rzA === undefined || rzB === undefined)
       return { wish, status: "unknown", reason: "missing group or assignment" };
-    const actual = relation(
-      deriveHomeWeeks(groupA.size, rzA, groupA.rasterMode).rasterSize,
-      rzA,
-      deriveHomeWeeks(groupB.size, rzB, groupB.rasterMode).rasterSize,
-      rzB
-    );
+    const byeA = unusedRasterzahl(groupA, assignment);
+    const byeB = unusedRasterzahl(groupB, assignment);
+    const derivedA = deriveHomeWeeks(groupA.size, rzA, groupA.rasterMode, byeA);
+    const derivedB = deriveHomeWeeks(groupB.size, rzB, groupB.rasterMode, byeB);
+    const actual =
+      byeA !== null || byeB !== null
+        ? relationFromWeeks(derivedA.weeks, derivedB.weeks)
+        : relation(derivedA.rasterSize, rzA, derivedB.rasterSize, rzB);
     if (actual === wish.relation) return { wish, status: "fulfilled" };
     return {
       wish,
@@ -103,4 +106,16 @@ export function evaluateWishes(
       reason: `expected ${wish.relation}, got ${actual}`
     };
   });
+}
+
+function relationFromWeeks(
+  weeksA: number[],
+  weeksB: number[]
+): "wechsel" | "zeitgleich" | "neither" {
+  const a = new Set(weeksA);
+  const b = new Set(weeksB);
+  const overlap = [...a].filter((week) => b.has(week)).length;
+  if (overlap === 0) return "wechsel";
+  if (overlap === Math.min(a.size, b.size)) return "zeitgleich";
+  return "neither";
 }

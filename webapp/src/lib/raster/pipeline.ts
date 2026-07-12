@@ -1,16 +1,25 @@
+import { execFile } from "node:child_process";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
+import { promisify } from "node:util";
 import type {
   TeamRasterAssignmentRow,
   WishParseResult,
 } from "../../../../src/raster/ingest/index.js";
+import type { SeasonModel } from "../../../../src/raster/types.js";
 
-type WishesPdfModule = {
-  parseWishesPdf(filePath: string): Promise<WishParseResult>;
-  readAssignmentTable(filePath: string): Promise<TeamRasterAssignmentRow[]>;
-};
-
-type ClickTtScrapeModule = {
-  scrapeCurrentTeamRasterAssignments(): Promise<TeamRasterAssignmentRow[]>;
-};
+const execFileAsync = promisify(execFile);
+const repoRoot = path.resolve(process.cwd(), "..");
+const ingestIndexUrl = pathToFileURL(
+  path.join(repoRoot, "src/raster/ingest/index.ts"),
+).href;
+const ingestScrapeUrl = pathToFileURL(
+  path.join(repoRoot, "src/raster/ingest/scrape.ts"),
+).href;
+const ingestWishesPdfUrl = pathToFileURL(
+  path.join(repoRoot, "src/raster/ingest/wishes-pdf.ts"),
+).href;
 
 function parseCsvLine(line: string): string[] {
   const result: string[] = [];
@@ -35,43 +44,102 @@ function parseCsvLine(line: string): string[] {
 }
 
 async function parseWishesPdf(filePath: string): Promise<WishParseResult> {
-  const modulePath = new URL(
-    "../../../../src/raster/ingest/wishes-pdf.ts",
-    import.meta.url,
-  ).href;
-  const wishesPdf = (await import(
-    /* webpackIgnore: true */ modulePath
-  )) as WishesPdfModule;
-  return wishesPdf.parseWishesPdf(filePath);
+  return runRasterTs<WishParseResult>(`
+    const { parseWishesPdf } = await import(${JSON.stringify(ingestWishesPdfUrl)});
+    emit(await parseWishesPdf(${JSON.stringify(filePath)}));
+  `);
 }
 
 async function readAssignmentTable(
   filePath: string,
 ): Promise<TeamRasterAssignmentRow[]> {
-  const modulePath = new URL(
-    "../../../../src/raster/ingest/index.ts",
-    import.meta.url,
-  ).href;
-  const ingest = (await import(
-    /* webpackIgnore: true */ modulePath
-  )) as WishesPdfModule;
-  return ingest.readAssignmentTable(filePath);
+  return runRasterTs<TeamRasterAssignmentRow[]>(`
+    const { readAssignmentTable } = await import(${JSON.stringify(ingestIndexUrl)});
+    emit(await readAssignmentTable(${JSON.stringify(filePath)}));
+  `);
 }
 
-async function scrapeClickTtAssignments(): Promise<TeamRasterAssignmentRow[]> {
-  const modulePath = new URL(
-    "../../../../src/raster/ingest/scrape.ts",
-    import.meta.url,
-  ).href;
-  const scrape = (await import(
-    /* webpackIgnore: true */ modulePath
-  )) as ClickTtScrapeModule;
-  return scrape.scrapeCurrentTeamRasterAssignments();
+async function buildSeasonModelFromAssignments(
+  assignments: TeamRasterAssignmentRow[],
+): Promise<SeasonModel> {
+  return runRasterTs<SeasonModel>(`
+    const { buildSeasonModelFromAssignments } = await import(${JSON.stringify(ingestIndexUrl)});
+    emit(await buildSeasonModelFromAssignments(${JSON.stringify(assignments)}));
+  `);
+}
+
+async function scrapeClickTtAssignments(options?: {
+  groupNamePattern?: string;
+}): Promise<TeamRasterAssignmentRow[]> {
+  return runRasterTs<TeamRasterAssignmentRow[]>(`
+    const { scrapeCurrentTeamRasterAssignments } = await import(${JSON.stringify(ingestScrapeUrl)});
+    emit(await scrapeCurrentTeamRasterAssignments(${JSON.stringify(options)}));
+  `);
+}
+
+async function scrapeClickTtPublicLeagueAssignments(
+  leaguePageUrl: string,
+): Promise<TeamRasterAssignmentRow[]> {
+  return runRasterTs<TeamRasterAssignmentRow[]>(`
+    const { scrapePublicLeagueAssignmentsFromUrl } = await import(${JSON.stringify(ingestScrapeUrl)});
+    emit(await scrapePublicLeagueAssignmentsFromUrl(${JSON.stringify(leaguePageUrl)}));
+  `);
+}
+
+async function runRasterTs<T>(code: string): Promise<T> {
+  const command =
+    process.platform === "win32" ? process.env.ComSpec ?? "cmd.exe" : "pnpm";
+  const dir = await mkdtemp(path.join(repoRoot, ".tmp-raster-ts-"));
+  const scriptPath = path.join(dir, "run.ts");
+  await writeFile(
+    scriptPath,
+    `
+    function emit(value) {
+      console.log("__RASTER_JSON__" + JSON.stringify(value));
+    }
+    async function main() {
+      ${code}
+    }
+    main().catch((error) => {
+      console.error(error);
+      process.exit(1);
+    });
+  `,
+  );
+  try {
+    const { stdout, stderr } = await execFileAsync(
+      command,
+      process.platform === "win32"
+        ? ["/d", "/c", `pnpm exec tsx ${scriptPath}`]
+        : ["exec", "tsx", scriptPath],
+      {
+        cwd: repoRoot,
+        env: process.env,
+        maxBuffer: 20 * 1024 * 1024,
+      },
+    );
+    const lines = stdout.split(/\r?\n/);
+    let line: string | undefined;
+    for (let index = lines.length - 1; index >= 0; index -= 1) {
+      if (lines[index]?.startsWith("__RASTER_JSON__")) {
+        line = lines[index];
+        break;
+      }
+    }
+    if (!line) {
+      throw new Error(stderr.trim() || "Raster parser returned no data");
+    }
+    return JSON.parse(line.slice("__RASTER_JSON__".length)) as T;
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 }
 
 export const rasterIngest = {
   parseCsvLine,
   parseWishesPdf,
   readAssignmentTable,
+  buildSeasonModelFromAssignments,
   scrapeClickTtAssignments,
+  scrapeClickTtPublicLeagueAssignments,
 };

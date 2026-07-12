@@ -1,21 +1,45 @@
 import { prisma } from "@/lib/db";
 import { rasterDistrictWhere } from "@/lib/raster/access";
+import { rasterIngest } from "@/lib/raster/pipeline";
+import { normalizeRasterSeason } from "@/lib/raster/season";
 import { seasonModelSchema, type SeasonModelInput } from "@/lib/raster/schemas";
 import { InputSetStatus } from "../../../generated/prisma/enums";
+import type {
+  TeamRasterAssignmentRow,
+  WishParseResult,
+} from "../../../../src/raster/ingest/index.js";
 import { listRasterSourcesForDistrict } from "./sources";
+import { replaceParsedWishes } from "./wishes";
 
-type SeasonGroup = Record<string, unknown> & {
+type SeasonGroup = {
   id?: string;
   ref?: { league?: string; name?: string };
   size?: number;
   rasterMode?: "single" | "double";
 };
 
-export async function listInputSets(district: string) {
+export async function listInputSets(
+  district: string,
+  season = normalizeRasterSeason(undefined),
+) {
   return prisma.rasterInputSet.findMany({
-    where: rasterDistrictWhere(district),
+    where: { ...rasterDistrictWhere(district), season: normalizeRasterSeason(season) },
     orderBy: { createdAt: "desc" },
     include: {
+      fixedRasterzahlen: {
+        orderBy: [{ clubId: "asc" }, { teamLabel: "asc" }],
+        select: {
+          clubId: true,
+          teamLabel: true,
+          rasterzahl: true,
+          source: true,
+        },
+      },
+      runs: {
+        orderBy: { createdAt: "desc" },
+        take: 5,
+        include: { snapshot: { select: { id: true } } },
+      },
       _count: {
         select: { wishes: true, fixedRasterzahlen: true, runs: true },
       },
@@ -25,11 +49,12 @@ export async function listInputSets(district: string) {
 
 export async function createInputSet(params: {
   district: string;
+  season: string;
   name: string;
   createdById: string;
 }) {
   return prisma.rasterInputSet.create({
-    data: params,
+    data: { ...params, season: normalizeRasterSeason(params.season) },
   });
 }
 
@@ -90,11 +115,14 @@ export async function validateInputSet(id: string) {
 export async function syncInputSetSourceCaches(inputSetId: string) {
   const inputSet = await prisma.rasterInputSet.findUnique({
     where: { id: inputSetId },
-    select: { id: true, district: true },
+    select: { id: true, district: true, season: true, seasonModelJson: true },
   });
   if (!inputSet) return null;
 
-  const sources = await listRasterSourcesForDistrict(inputSet.district);
+  const sources = await listRasterSourcesForDistrict(
+    inputSet.district,
+    inputSet.season,
+  );
   const groupSource = sources.find(
     (source) =>
       source.sourceType.toUpperCase() === "GROUP_ASSIGNMENT" &&
@@ -105,27 +133,87 @@ export async function syncInputSetSourceCaches(inputSetId: string) {
       source.sourceType.toUpperCase() === "WISHES_PDF" && source.parsedJson,
   );
   const data: {
+    seasonModelJson?: string;
     groupAssignmentJson?: string;
     wishesJson?: string;
   } = {};
   if (groupSource?.parsedJson) {
     data.groupAssignmentJson = groupSource.parsedJson;
+    const parsed = JSON.parse(groupSource.parsedJson) as {
+      assignments?: TeamRasterAssignmentRow[];
+    };
+    if (parsed.assignments?.length) {
+      const groupSizes = new Map<string, number>();
+      for (const assignment of parsed.assignments) {
+        groupSizes.set(
+          assignment.group,
+          (groupSizes.get(assignment.group) ?? 0) + 1,
+        );
+      }
+      const supportedSizes = new Set([5, 6, 7, 8, 9, 10, 11, 12, 13, 14]);
+      const supportedAssignments = parsed.assignments.filter((assignment) =>
+        supportedSizes.has(groupSizes.get(assignment.group) ?? 0),
+      );
+      const skippedGroups = [...groupSizes.entries()].filter(
+        ([, size]) => !supportedSizes.has(size),
+      );
+      const model =
+        await rasterIngest.buildSeasonModelFromAssignments(supportedAssignments);
+      const existingModes = groupModesByKey(inputSet.seasonModelJson);
+      model.groups = model.groups.map((group) => ({
+        ...group,
+        rasterMode: group.rasterMode ?? existingModes.get(groupKey(group)),
+      }));
+      model.warnings.push(
+        ...skippedGroups.map(
+          ([group, size]) =>
+            `Skipped ${group}: unsupported group size ${size}.`,
+        ),
+      );
+      data.seasonModelJson = JSON.stringify(model);
+    }
   }
   if (wishSources.length) {
+    const parsedWishes = wishSources.map(
+      (source) => JSON.parse(source.parsedJson ?? "{}") as WishParseResult,
+    );
     data.wishesJson = JSON.stringify({
-      sources: wishSources.map((source) => ({
+      sources: wishSources.map((source, index) => ({
         sourceId: source.id,
         sourceRef: source.sourceRef,
-        parsed: JSON.parse(source.parsedJson ?? "{}"),
+        parsed: parsedWishes[index],
       })),
     });
+    await replaceParsedWishes(inputSet.id, {
+      clubs: parsedWishes.flatMap((parsed) => parsed.clubs ?? []),
+      teams: parsedWishes.flatMap((parsed) => parsed.teams ?? []),
+      warnings: parsedWishes.flatMap((parsed) => parsed.warnings ?? []),
+    });
   }
-  if (!data.groupAssignmentJson && !data.wishesJson) return inputSet;
+  if (!data.groupAssignmentJson && !data.wishesJson && !data.seasonModelJson) {
+    return inputSet;
+  }
 
   return prisma.rasterInputSet.update({
     where: { id: inputSet.id },
     data,
   });
+}
+
+function groupModesByKey(seasonModelJson?: string | null) {
+  const modes = new Map<string, "single" | "double">();
+  if (!seasonModelJson) return modes;
+  try {
+    const model = JSON.parse(seasonModelJson) as { groups?: SeasonGroup[] };
+    for (const group of model.groups ?? []) {
+      if (group.rasterMode === "single" || group.rasterMode === "double") {
+        modes.set(groupKey(group), group.rasterMode);
+      }
+    }
+  } catch {
+    return modes;
+  }
+  return modes;
 }
 
 export async function updateSeasonModel(

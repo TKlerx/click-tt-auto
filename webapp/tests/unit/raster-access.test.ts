@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { prismaMock } from "@/lib/__mocks__/db";
-import { canAccessRasterDistrict } from "@/lib/raster/access";
+import {
+  canAccessRasterDistrict,
+  listAccessibleRasterScopes,
+} from "@/lib/raster/access";
 import { Role } from "../../generated/prisma/enums";
 
 vi.mock("@/lib/db", () => ({
@@ -45,5 +48,88 @@ describe("raster access", () => {
       },
       select: { id: true },
     });
+  });
+
+  it("lists scopes a scoped user may open", async () => {
+    prismaMock.scope.findMany.mockResolvedValue([
+      {
+        code: "OWL",
+        name: "Ostwestfalen-Lippe",
+        parent: {
+          code: "WTTV",
+          name: "Westdeutscher Tischtennis-Verband",
+          parent: { code: "DE", name: "Germany" },
+        },
+      },
+    ] as never);
+
+    await expect(
+      listAccessibleRasterScopes({ id: "user-1", role: Role.SCOPE_USER }),
+    ).resolves.toEqual([
+      {
+        code: "OWL",
+        name: "Ostwestfalen-Lippe",
+        parent: {
+          code: "WTTV",
+          name: "Westdeutscher Tischtennis-Verband",
+          parent: { code: "DE", name: "Germany" },
+        },
+      },
+    ]);
+
+    expect(prismaMock.scope.findMany).toHaveBeenCalledWith({
+      where: {
+        OR: [
+          { userAssignments: { some: { userId: "user-1" } } },
+          { parent: { userAssignments: { some: { userId: "user-1" } } } },
+          {
+            parent: {
+              parent: { userAssignments: { some: { userId: "user-1" } } },
+            },
+          },
+        ],
+      },
+      select: {
+        code: true,
+        name: true,
+        parent: {
+          select: {
+            code: true,
+            name: true,
+            parent: { select: { code: true, name: true } },
+          },
+        },
+      },
+    });
+  });
+
+  it("sorts accessible scopes by hierarchy path", async () => {
+    prismaMock.scope.findMany.mockResolvedValue([
+      {
+        code: "OWL",
+        name: "Ostwestfalen-Lippe",
+        parent: {
+          code: "WTTV",
+          name: "Westdeutscher Tischtennis-Verband",
+          parent: { code: "DE", name: "Germany" },
+        },
+      },
+      {
+        code: "AACHEN_EUREGIO",
+        name: "Aachen/Euregio",
+        parent: {
+          code: "WTTV",
+          name: "Westdeutscher Tischtennis-Verband",
+          parent: { code: "DE", name: "Germany" },
+        },
+      },
+    ] as never);
+
+    await expect(
+      listAccessibleRasterScopes({ id: "admin-1", role: Role.PLATFORM_ADMIN }),
+    ).resolves.toMatchObject([
+      { code: "AACHEN_EUREGIO" },
+      { code: "OWL" },
+    ]);
   });
 });

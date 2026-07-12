@@ -4,12 +4,12 @@ Prisma models added to `webapp/prisma/schema.prisma` (+ `schema.postgres.prisma`
 
 ## Scope
 
-Existing baseline scope, extended for raster hierarchy. Initial hierarchy: `DE` → `WTTV` → `OWL`.
+Existing baseline scope, extended for raster hierarchy. Initial hierarchy: `DE` → `WTTV` → configured WTTV districts, including OWL.
 
 | Field    | Type          | Notes                                                   |
 | -------- | ------------- | ------------------------------------------------------- |
 | id       | string (cuid) | PK                                                      |
-| code     | string        | Unique key, e.g. `DE`, `WTTV`, `OWL`                    |
+| code     | string        | Unique key, e.g. `DE`, `WTTV`, `OWL`, `AACHEN_EUREGIO`  |
 | name     | string        | Unique display name                                     |
 | parentId | string?       | FK → Scope; null for root                               |
 
@@ -25,6 +25,7 @@ A registered document/link/cache used to build input sets. It belongs to the sco
 | ----------- | ------------- | ----------------------------------------------------------------- |
 | id          | string (cuid) | PK                                                                |
 | scopeId     | string        | FK → Scope                                                        |
+| season      | string        | Season key, e.g. `2026/27`                                        |
 | sourceType  | string        | e.g. `GROUP_ASSIGNMENT`, `WISHES_PDF`, `FIXED_RASTERZAHL`         |
 | sourceRef   | string        | URL, file id, or stable source identifier                         |
 | displayName | string        | User-facing label                                                 |
@@ -33,7 +34,9 @@ A registered document/link/cache used to build input sets. It belongs to the sco
 | createdAt   | datetime      |                                                                   |
 | updatedAt   | datetime      |                                                                   |
 
-Uniqueness: (scopeId, sourceType, sourceRef). District flows list sources from the district scope and ancestors.
+Uniqueness: (scopeId, season, sourceType, sourceRef). District flows list sources from the selected season in the district scope and ancestors.
+
+Wrongly registered sources can be deleted by an admin. If `sourceRef` points at app-controlled upload storage, the stored file is deleted with the source row.
 
 ## InputSet
 
@@ -44,6 +47,7 @@ A named collection of inputs used for one generation run.
 | id              | string (cuid)         | PK                                                                                                   |
 | name            | string                | User-facing label                                                                                    |
 | district        | string                | Scope key (indexed)                                                                                  |
+| season          | string                | Season key, e.g. `2026/27`                                                                           |
 | createdById     | string                | FK → User                                                                                            |
 | createdAt       | datetime              |                                                                                                      |
 | status          | enum(`draft`,`ready`) | `ready` = validated, runnable (FR-008)                                                               |
@@ -51,7 +55,7 @@ A named collection of inputs used for one generation run.
 | groupAssignmentJson | string?          | Cached parsed group assignment source used for the input set; refreshed only on explicit source refresh/upload |
 | wishesJson      | string?               | Cached parsed/uploaded wishes source used for the input set; refreshed only on explicit source refresh/upload |
 
-Relations: has many Wish, HallCapacity, FixedRasterzahl; has many OptimizationRun.
+Relations: has many Wish, HallCapacity, FixedRasterzahl; has many OptimizationRun. Input sets are listed and created for one district/scope and season.
 
 Group rows inside `seasonModelJson` include `size` and optional `rasterMode` (`single` or `double`). Six-team groups must be reviewed so that `rasterMode: "double"` selects the official 6er Doppelrunde table; missing mode blocks validation.
 

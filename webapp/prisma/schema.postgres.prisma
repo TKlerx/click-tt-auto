@@ -284,6 +284,7 @@ model Scope {
 model RasterSource {
   id          String   @id @default(cuid())
   scopeId     String
+  season      String   @default("2026/27")
   sourceType  String
   sourceRef   String
   displayName String
@@ -293,8 +294,8 @@ model RasterSource {
   updatedAt   DateTime @updatedAt
   scope       Scope    @relation(fields: [scopeId], references: [id], onDelete: Cascade)
 
-  @@unique([scopeId, sourceType, sourceRef])
-  @@index([scopeId, sourceType])
+  @@unique([scopeId, season, sourceType, sourceRef])
+  @@index([scopeId, season, sourceType])
 }
 
 model UserScopeAssignment {
@@ -575,6 +576,7 @@ model RasterInputSet {
   id                  String                  @id @default(cuid())
   name                String
   district            String
+  season              String                  @default("2026/27")
   createdById         String
   createdAt           DateTime                @default(now())
   status              InputSetStatus          @default(DRAFT)
@@ -586,7 +588,7 @@ model RasterInputSet {
   fixedRasterzahlen   RasterFixedRasterzahl[]
   runs                RasterOptimizationRun[]
 
-  @@index([district, createdAt])
+  @@index([district, season, createdAt])
   @@index([createdById])
 }
 

@@ -77,7 +77,12 @@ describe("raster input set route", () => {
 
     expect(response.status).toBe(201);
     expect(prismaMock.rasterInputSet.create).toHaveBeenCalledWith({
-      data: { district: "OWL", name: "OWL 2026", createdById: "admin-1" },
+      data: {
+        district: "OWL",
+        season: "2026/27",
+        name: "OWL 2026",
+        createdById: "admin-1",
+      },
     });
   });
 });

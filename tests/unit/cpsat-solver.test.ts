@@ -162,6 +162,40 @@ function fixedSt4DerbyModel(): SeasonModel {
   };
 }
 
+function fiveTeamModelWithFixedSix(): SeasonModel {
+  const teams = Array.from({ length: 5 }, (_, index) => ({
+    id: `team-${index + 1}`,
+    clubId: `club-${index + 1}`,
+    label: `Team ${index + 1}`,
+    homeWeekday: "friday" as const,
+    hall: "1",
+    rasterzahl:
+      index === 0
+        ? ({ kind: "fixed", value: 6 } as const)
+        : ({ kind: "assignable" } as const),
+    confidence: "ok" as const
+  }));
+  return {
+    clubs: teams.map((team) => ({
+      id: team.clubId,
+      name: team.clubId,
+      venues: [],
+      notes: ""
+    })),
+    teams,
+    groups: [
+      {
+        ref: { league: "L", name: "G5" },
+        size: 5,
+        teamIds: teams.map((team) => team.id)
+      }
+    ],
+    wishes: [],
+    absoluteConstraints: [],
+    warnings: []
+  };
+}
+
 describe("CP-SAT raster solver", () => {
   it("finds a known optimum across multiple groups and hall constraints", async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "raster-cpsat-"));
@@ -197,6 +231,43 @@ describe("CP-SAT raster solver", () => {
       expect(metadata.status).toBe("OPTIMAL");
       expect(assignment).toEqual(knownAssignment);
       expect(evaluate(model, assignment).objective).toBe(0);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }, 120_000);
+
+  it("allows a 5-team group to use schedule number 6", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "raster-cpsat-"));
+    try {
+      const model = fiveTeamModelWithFixedSix();
+      const modelPath = path.join(dir, "model.json");
+      const outPath = path.join(dir, "assignment.json");
+      const metadataPath = path.join(dir, "metadata.json");
+      await writeFile(modelPath, JSON.stringify(model), "utf8");
+
+      await execFileAsync(
+        "uv",
+        [
+          "run",
+          "--python",
+          "3.12",
+          "scripts/solve-raster-cpsat.py",
+          "--model",
+          modelPath,
+          "--out",
+          outPath,
+          "--metadata",
+          metadataPath,
+          "--time-limit",
+          "30"
+        ],
+        { cwd: process.cwd(), timeout: 120_000 }
+      );
+
+      const assignment = JSON.parse(await readFile(outPath, "utf8")) as Assignment;
+
+      expect(assignment["team-1"]).toBe(6);
+      expect(evaluate(model, assignment).hardViolations).toHaveLength(0);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

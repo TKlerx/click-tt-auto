@@ -23,8 +23,10 @@ export async function POST(
   if (access !== true) return access.error;
 
   try {
+    const refreshed = await refreshRasterSource(source.id);
     return NextResponse.json({
-      source: await refreshRasterSource(source.id),
+      source: refreshed,
+      summary: summarizeParsedSource(refreshed?.parsedJson),
     });
   } catch (error) {
     return NextResponse.json(
@@ -35,4 +37,31 @@ export async function POST(
       { status: 422 },
     );
   }
+}
+
+function summarizeParsedSource(parsedJson?: string | null) {
+  if (!parsedJson) return "No parsed data";
+  let parsed: {
+    assignments?: unknown[];
+    clubs?: unknown[];
+    teams?: unknown[];
+    wishes?: unknown[];
+  };
+  try {
+    parsed = JSON.parse(parsedJson) as typeof parsed;
+  } catch {
+    return "Parsed data saved";
+  }
+  const parts = [
+    countLabel(parsed.assignments, "assignment"),
+    countLabel(parsed.clubs, "club"),
+    countLabel(parsed.teams, "team"),
+    countLabel(parsed.wishes, "wish"),
+  ].filter(Boolean);
+  return parts.length ? `Parsed ${parts.join(", ")}` : "Parsed data saved";
+}
+
+function countLabel(rows: unknown[] | undefined, label: string) {
+  if (!rows?.length) return null;
+  return `${rows.length} ${label}${rows.length === 1 ? "" : "s"}`;
 }

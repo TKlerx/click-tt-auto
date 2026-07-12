@@ -153,8 +153,8 @@
 
 **Independent Test**: Register a WTTV group source, open an OWL raster flow, verify the WTTV source is visible to OWL users with parent-scope access, and verify reopening the input set does not reparse until refresh/upload is requested.
 
-- [x] T054 [US1] Extend `webapp/prisma/schema.postgres.prisma` and migrations with hierarchical `Scope.parentId` for Germany → WTTV → OWL.
-- [x] T055 [US1] Update `webapp/prisma/seed.ts` to seed `DE`, `WTTV`, and `OWL` hierarchy while preserving demo OWL users.
+- [x] T054 [US1] Extend `webapp/prisma/schema.postgres.prisma` and migrations with hierarchical `Scope.parentId` for Germany → WTTV → district scopes.
+- [x] T055 [US1] Update `webapp/prisma/seed.ts` to seed `DE`, `WTTV`, and WTTV district hierarchy while preserving demo OWL users.
 - [x] T056 [US5] Update `webapp/src/lib/raster/access.ts` so users assigned to parent scopes can access child district raster data according to role.
 - [x] T057 [P] [US5] Add hierarchy access tests in `webapp/tests/unit/raster-access.test.ts`.
 - [x] T058 [US1] Add `RasterSource` model and migration for scoped documents/links/parsed cache in `webapp/prisma/schema.postgres.prisma`.
@@ -170,6 +170,28 @@
 
 ---
 
+## Phase 11: Follow-Up Gap Closure From Admin Workflow Review
+
+**Goal**: Close the practical workflow gaps discovered during manual admin review: guided source preparation, season/district hierarchy, source cleanup, and visible run/results controls.
+
+**Independent Test**: As an admin, select a season and WTTV district from hierarchy-sorted controls, register a click-TT group URL, upload multiple wish PDFs, delete a wrong source, create/validate an input set with zero fixed schedule numbers, start a background run, and open the generated result view without API/manual log inspection.
+
+- [x] T068 [US1] Add season to `RasterSource` and `RasterInputSet`, migrations, source/input-set services, and route tests so sources/input sets are isolated per season.
+- [x] T069 [US5] Seed WTTV plus all listed WTTV districts and show district selection from configured scopes sorted/labeled by hierarchy instead of free-text district entry.
+- [x] T070 [US1] Change the visible source UI to use click-TT league URLs for group assignment and multi-file wish PDF upload; keep group-assignment file upload only as hidden/advanced fallback.
+- [x] T071 [US1] Add optional fixed schedule number editing on input sets and prove run creation does not require any fixed schedule numbers.
+- [x] T072 [US1] Add source deletion and PDF byte validation for wish uploads, with route tests.
+- [x] T073 [US1] Add visible source parse state and a single refresh/parse action flow, including clear errors when a source cannot be parsed as `GROUP_ASSIGNMENT` or `WISHES_PDF`.
+- [x] T074 [US1] Add guided next-step controls on the Raster page: create input set, validate, start run, and display why a run is blocked.
+- [x] T075 [US1] Wire the local/background worker command or dev workflow so `raster_run` jobs created by the webapp are actually processed in local development.
+- [x] T076 [US1] Add run status UI in the Raster page showing pending/running/failed/completed jobs with cancel where supported.
+- [x] T077 [US2] Add a reachable snapshot/results view from the Raster page using the existing assignment/conflict/snapshot APIs and components.
+- [x] T078 [US1] Add Playwright coverage for the real guided admin workflow: season + hierarchy district selection, click-TT URL source, multi-wish upload, delete wrong source, validate/start, and open results.
+
+**Checkpoint**: The admin can complete the intended workflow from the UI without knowing internal source types, API routes, or worker mechanics.
+
+---
+
 ## Dependencies & Execution Order
 
 - **Setup (Phase 1)**: T001 governance blocker first; T002→T003 (schema→migration) ordered; T004/T005/T006 parallel after.
@@ -182,6 +204,7 @@
 - **US6 (Phase 8)**: reuses review layer (US2/US3).
 - **Polish (Phase 9)**: after target stories.
 - **Source hierarchy/cache (Phase 10)**: schema/access tasks T054–T059 before APIs/UI; T064–T066 complete parser integration; T067 verifies behavior end-to-end.
+- **Gap closure (Phase 11)**: T068–T078 are implemented and covered by focused tests.
 
 ### Parallel Opportunities
 
@@ -194,7 +217,7 @@
 
 ### MVP
 
-US1 + US2 (generate a proposal and review its conflicts) is the minimum valuable release. US3–US6 are incremental.
+US1 + US2 (generate a proposal and review its conflicts) is the minimum valuable release. Phase 11 closes the manual-review gaps discovered during admin workflow testing.
 
 ---
 

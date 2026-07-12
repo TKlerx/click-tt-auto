@@ -37,6 +37,8 @@ DEFAULT_WEIGHTS = {
 
 def raster_key_for_group(group: dict[str, Any]) -> str:
     size = int(group["size"])
+    if size == 5:
+        return "6"
     if size == 6 and group.get("rasterMode") == "double":
         return "6d"
     if size == 6:
@@ -49,7 +51,7 @@ def raster_key_for_group(group: dict[str, Any]) -> str:
         return "12"
     if size in (13, 14):
         return "14"
-    raise ValueError(f"Unsupported group size {size}; supported district sizes are 6..14.")
+    raise ValueError(f"Unsupported group size {size}; supported district sizes are 5..14.")
 
 
 def raster_size_for_group_size(size: int) -> int:
@@ -80,10 +82,15 @@ def circle_pairs(size: str) -> list[list[dict[str, int]]]:
     return rounds
 
 
-def home_weeks_for_group(group: dict[str, Any], rasterzahl: int) -> list[int]:
+def raster_values_for_group(group: dict[str, Any]) -> range:
+    return range(1, numeric_raster_size(raster_key_for_group(group)) + 1)
+
+
+def home_weeks_for_group(group: dict[str, Any], rasterzahl: int, bye: int | None = None) -> list[int]:
     size = raster_key_for_group(group)
     group_size = int(group["size"])
-    bye = int(size) if group_size % 2 == 1 else None
+    if bye is None and group_size % 2 == 1:
+        bye = numeric_raster_size(size)
     if rasterzahl == bye:
         return []
     weeks: list[int] = []
@@ -120,8 +127,8 @@ def home_weeks(group_size: int, rasterzahl: int) -> list[int]:
     return home_weeks_for_group({"size": group_size}, rasterzahl)
 
 
-def week_slot_for_group(group: dict[str, Any], rasterzahl: int) -> str:
-    weeks = home_weeks_for_group(group, rasterzahl)
+def week_slot_for_group(group: dict[str, Any], rasterzahl: int, bye: int | None = None) -> str:
+    weeks = home_weeks_for_group(group, rasterzahl, bye)
     odd = sum(1 for week in weeks if week % 2 == 1)
     return "A" if odd >= len(weeks) - odd else "B"
 
@@ -136,9 +143,25 @@ def derby_spieltag_for_group(group: dict[str, Any], a: int, b: int) -> int | Non
     return None
 
 
-def relation(group_a: dict[str, Any], rz_a: int, group_b: dict[str, Any], rz_b: int) -> str:
+def relation(
+    group_a: dict[str, Any],
+    rz_a: int,
+    group_b: dict[str, Any],
+    rz_b: int,
+    bye_a: int | None = None,
+    bye_b: int | None = None,
+) -> str:
     size_a = raster_key_for_group(group_a)
     size_b = raster_key_for_group(group_b)
+    if bye_a is not None or bye_b is not None:
+        weeks_a = set(home_weeks_for_group(group_a, rz_a, bye_a))
+        weeks_b = set(home_weeks_for_group(group_b, rz_b, bye_b))
+        overlap = len(weeks_a & weeks_b)
+        if overlap == 0:
+            return "wechsel"
+        if overlap == min(len(weeks_a), len(weeks_b)):
+            return "zeitgleich"
+        return "neither"
     if size_a == size_b:
         rows = HOME_ROWS[size_a]
         a_home = {index + 1 for index, homes in enumerate(rows) if rz_a in homes}
@@ -217,17 +240,24 @@ def main() -> None:
         for team_id in group["teamIds"]
     }
     rz: dict[str, cp_model.IntVar] = {}
+    bye: dict[str, cp_model.IntVar] = {}
     for group in season["groups"]:
         group_vars = []
         for team_id in group["teamIds"]:
             team = teams[team_id]
-            var = model.new_int_var(1, int(group["size"]), f"rz_{team_id}")
+            var = model.new_int_var(1, numeric_raster_size(raster_key_for_group(group)), f"rz_{team_id}")
             rz[team_id] = var
             group_vars.append(var)
             kind = team["rasterzahl"]["kind"]
             if kind in ("fixed", "pinned"):
                 model.add(var == int(team["rasterzahl"]["value"]))
-        model.add_all_different(group_vars)
+        if int(group["size"]) % 2 == 1:
+            group_key = str(group["ref"]["league"]) + "::" + str(group["ref"]["name"])
+            bye_var = model.new_int_var(1, numeric_raster_size(raster_key_for_group(group)), f"bye_{len(bye)}")
+            bye[group_key] = bye_var
+            model.add_all_different([*group_vars, bye_var])
+        else:
+            model.add_all_different(group_vars)
 
     objective_terms: list[cp_model.LinearExpr] = []
 
@@ -241,8 +271,8 @@ def main() -> None:
                     continue
                 allowed = []
                 is_st4 = model.new_bool_var(f"same_club_st4_{left_id}_{right_id}")
-                for a in range(1, int(group["size"]) + 1):
-                    for b in range(1, int(group["size"]) + 1):
+                for a in raster_values_for_group(group):
+                    for b in raster_values_for_group(group):
                         if a == b:
                             continue
                         day = derby_spieltag_for_group(group, a, b)
@@ -256,11 +286,27 @@ def main() -> None:
         group = team_group.get(team_id)
         if not group:
             continue
-        all_weeks = sorted({week for value in range(1, int(group["size"]) + 1) for week in home_weeks_for_group(group, value)})
+        group_key = str(group["ref"]["league"]) + "::" + str(group["ref"]["name"])
+        bye_var = bye.get(group_key)
+        all_weeks = sorted({
+            week
+            for value in raster_values_for_group(group)
+            for bye_value in (raster_values_for_group(group) if bye_var is not None else [None])
+            for week in home_weeks_for_group(group, value, bye_value)
+        })
         for week in all_weeks:
             var = model.new_bool_var(f"home_{team_id}_{week}")
-            table = [(value, int(week in home_weeks_for_group(group, value))) for value in range(1, int(group["size"]) + 1)]
-            model.add_allowed_assignments([rz[team_id], var], table)
+            if bye_var is not None:
+                table = [
+                    (value, bye_value, int(week in home_weeks_for_group(group, value, bye_value)))
+                    for value in raster_values_for_group(group)
+                    for bye_value in raster_values_for_group(group)
+                    if value != bye_value
+                ]
+                model.add_allowed_assignments([rz[team_id], bye_var, var], table)
+            else:
+                table = [(value, int(week in home_weeks_for_group(group, value))) for value in raster_values_for_group(group)]
+                model.add_allowed_assignments([rz[team_id], var], table)
             home_bool[(team_id, week)] = var
 
     excess_by_club: dict[str, list[cp_model.IntVar]] = {}
@@ -268,8 +314,16 @@ def main() -> None:
         {
             (team["clubId"], team["hall"], team["homeWeekday"], week)
             for team in season["teams"]
-            for week in sorted({week for value in range(1, int(team_group.get(team["id"], {"size": 0})["size"]) + 1) for week in home_weeks_for_group(team_group.get(team["id"], {"size": 0}), value)})
             if capacity_for(season, team) is not None and team["id"] in team_group
+            for group in [team_group[team["id"]]]
+            for week in sorted(
+                {
+                    week
+                    for value in raster_values_for_group(group)
+                    for bye_value in (raster_values_for_group(group) if int(group["size"]) % 2 == 1 else [None])
+                    for week in home_weeks_for_group(group, value, bye_value)
+                }
+            )
         }
     )
     for club_id, hall, weekday, week in slot_keys:
@@ -310,14 +364,37 @@ def main() -> None:
         if not team_a or not team_b or not group_a or not group_b:
             continue
         ok_pairs = []
-        for a in range(1, int(group_a["size"]) + 1):
-            for b in range(1, int(group_b["size"]) + 1):
-                if relation(group_a, a, group_b, b) == wish["relation"]:
-                    ok_pairs.append((a, b, 0))
-                else:
-                    ok_pairs.append((a, b, 1))
+        key_a = str(group_a["ref"]["league"]) + "::" + str(group_a["ref"]["name"])
+        key_b = str(group_b["ref"]["league"]) + "::" + str(group_b["ref"]["name"])
+        bye_a = bye.get(key_a)
+        bye_b = bye.get(key_b)
+        same_bye = bye_a is not None and bye_a is bye_b
+        for a in raster_values_for_group(group_a):
+            for b in raster_values_for_group(group_b):
+                for ba in (raster_values_for_group(group_a) if bye_a is not None else [None]):
+                    for bb in (raster_values_for_group(group_b) if bye_b is not None else [None]):
+                        if same_bye and ba != bb:
+                            continue
+                        if a == ba or b == bb:
+                            continue
+                        broken_value = int(relation(group_a, a, group_b, b, ba, bb) != wish["relation"])
+                        row = [a]
+                        if bye_a is not None:
+                            row.append(int(ba))
+                        row.append(b)
+                        if bye_b is not None and not same_bye:
+                            row.append(int(bb))
+                        row.append(broken_value)
+                        ok_pairs.append(tuple(row))
         broken = model.new_bool_var(f"wish_{wish['teamA']}_{wish['teamB']}")
-        model.add_allowed_assignments([rz[wish["teamA"]], rz[wish["teamB"]], broken], ok_pairs)
+        variables = [rz[wish["teamA"]]]
+        if bye_a is not None:
+            variables.append(bye_a)
+        variables.append(rz[wish["teamB"]])
+        if bye_b is not None and not same_bye:
+            variables.append(bye_b)
+        variables.append(broken)
+        model.add_allowed_assignments(variables, ok_pairs)
         objective_terms.append(broken * int(weights[wish["relation"]]))
 
     if int(weights["spielwoche"]):
@@ -327,8 +404,19 @@ def main() -> None:
             if not pref or not group:
                 continue
             miss = model.new_bool_var(f"spielwoche_{team_id}")
-            table = [(value, int(week_slot_for_group(group, value) != pref)) for value in range(1, int(group["size"]) + 1)]
-            model.add_allowed_assignments([rz[team_id], miss], table)
+            key = str(group["ref"]["league"]) + "::" + str(group["ref"]["name"])
+            bye_var = bye.get(key)
+            if bye_var is not None:
+                table = [
+                    (value, bye_value, int(week_slot_for_group(group, value, bye_value) != pref))
+                    for value in raster_values_for_group(group)
+                    for bye_value in raster_values_for_group(group)
+                    if value != bye_value
+                ]
+                model.add_allowed_assignments([rz[team_id], bye_var, miss], table)
+            else:
+                table = [(value, int(week_slot_for_group(group, value) != pref)) for value in raster_values_for_group(group)]
+                model.add_allowed_assignments([rz[team_id], miss], table)
             objective_terms.append(miss * int(weights["spielwoche"]))
 
     model.minimize(sum(objective_terms) if objective_terms else 0)

@@ -10,6 +10,10 @@ export interface TeamRasterAssignmentRow {
   wishUrl?: string;
 }
 
+export interface TeamRasterAssignmentScrapeOptions {
+  groupNamePattern?: string;
+}
+
 function publicGroupUrl(leaguePageUrl: string, groupId: string): string {
   const url = new URL(leaguePageUrl);
   return `${url.origin}/cgi-bin/WebObjects/nuLigaTTDE.woa/wa/groupPage?${url.searchParams.toString()}&group=${groupId}`;
@@ -73,20 +77,26 @@ export async function scrapePublicLeagueAssignments(
 }
 
 export async function scrapeTeamRasterAssignments(
-  page: Page
+  page: Page,
+  options: TeamRasterAssignmentScrapeOptions = {}
 ): Promise<TeamRasterAssignmentRow[]> {
   await page.getByText("Verstanden", { exact: true }).click().catch(() => undefined);
   await page.getByText("SpielbetriebOrganisation", { exact: false }).click();
   await page.waitForLoadState("domcontentloaded");
 
-  const groups = await page.locator("a").evaluateAll((anchors) =>
-    anchors
-      .map((anchor) => ({
+  const groupPattern = new RegExp(
+    options.groupNamePattern ??
+      "^(?:Bezirksoberliga|\\d+\\.\\s*Bezirksliga|Bezirksklasse|Kreisliga|Kreisklasse|NRW-Liga|Verbandsliga|Landesliga)",
+    "i"
+  );
+  const groups = (
+    await page.locator("a").evaluateAll((anchors) =>
+      anchors.map((anchor) => ({
         group: (anchor.textContent ?? "").replace(/\s+/g, " ").trim(),
         href: anchor.getAttribute("href") ?? ""
       }))
-      .filter((link) => /^(Bezirksoberliga|1\. Bezirksliga)/.test(link.group) && link.href)
-  );
+    )
+  ).filter((link) => groupPattern.test(link.group) && link.href);
 
   const rows: TeamRasterAssignmentRow[] = [];
   for (const group of groups) {

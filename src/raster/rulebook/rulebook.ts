@@ -14,27 +14,28 @@ import type {
 
 const supportedSizes = [6, "6d", 8, 10, 12, 14] as const;
 
+export function numericRasterSize(size: RasterSize): number {
+  return size === "6d" ? 6 : size;
+}
+
 export function rasterSizeForGroupSize(
   size: number,
   mode: RasterMode = "single"
 ): RasterSize {
+  if (size === 5) return 6;
   if (size === 6) return mode === "double" ? "6d" : 6;
   if (size === 7 || size === 8) return 8;
   if (size === 9 || size === 10) return 10;
   if (size === 11 || size === 12) return 12;
   if (size === 13 || size === 14) return 14;
   throw new Error(
-    `Unsupported group size ${size}; supported district sizes are 6..14.`
+    `Unsupported group size ${size}; supported district sizes are 5..14.`
   );
 }
 
 export function pairKey(a: number, b: number): PairKey {
   const [left, right] = a < b ? [a, b] : [b, a];
   return `${left}-${right}`;
-}
-
-function numericRasterSize(size: RasterSize): number {
-  return size === "6d" ? 6 : size;
 }
 
 function circlePairs(size: RasterSize): Pairing[][] {
@@ -114,9 +115,9 @@ export function deriveRaster(size: RasterSize): DerivedRaster {
 export function homeWeeks(
   size: RasterSize,
   rasterzahl: number,
-  groupSize: number = numericRasterSize(size)
+  groupSize: number = numericRasterSize(size),
+  bye: number | null = groupSize % 2 === 1 ? numericRasterSize(size) : null
 ): number[] {
-  const bye = groupSize % 2 === 1 ? numericRasterSize(size) : null;
   if (rasterzahl === bye) return [];
 
   const weeks: number[] = [];

@@ -28,6 +28,22 @@ function normalizeEmail(email: string) {
   return email.toLowerCase();
 }
 
+const wttvDistricts = [
+  ["NIEDERRHEIN", "Niederrhein"],
+  ["RHEIN_RUHR", "Rhein-Ruhr"],
+  ["RHEIN_WUPPER", "Rhein-Wupper"],
+  ["KOELN", "Köln"],
+  ["RHEIN_ERFT_SIEG", "Rhein-Erft-Sieg"],
+  ["AACHEN_EUREGIO", "Aachen/Euregio"],
+  ["MUENSTERLAND", "Münsterland"],
+  ["MUENSTERLAND_HOHE_MARK", "Münsterland/Hohe Mark"],
+  ["OSTWESTFALEN_NORD", "Ostwestfalen-Nord"],
+  ["OWL", "Ostwestfalen/Lippe"],
+  ["MITTLERES_RUHRGEBIET", "Mittleres Ruhrgebiet"],
+  ["WESTFALEN_MITTE", "Westfalen-Mitte"],
+  ["SUEDWESTFALEN", "Südwestfalen"],
+] as const;
+
 async function readJson<T>() {
   const chunks: Buffer[] = [];
   for await (const chunk of process.stdin) {
@@ -237,20 +253,29 @@ async function main() {
       });
       const wttv = await prisma.scope.upsert({
         where: { code: "WTTV" },
-        update: { name: "WTTV", parentId: de.id },
-        create: { code: "WTTV", name: "WTTV", parentId: de.id },
-        select: { id: true },
-      });
-      const owl = await prisma.scope.upsert({
-        where: { code: "OWL" },
-        update: { name: "Ostwestfalen-Lippe", parentId: wttv.id },
+        update: {
+          name: "Westdeutscher Tischtennis-Verband",
+          parentId: de.id,
+        },
         create: {
-          code: "OWL",
-          name: "Ostwestfalen-Lippe",
-          parentId: wttv.id,
+          code: "WTTV",
+          name: "Westdeutscher Tischtennis-Verband",
+          parentId: de.id,
         },
         select: { id: true },
       });
+      const districts = await Promise.all(
+        wttvDistricts.map(([code, name]) =>
+          prisma.scope.upsert({
+            where: { code },
+            update: { name, parentId: wttv.id },
+            create: { code, name, parentId: wttv.id },
+            select: { id: true, code: true },
+          }),
+        ),
+      );
+      const owl = districts.find((scope) => scope.code === "OWL");
+      if (!owl) throw new Error("OWL scope was not seeded");
 
       process.stdout.write(
         JSON.stringify({ de: de.id, wttv: wttv.id, owl: owl.id }),
@@ -264,9 +289,11 @@ async function main() {
         sourceType: string;
         sourceRef: string;
         displayName: string;
+        season?: string;
         contentHash?: string | null;
         parsedJson?: unknown;
       }>();
+      const season = input.season ?? "2026/27";
       const scope = await prisma.scope.findUnique({
         where: { code: input.scopeCode },
         select: { id: true },
@@ -280,8 +307,9 @@ async function main() {
 
       const source = await prisma.rasterSource.upsert({
         where: {
-          scopeId_sourceType_sourceRef: {
+          scopeId_season_sourceType_sourceRef: {
             scopeId: scope.id,
+            season,
             sourceType: input.sourceType,
             sourceRef: input.sourceRef,
           },
@@ -296,6 +324,7 @@ async function main() {
         },
         create: {
           scopeId: scope.id,
+          season,
           sourceType: input.sourceType,
           sourceRef: input.sourceRef,
           displayName: input.displayName,

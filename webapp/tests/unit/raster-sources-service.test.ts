@@ -18,6 +18,7 @@ vi.mock("@/lib/raster/pipeline", async (importOriginal) => {
     rasterIngest: {
       ...actual.rasterIngest,
       scrapeClickTtAssignments: vi.fn(),
+      scrapeClickTtPublicLeagueAssignments: vi.fn(),
     },
   };
 });
@@ -34,11 +35,12 @@ describe("raster sources service", () => {
     } as never);
     prismaMock.rasterSource.findMany.mockResolvedValue([] as never);
 
-    await listRasterSourcesForDistrict("OWL", "GROUP_ASSIGNMENT");
+    await listRasterSourcesForDistrict("OWL", "2026/27", "GROUP_ASSIGNMENT");
 
     expect(prismaMock.rasterSource.findMany).toHaveBeenCalledWith({
       where: {
         scopeId: { in: ["owl", "wttv", "de"] },
+        season: "2026/27",
         sourceType: "GROUP_ASSIGNMENT",
       },
       orderBy: [{ updatedAt: "desc" }, { displayName: "asc" }],
@@ -116,5 +118,76 @@ describe("raster sources service", () => {
       },
       include: { scope: true },
     });
+  });
+
+  it("passes click-TT group filters from source refs", async () => {
+    const { rasterIngest } = await import("@/lib/raster/pipeline");
+    vi.mocked(rasterIngest.scrapeClickTtAssignments).mockResolvedValue([]);
+    prismaMock.rasterSource.findUnique.mockResolvedValue({
+      id: "source-filtered",
+      sourceType: "GROUP_ASSIGNMENT",
+      sourceRef:
+        "clicktt://group-assignment?groupNamePattern=^(?:NRW-Liga|Verbandsliga|Landesliga)",
+      scope: { id: "wttv", code: "WTTV" },
+    } as never);
+    prismaMock.rasterSource.update.mockResolvedValue({
+      id: "source-filtered",
+    } as never);
+
+    await refreshRasterSource("source-filtered");
+
+    expect(rasterIngest.scrapeClickTtAssignments).toHaveBeenCalledWith({
+      groupNamePattern: "^(?:NRW-Liga|Verbandsliga|Landesliga)",
+    });
+  });
+
+  it("scrapes public league URLs from click-TT source refs", async () => {
+    const { rasterIngest } = await import("@/lib/raster/pipeline");
+    vi.mocked(rasterIngest.scrapeClickTtPublicLeagueAssignments).mockResolvedValue(
+      [],
+    );
+    prismaMock.rasterSource.findUnique.mockResolvedValue({
+      id: "source-public",
+      sourceType: "GROUP_ASSIGNMENT",
+      sourceRef:
+        "clicktt://group-assignment?publicLeagueUrl=https%3A%2F%2Fwttv.click-tt.de%2Fcgi-bin%2FWebObjects%2FnuLigaTTDE.woa%2Fwa%2FleaguePage",
+      scope: { id: "wttv", code: "WTTV" },
+    } as never);
+    prismaMock.rasterSource.update.mockResolvedValue({
+      id: "source-public",
+    } as never);
+
+    await refreshRasterSource("source-public");
+
+    expect(
+      rasterIngest.scrapeClickTtPublicLeagueAssignments,
+    ).toHaveBeenCalledWith(
+      "https://wttv.click-tt.de/cgi-bin/WebObjects/nuLigaTTDE.woa/wa/leaguePage",
+    );
+  });
+
+  it("scrapes raw click-TT league page URLs as group assignments", async () => {
+    const { rasterIngest } = await import("@/lib/raster/pipeline");
+    vi.mocked(rasterIngest.scrapeClickTtPublicLeagueAssignments).mockResolvedValue(
+      [],
+    );
+    prismaMock.rasterSource.findUnique.mockResolvedValue({
+      id: "source-raw-public",
+      sourceType: "GROUP_ASSIGNMENT",
+      sourceRef:
+        "https://wttv.click-tt.de/cgi-bin/WebObjects/ClickWTTV.woa/wa/leaguePage?championship=WTTV%2026/27",
+      scope: { id: "wttv", code: "WTTV" },
+    } as never);
+    prismaMock.rasterSource.update.mockResolvedValue({
+      id: "source-raw-public",
+    } as never);
+
+    await refreshRasterSource("source-raw-public");
+
+    expect(
+      rasterIngest.scrapeClickTtPublicLeagueAssignments,
+    ).toHaveBeenCalledWith(
+      "https://wttv.click-tt.de/cgi-bin/WebObjects/ClickWTTV.woa/wa/leaguePage?championship=WTTV%2026/27",
+    );
   });
 });
