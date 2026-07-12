@@ -170,6 +170,54 @@
 
 ---
 
+## Phase 11: Clarification Follow-ups (Session 2026-07-12)
+
+**Goal**: Implement the five decisions added after the feature was first built — canonical Club identity (FR-008f), explicit live/manual click-TT ingestion (FR-008e-1), the 30-min admin-overridable run limit (FR-010a), German-only UI on next-intl, and indefinite snapshot retention with a latest-delete guard (FR-014a).
+
+**Independent Test**: Ingest sources with mismatched club spellings and confirm one canonical resolution; run a live click-TT refresh and a manual-upload fallback; start a run with an overridden time limit; delete a superseded vs the latest snapshot; verify new UI strings are German via next-intl.
+
+### Canonical Club identity (FR-008f)
+
+- [ ] T068 [P] [US1] Add `RasterClub` + `RasterClubAlias` models to `webapp/prisma/schema.postgres.prisma` (the repo's single schema) + migration per data-model.md — canonical per scope, alias uniqueness `(scopeId, sourceName)`.
+- [ ] T069 [P] [US1] Add pure-JS string-similarity helper in `webapp/src/lib/raster/club-match.ts` (normalized Levenshtein / token overlap; no new dependency) with unit test `webapp/tests/unit/club-match.test.ts`.
+- [ ] T070 [US1] Add club resolution service in `webapp/src/services/raster/clubs.ts`: exact name/alias auto-resolves with no review; non-exact returns the closest `RasterClub` as a proposal; persist confirmed `RasterClubAlias`.
+- [ ] T071 [US1] Add `GET /api/raster/clubs`, `POST /api/raster/clubs/resolve`, `POST /api/raster/clubs/aliases` under `webapp/src/app/api/raster/clubs/` with route tests in `webapp/tests/unit/raster-clubs-route.test.ts`.
+- [ ] T072 [US1] Wire club resolution into wishes/capacity/assignment ingest in `webapp/src/services/raster/` so rows persist the canonical club id (retaining source `clubName`); block the review step on unresolved non-exact names.
+- [ ] T072a [US1] Data migration + backfill: create `RasterClub`/`RasterClubAlias` rows from existing `clubId`/`clubName` values across `RasterWish`, `RasterHallCapacity`, `RasterAssignment`, `RasterConflict`, and re-point their club references to the canonical club (idempotent, per scope) in `webapp/prisma/migrations-postgres/` + a one-off script under `webapp/scripts/`.
+- [ ] T073 [P] [US1] Club-alias review UI in `webapp/src/components/raster/clubs/club-resolve.tsx` (confirm fuzzy proposal / remap / create new canonical club).
+- [ ] T074 [P] [US1] Unit test `webapp/tests/unit/club-resolve.test.ts`: exact auto-resolves without review; non-exact proposes closest; a confirmed alias is reused (no re-prompt) on the next ingest.
+
+### Explicit click-TT ingestion (FR-008e-1)
+
+- [ ] T075 [US1] Implement the live click-TT fetch/parse for `GROUP_ASSIGNMENT` in `webapp/src/app/api/raster/sources/[id]/refresh/route.ts` (read-only toward click-TT; runs only on explicit refresh) as the primary path. Authenticate with server-side stored click-TT credentials (env/secret, reusing the CLI mechanism) — never prompt in-app; on missing creds / login failure, return a clear error pointing to the manual-upload fallback (FR-008e-2).
+- [ ] T076 [US1] Schema-validate the manual click-TT export on `POST /api/raster/sources/upload` (fallback path when live fetch fails/unavailable); reject invalid payloads with clear errors before caching.
+- [ ] T077 [P] [US1] Test both paths in `webapp/tests/unit/raster-sources-clicktt.test.ts`: live refresh caches `parsedJson`, manual upload is validated, and no network call happens on ordinary page load.
+
+### Optimizer run time limit (FR-010a)
+
+- [ ] T078 [US1] Add an app-level default run limit (1800s) and read it in run-start; accept optional `timeLimitSeconds` admin override in `POST /api/raster/input-sets/{id}/runs`; persist the effective value to `OptimizationRun.settings`.
+- [ ] T079 [US1] Pass `timeLimitSeconds` through the `raster-run` job `--settings` to `scripts/solve-raster-cpsat.py` as the solver stop limit; map limit-reached-without-proof → `feasible` (or `infeasible`/`failed`).
+- [ ] T080 [P] [US1] Admin run-start UI control to override the default limit, with unit test `webapp/tests/unit/run-timelimit.test.ts`.
+
+### Snapshot retention & latest-delete guard (FR-014a)
+
+- [ ] T081 [P] [US2] Add `season` to `RasterInputSet` and `RasterSnapshot` in `webapp/prisma/schema.postgres.prisma` + migration; propagate `season` from the input set to the snapshot on creation (FR-014b).
+- [ ] T081a [US1] Capture `season` at input-set creation: extend `POST /api/raster/input-sets` (`webapp/src/app/api/raster/input-sets/route.ts`), its service, and the create UI to require/record a season identifier (FR-014b).
+- [ ] T081b [P] [US2] Add `season` to the snapshot list filter: extend `GET /api/raster/snapshots?district=&season=` and the snapshot list UI so review can be scoped to a district+season (FR-014b).
+- [ ] T082 [US2] Add `DELETE /api/raster/snapshots/{id}` (admin) in `webapp/src/app/api/raster/snapshots/[id]/route.ts`: superseded snapshots delete freely; the newest for `(district, season)` returns 409 with a warning payload unless `?confirmLatest=true`.
+- [ ] T083 [P] [US2] Snapshot delete UI with the latest-guard confirmation in `webapp/src/components/raster/snapshots/`.
+- [ ] T084 [P] [US2] Unit test `webapp/tests/unit/snapshot-delete.test.ts`: superseded deletes without confirm; latest requires `confirmLatest`.
+
+### German-only UI (cross-cutting)
+
+- [ ] T085 [P] Externalize all new raster UI strings via next-intl `de` messages and confirm `de` is the default locale; no hardcoded UI text in the Phase 11 components (FR-032).
+
+### Validation
+
+- [ ] T086 Run `webapp/validate.ps1` (typecheck + lint + tests) and root `pnpm test && pnpm typecheck`; fix issues from the Phase 11 tasks.
+
+---
+
 ## Dependencies & Execution Order
 
 - **Setup (Phase 1)**: T001 governance blocker first; T002→T003 (schema→migration) ordered; T004/T005/T006 parallel after.
@@ -182,6 +230,7 @@
 - **US6 (Phase 8)**: reuses review layer (US2/US3).
 - **Polish (Phase 9)**: after target stories.
 - **Source hierarchy/cache (Phase 10)**: schema/access tasks T054–T059 before APIs/UI; T064–T066 complete parser integration; T067 verifies behavior end-to-end.
+- **Clarification follow-ups (Phase 11)**: builds on the completed feature. Club identity: T068→T069→T070→T071→T072→T072a ordered (schema→match→service→API→ingest wiring→backfill); T073/T074 parallel after. click-TT: T075/T076 then T077. Run limit: T078→T079, T080 parallel. Season/snapshot delete: T081→T081a→T082→(T083/T084); T081b parallel after T081. T085 parallel across all Phase 11 UI. T086 last (after all).
 
 ### Parallel Opportunities
 
@@ -191,6 +240,7 @@
 - T025, T026, T028 parallel; T031, T032, T034 parallel.
 - US2 and US3 can proceed in parallel once US1 produces a snapshot.
 - T064 and T065 can proceed in parallel after T062/T063.
+- Phase 11: T068/T069 parallel; T073/T074 parallel; T080, T083, T084, T085 parallel within their groups.
 
 ### MVP
 

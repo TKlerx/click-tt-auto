@@ -34,13 +34,15 @@ cd webapp && pnpm worker        # or docker compose up worker
 1. Sign in as **admin**. Create an InputSet for a district.
 2. Register source material at the right hierarchy level: WTTV-wide group documents under `WTTV`, district-only wishes under `OWL`, and shared national material under `DE`.
 3. Open `/raster?district=OWL` and verify inherited WTTV sources are visible without being copied into OWL.
-4. Upload or explicitly refresh wishes/group sources only when the underlying PDF/link changed; reopening the input set should reuse the stored cache.
+4. Load group data: click **Refresh** on a `GROUP_ASSIGNMENT` source to trigger the live click-TT fetch/parse; if that fails, upload a click-TT export instead (manual fallback). Reopening the input set reuses the stored cache — no reparse without an explicit refresh/upload.
 5. Upload a wishes PDF → verify deterministic parse shows clubs/teams marked *review*; correct any.
+   - For any club name that does not exactly match a canonical club, confirm the fuzzy-proposed match (or map/create one); the alias is saved and not re-asked next time.
 6. Upload hall-capacity CSV (or add via form); search a club to confirm.
 7. Add fixed upper-league Rasterzahlen (manual entry).
 8. Validate the InputSet → status `ready`.
-9. Start a run → it goes `pending`→`running` asynchronously; the UI stays responsive.
+9. Start a run → it goes `pending`→`running` asynchronously; the UI stays responsive. (Admins may override the default 30-min time limit on start, FR-010a.)
 10. When it finishes, open the snapshot → confirm optimality label (proven-optimal/feasible) and that **no fixed Rasterzahl is violated** (SC-003).
+11. Delete a superseded snapshot → no warning. Attempt to delete the newest snapshot for the district+season → the app requires an explicit confirmation first (FR-014a).
 
 ## Review checks (US2–US4)
 

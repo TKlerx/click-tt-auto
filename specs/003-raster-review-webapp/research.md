@@ -53,6 +53,44 @@
 **Alternatives considered**:
 - Optimistic locking / merge UI — rejected as over-engineering for the usage pattern.
 
+## Decision: Canonical Club identity with fuzzy-assisted alias mapping
+
+**Decision**: Maintain a canonical `Club` per scope plus a persisted `ClubAlias` (sourceName → clubId) table. At ingest, exact name/alias matches resolve automatically; only non-exact names trigger a review step that proposes the closest canonical club by string similarity, and the confirmed mapping is saved for reuse (clarified 2026-07-12, FR-008f).
+**Rationale**: Club names differ across wishes, capacity, and assignment sources; a canonical entity keeps last-write-wins capacity, wishes, and assignments reliably joined. Auto-resolving exact matches avoids needless review prompts.
+**Alternatives considered**:
+- Re-fuzzy-match every ingest with no persisted aliases — rejected: repeats work and re-asks the user each run.
+- Exact-string-only with a blocking error on any mismatch — rejected: pushes avoidable data-cleanup back onto the user for benign spelling differences.
+**Implementation note**: string-similarity ranking can use a small pure-JS routine (e.g. normalized Levenshtein / token overlap); no heavyweight dependency required.
+
+## Decision: click-TT group data via explicit live fetch, manual upload as fallback
+
+**Decision**: Obtain click-TT group/roster data through two explicit-action paths — a live fetch/parse on `sources/{id}/refresh` (primary) and a schema-validated manual export upload on `sources/upload` (fallback when live fetch fails/unavailable). The app never contacts click-TT without an explicit user action (clarified 2026-07-12, FR-008e-1).
+**Rationale**: Matches the existing FR-008e cache rule (refresh only on explicit request) and keeps the app read-only toward click-TT (Principle II). The manual path guarantees the flow still works when the live fetch breaks (layout/auth drift).
+**Alternatives considered**:
+- Live fetch only — rejected: a single point of failure when click-TT changes.
+- Manual upload only — rejected: loses the low-effort primary path the FR-008e wording already implies.
+
+## Decision: Optimizer run time limit — 30 min default, admin-overridable
+
+**Decision**: Enforce a run time limit carried in `OptimizationRun.settings.timeLimitSeconds`, defaulting from an app setting (1800s / 30 min) and overridable per run by admins; reaching it without proof yields the `feasible` outcome (clarified 2026-07-12, FR-010a). Resolves the previously vague "configured limit."
+**Rationale**: District scale (~100–1,000 assignments) usually proves or strongly approximates well under 30 min; the ceiling bounds worker occupancy while the override covers a rare hard district.
+**Alternatives considered**:
+- Hard-coded fixed limit — rejected: no escape hatch for a hard district.
+- No app-level limit, rely on solver defaults only — rejected: unbounded worker occupancy, unpredictable UX.
+
+## Decision: German-only UI on next-intl scaffolding
+
+**Decision**: Ship a German-only UI for the first release, built on the baseline's `next-intl` with externalized strings; domain terms (Rasterzahl, Spieltag, Doppelrunde) stay German (clarified 2026-07-12).
+**Rationale**: Audience is a German association; externalized strings keep later locales cheap without double-authoring now.
+**Alternatives considered**: bilingual from day one — rejected as unneeded first-release cost.
+
+## Decision: Indefinite snapshot retention with a latest-delete guard
+
+**Decision**: Retain snapshots indefinitely (no auto-pruning); admins may delete, but deleting the newest snapshot for a `(district, season)` requires an explicit confirmation (409 without `confirmLatest`), while superseded snapshots delete freely (clarified 2026-07-12, FR-014a). Adds a `season` key to InputSet/Snapshot.
+**Rationale**: Snapshots are the historical record; run volume is low, so manual delete suffices. The guard prevents accidentally destroying the current authoritative result.
+**Alternatives considered**:
+- Auto-prune last-N / time-based — rejected: risks discarding still-relevant history for an infrequent workflow.
+
 ## Open items deferred to implementation
 
 - **Wishes JSON schema** (the exact zod schema shared by the deterministic parser output and the LLM-fallback prompt) — define in `webapp/src/lib/raster/`.

@@ -29,6 +29,14 @@ Raw inputs arrive today mostly as PDFs; the app must accept structured versions 
 - Q: What data scale must the app handle? → A: ~100–1,000 assignments and up to a few hundred conflicts per district snapshot. The system may later hold county-wide data (~1,400 clubs/teams), but review views remain scoped to a selected district, so a single view stays at the hundreds scale.
 - Q: How should shared documents and links be scoped if OWL is only one WTTV district? → A: Model a hierarchy of scopes, initially Germany → WTTV → OWL. Input sets still target a district such as OWL, but source documents/links and parsed caches belong to the scope where they are valid. An OWL input set may use OWL sources plus ancestor sources from WTTV and Germany.
 
+### Session 2026-07-12
+
+- Q: How does the app resolve a club name that differs between wishes, capacity, and assignment inputs? → A: A canonical Club entity per scope. An exact match (against a canonical name or an existing alias) resolves automatically with no review. Only a non-exact source name goes through a review step that proposes the closest existing club by string similarity (fuzzy match); the user confirms or corrects, and the resulting alias→canonical mapping is persisted and reused on later ingests.
+- Q: How does the app obtain click-TT group/roster data? → A: Both. Primary path: the app fetches/parses click-TT live when a user explicitly triggers a refresh, storing the result in the scope's source cache. Fallback when live fetch fails or is unavailable: the user manually uploads a click-TT export, validated against the app's expected schema. The app never contacts click-TT without an explicit user action.
+- Q: How is the optimizer run time bounded? → A: A system-wide default time limit of 30 minutes, configurable in app settings and overridable per run by admins. Reaching the limit without proof yields the "feasible but not proven optimal" outcome.
+- Q: What is the UI language policy for the first release? → A: German-only UI, with next-intl i18n scaffolding in place (strings externalized) for later locales. Domain terms (Rasterzahl, Spieltag, Doppelrunde) stay German.
+- Q: How long are optimizer snapshots retained? → A: Indefinitely; no automatic pruning. Admins may manually delete snapshots. Deleting the latest (most recent) snapshot for a given scope+season MUST show a confirmation warning, since it is the current authoritative result; superseded/interim runs can be deleted without that warning.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Generate a Rasterzahl Proposal From Inputs (Priority: P1)
@@ -169,11 +177,15 @@ An admin imports a snapshot produced by the legacy external optimizer into the s
 - **FR-008c**: The system MUST store raster source documents/links and parsed source caches with an owning scope. A district input set MUST be able to list and use sources from its own district scope and ancestor scopes.
 - **FR-008d**: The system MUST allow authorized admins to register or update source metadata and parsed cache content for a selected scope without reparsing or rescraping existing sources.
 - **FR-008e**: The system MUST only refresh group assignment and wishes caches when an authorized user explicitly requests a click-TT parse/refresh or uploads/replaces source PDFs or structured source data.
+- **FR-008e-1**: The system MUST support two paths for obtaining click-TT group/roster data, both triggered only by an explicit user action: (a) a live fetch/parse of click-TT that stores the result in the scope's source cache, and (b) a manual upload of a click-TT export that is validated against the app's expected schema. The manual upload path MUST serve as the fallback when live fetch fails or is unavailable. The system MUST NOT contact click-TT without an explicit user request.
+- **FR-008e-2**: The live click-TT fetch MUST be read-only toward click-TT and MUST authenticate using server-side stored click-TT credentials (environment/secret configuration, reusing the existing CLI credential mechanism), never by prompting the user for click-TT credentials interactively in the webapp. If credentials are absent or authentication fails, the system MUST surface a clear error and direct the user to the manual-upload fallback (FR-008e-1).
+- **FR-008f**: The system MUST maintain a canonical Club entity per scope and reconcile club names that differ across wishes, capacity, and assignment inputs against it. A source name that exactly matches a canonical name or an existing alias MUST resolve automatically without a review step. Only a non-exact source name triggers a review step that proposes the closest existing canonical club by string similarity (fuzzy match); once the user confirms or corrects the match, the system MUST persist the source-name→canonical alias mapping and reuse it on subsequent ingests without re-prompting.
 
 #### Generation / Optimization
 
 - **FR-009**: Admin users MUST be able to start an optimization run from a reviewed input set.
 - **FR-010**: The system MUST process optimization runs asynchronously — by invoking the existing Rasterzahl optimizer as a background job (not a reimplemented solver) — so users can continue reviewing existing snapshots while a run is pending. The app prepares the optimizer's input from the reviewed input set and ingests its output into the snapshot model.
+- **FR-010a**: The system MUST enforce a run time limit on the optimizer job, with a system-wide default of 30 minutes configurable in app settings and overridable per run by admin users. A run that reaches its time limit without proving optimality MUST return the "feasible but not proven optimal" outcome (or "infeasible"/"failed" if no feasible assignment was found).
 - **FR-011**: Each completed run MUST report one of these outcomes: proven optimal, feasible but not proven optimal, infeasible, failed, or cancelled.
 - **FR-012**: For proven-optimal and feasible runs, the system MUST create a review snapshot containing assignment output, conflict output, objective value, solver status, run settings, and a reference to the input set used.
 - **FR-013**: The system MUST clearly distinguish proven-optimal assignments from feasible-only or imported heuristic assignments in all snapshot and assignment views.
@@ -183,6 +195,8 @@ An admin imports a snapshot produced by the legacy external optimizer into the s
 #### Snapshots & Review
 
 - **FR-014**: The system MUST retain snapshots as separate review versions so users can compare or revisit past runs.
+- **FR-014a**: The system MUST retain snapshots indefinitely with no automatic pruning. Admin users MAY manually delete a snapshot. When the target is the latest (most recent) snapshot for its scope+season — i.e. the current authoritative result — the system MUST require an explicit confirmation warning before deletion; superseded/interim snapshots MUST be deletable without that warning.
+- **FR-014b**: An input set MUST carry a season identifier, set when the input set is created, and each generated or imported snapshot MUST inherit the season of its originating input set. The `(district, season)` pair defines the grouping used for the latest-snapshot delete guard (FR-014a) and for scoping review to a season.
 - **FR-015**: The system MUST show a conflict overview with total conflicts, total excess, maximum excess, affected club count, and the highest-impact clubs.
 - **FR-016**: Users MUST be able to filter conflicts by club, weekday, hall, match week, and excess severity.
 - **FR-017**: Each conflict MUST show match week, club, weekday, hall, capacity, actual home-match count, excess, involved teams, and the source snapshot.
@@ -205,9 +219,14 @@ An admin imports a snapshot produced by the legacy external optimizer into the s
 - **FR-030**: The system MUST keep an audit trail of input uploads, run starts, capacity edits, and review-status changes, including who performed the action and when.
 - **FR-031**: The system MAY (later phase) import a pre-computed external optimizer snapshot into the same review model, warning users when imported files disagree on snapshot identity or row counts.
 
+#### Localization
+
+- **FR-032**: The first-release UI MUST be German-only, with all UI strings externalized via `next-intl` (default locale `de`) so additional locales can be added later without re-authoring screens. Domain terms (Rasterzahl, Spieltag, Doppelrunde, etc.) remain German regardless of UI locale. No user-facing UI text may be hardcoded outside the `next-intl` message catalog.
+
 ### Key Entities *(include if feature involves data)*
 
 - **User**: A person who signs into the app, with permissions via a role.
+- **Club**: A canonical club identity scoped to a Scope, holding a set of source-name aliases so that names differing across wishes, capacity, and assignment inputs resolve to one entity. Exact name/alias matches resolve automatically; only non-exact names are added via a fuzzy-match-assisted review step and persisted for reuse.
 - **Role**: A permission level (admin, scheduler, viewer) governing upload, run, capacity edit, review, and user management.
 - **Input Set**: A named collection of the wishes, hall capacities, and fixed upper-league Rasterzahlen used for one generation run.
 - **Scope**: A hierarchy node such as Germany, WTTV, or OWL. Users and raster source material may be assigned at the level where they are valid.
@@ -244,6 +263,10 @@ An admin imports a snapshot produced by the legacy external optimizer into the s
 - **SC-012**: At least 95% of completed runs display their final outcome, objective value, and generated snapshot link without manual log inspection.
 - **SC-013**: Users can distinguish proven-optimal, feasible-only, and imported heuristic snapshots within 5 seconds of opening a snapshot.
 - **SC-014**: If a generated snapshot uses any Spieltag-4 same-club derby fallback, a scheduler can see the count and affected objective component within 5 seconds of opening the snapshot; no Spieltag-5-or-later same-club derby is stored as a valid generated snapshot.
+- **SC-015**: A source club name that exactly matches a canonical club or alias resolves with zero review prompts; a club mapping confirmed once is never re-prompted on any later ingest within the same scope (FR-008f).
+- **SC-016**: A run that reaches its configured time limit without proof stops within that limit and is recorded as `feasible` (or `infeasible`/`failed`), never left running indefinitely; an admin-supplied per-run limit overrides the 30-minute default (FR-010a).
+- **SC-017**: Deleting a superseded snapshot completes in one action with no warning, while deleting the latest snapshot for a district+season is blocked until an explicit confirmation is given (FR-014a) — 100% in acceptance testing.
+- **SC-018**: The webapp never prompts a user for click-TT credentials; when live click-TT fetch credentials are missing or login fails, the user is directed to the manual-upload fallback (FR-008e-2).
 
 ## Assumptions
 
@@ -258,7 +281,9 @@ An admin imports a snapshot produced by the legacy external optimizer into the s
 - Reviewed capacity and input data are maintained separately from snapshots so old snapshots remain historically understandable.
 - First release targets district scale (hundreds of assignments/conflicts per snapshot). The data model should not preclude later county-wide scale (~1,400 clubs/teams) with district-scoped views.
 - WTTV-level documents may apply to multiple districts. Source ownership follows the administrative level where the document is valid; input sets consume inherited sources instead of duplicating them per district.
+- The live click-TT fetch is read-only and authenticates with server-side stored click-TT credentials (the same env/secret mechanism the CLI approval tool uses); the webapp never prompts a user for click-TT credentials. When credentials are missing or login fails, users fall back to the manual click-TT export upload.
 - Desktop/tablet review is the primary workflow for the first release; mobile is useful but secondary.
+- The first-release UI is German-only, built on `next-intl` with externalized strings so additional locales can be added later without re-authoring screens. Domain terms (Rasterzahl, Spieltag, Doppelrunde, etc.) remain German regardless of UI locale.
 - A new snapshot is required after capacity/input edits before conflict counts can be considered final.
 </content>
 </invoke>

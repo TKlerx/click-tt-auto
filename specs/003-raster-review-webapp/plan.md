@@ -1,7 +1,9 @@
 # Implementation Plan: Raster Generation & Review Webapp
 
-**Branch**: `003-raster-review-webapp` | **Date**: 2026-07-09 | **Spec**: [spec.md](spec.md)
+**Branch**: `003-raster-review-webapp` | **Date**: 2026-07-12 | **Spec**: [spec.md](spec.md)
 **Input**: Feature specification from `specs/003-raster-review-webapp/spec.md`
+
+> **Updated 2026-07-12** to absorb Clarifications Session 2026-07-12: canonical Club identity + fuzzy alias mapping (FR-008f), explicit live/manual click-TT ingestion (FR-008e-1), 30-min admin-overridable run limit (FR-010a), German-only UI on next-intl, and indefinite snapshot retention with a latest-delete guard (FR-014a). See `research.md`, `data-model.md`, and `contracts/api.md` for the design deltas.
 
 ## Summary
 
@@ -11,19 +13,19 @@ Build the Raster Generation & Review feature inside the existing `webapp/` basel
 
 **Language/Version**: TypeScript 5.9 (strict) for the webapp and `src/raster` pipeline; Python 3.12 for the existing CP-SAT solver (invoked as a subprocess via `uv`)
 **Primary Dependencies**: Next.js 16 (App Router), React 19, Prisma 7 (`@prisma/client`), better-auth, next-intl, zod, Tailwind 4 / shadcn; `pdfjs-dist` (wishes PDF text extraction, already used by `src/raster/ingest/pdf-text.ts`); OR-Tools CP-SAT via the existing Python script
-**Storage**: Prisma — SQLite for dev (`schema.prisma`), PostgreSQL for prod (`schema.postgres.prisma`); uploaded files on disk/object storage referenced by rows
+**Storage**: Prisma — PostgreSQL via the single `schema.postgres.prisma` present in the repo (the originally-planned SQLite dev `schema.prisma` split was not implemented); uploaded files on disk/object storage referenced by rows
 **Testing**: Vitest (webapp unit + `src/raster` unit), Playwright (webapp e2e — config already present)
 **Target Platform**: Containerized web (Dockerfile.app + Dockerfile.worker already present); desktop/tablet browsers primary
 **Project Type**: Web application (Next.js app + background worker) on top of an existing pipeline library
 **Performance Goals**: District-scoped views render hundreds of rows without virtualization; SC-004 top-10 clubs < 30s, SC-007 find assignment < 15s, SC-008 find capacity < 15s
-**Constraints**: Generated assignments MUST NOT violate fixed upper-league Rasterzahlen (hard constraint, SC-003) or same-club derbies after Spieltag 4; same-club derby Spieltag 4 is legal only as a high-penalty objective component shown in the snapshot breakdown; optimizer runs async so review is never blocked (FR-010); no server-side LLM (FR-002 deterministic parse; LLM prompt/paste is user-side fallback)
+**Constraints**: Generated assignments MUST NOT violate fixed upper-league Rasterzahlen (hard constraint, SC-003) or same-club derbies after Spieltag 4; same-club derby Spieltag 4 is legal only as a high-penalty objective component shown in the snapshot breakdown; optimizer runs async so review is never blocked (FR-010) with a 30-min default run limit, admin-overridable (FR-010a); no server-side LLM (FR-002 deterministic parse; LLM prompt/paste is user-side fallback); read-only toward click-TT — live fetch only on explicit refresh, manual upload fallback (FR-008e-1); club names resolved to a canonical per-scope Club via exact-then-fuzzy alias mapping (FR-008f); German-only UI on next-intl
 **Scale/Scope**: Hundreds of assignments/conflicts per district snapshot now; data model must not preclude county-wide (~1,400 clubs/teams) with district-scoped views (FR-025)
 
 ## Constitution Check
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-Constitution v2.0.0 (`.specify/memory/constitution.md`).
+Constitution v3.0.0 (`.specify/memory/constitution.md`, ratified 2026-07-10).
 
 | Principle | Status | Notes |
 |-----------|--------|-------|
@@ -82,7 +84,7 @@ webapp/                         # EXISTING Next.js baseline — feature work lan
 
 ## Complexity Tracking
 
-> Filled because the Constitution Check has a violation that must be justified.
+> Retained for the record. The Principle I / web-stack tension was **resolved** by the v3.0.0 constitution amendment (ratified 2026-07-10); the justifications below explain why the amendment was warranted.
 
 | Violation | Why Needed | Simpler Alternative Rejected Because |
 |-----------|------------|-------------------------------------|
@@ -90,5 +92,5 @@ webapp/                         # EXISTING Next.js baseline — feature work lan
 | Web-scoped production dependencies (Prisma, better-auth, next-intl, Tailwind, zod) | Required by the Next.js baseline for persistence, auth/roles, i18n, and validation. | Hand-rolling auth/ORM/validation would be more code and less safe than the vetted baseline; contradicts "narrowly-scoped, justified" allowance already in v2.0.0. |
 | Python (CP-SAT) alongside TypeScript | The exact optimizer already exists in Python (OR-Tools); it yields proven-optimal vs feasible outcomes (FR-011/013). | Porting CP-SAT to TS was rejected — high risk, redundant, and OR-Tools has no equivalent TS solver. The worker invokes it as a subprocess. |
 
-**Required governance action**: Amend the constitution to v3.0.0 (add the Rasterzahl Review Webapp capability; scope web deps to `webapp/`) before implementation lands. This mirrors the v2.0.0 amendment that admitted the offline planner.
+**Governance action (completed)**: The constitution was amended to v3.0.0 (2026-07-10) — adding the Rasterzahl Review Webapp capability and scoping the web stack to `webapp/` — mirroring the v2.0.0 amendment that admitted the offline planner. No further governance action is required before implementation.
 </content>

@@ -22,10 +22,20 @@ Next.js App Router route handlers under `webapp/src/app/api/raster/`. All routes
 |--------|------|------|---------|
 | GET | `/api/raster/sources?district=&sourceType=` | any | List source documents/links/caches visible to a district, including ancestor scope sources (e.g. OWL + WTTV + DE) |
 | POST | `/api/raster/sources` | admin | Register or update a source for a scope (`scopeCode`, `sourceType`, `sourceRef`, `displayName`, optional `contentHash`, optional `parsedJson`) |
-| POST | `/api/raster/sources/upload` | admin | Upload a replacement source file for a scope and register it as a `RasterSource` |
-| POST | `/api/raster/sources/{id}/refresh` | admin | Explicitly parse/refresh a stored source cache for supported source types such as `GROUP_ASSIGNMENT` and `WISHES_PDF` |
+| POST | `/api/raster/sources/upload` | admin | Upload a replacement source file for a scope and register it as a `RasterSource`. For `GROUP_ASSIGNMENT`, this is the **manual click-TT fallback** (used when live fetch fails/unavailable); the payload is schema-validated before caching (FR-008e-1) |
+| POST | `/api/raster/sources/{id}/refresh` | admin | Explicitly parse/refresh a stored source cache. For `GROUP_ASSIGNMENT` this performs the **live click-TT fetch/parse** (primary path, FR-008e-1); also supports `WISHES_PDF` |
 
-Source records belong to the hierarchy level where the source is valid. For example, a WTTV-wide group PDF is stored under WTTV and inherited by OWL flows. Registering a source does not reparse it; parse/cache refresh happens only when explicitly requested by a parser/upload flow.
+Source records belong to the hierarchy level where the source is valid. For example, a WTTV-wide group PDF is stored under WTTV and inherited by OWL flows. Registering a source does not reparse it; parse/cache refresh happens only when explicitly requested by a parser/upload flow. The app never contacts click-TT without an explicit refresh/upload action.
+
+## Club identity resolution
+
+| Method | Path | Role | Purpose |
+|--------|------|------|---------|
+| GET | `/api/raster/clubs?district=&q=` | any | List/search canonical `Club` entities for a scope |
+| POST | `/api/raster/clubs/resolve` | admin | Resolve a batch of source club names against the scope's canonical clubs. Exact name/alias matches auto-resolve; each non-exact name returns the closest canonical `Club` by string similarity as a proposal (FR-008f) |
+| POST | `/api/raster/clubs/aliases` | admin | Confirm a resolution: persist a `ClubAlias` (`scopeCode`, `sourceName`, target `clubId` or new `canonicalName`) so the mapping is reused on later ingests (FR-008f) |
+
+Ingest flows (wishes/capacity/assignments) call resolution before persisting rows; unresolved non-exact names block the review step until an admin confirms a mapping.
 
 ## Hall capacity
 
@@ -41,16 +51,17 @@ Editing capacity marks dependent snapshots `stale=true` (FR-022).
 
 | Method | Path | Role | Purpose |
 |--------|------|------|---------|
-| POST | `/api/raster/input-sets/{id}/runs` | admin | Start a generation run → enqueues `raster-run` job; 409 if InputSet not `ready` (FR-009) |
+| POST | `/api/raster/input-sets/{id}/runs` | admin | Start a generation run → enqueues `raster-run` job; 409 if InputSet not `ready` (FR-009). Optional body `{ timeLimitSeconds }` lets an admin override the default 30-min run limit (FR-010a) |
 | GET | `/api/raster/runs/{id}` | any | Run status/outcome (FR-011) |
 | POST | `/api/raster/runs/{id}/cancel` | admin | Cancel a pending/running job |
-| GET | `/api/raster/snapshots?district=` | any | List snapshots (versions, FR-014) |
+| GET | `/api/raster/snapshots?district=&season=` | any | List snapshots (versions, FR-014); optional `season` scopes review to a district+season (FR-014b) |
 | GET | `/api/raster/snapshots/{id}` | any | Snapshot overview metrics + optimality + stale flag + objective breakdown, including ST4 same-club derby fallback count (FR-013/013a/015/022) |
 | GET | `/api/raster/snapshots/{id}/conflicts?club=&weekday=&hall=&week=&minExcess=` | any | Conflict list, filtered (FR-016/017) |
 | GET | `/api/raster/snapshots/{id}/conflicts/summary` | any | Per-club conflict summary (FR-018) |
 | GET | `/api/raster/snapshots/{id}/assignments?club=&league=&group=&team=&status=` | any | Assignment view, filtered (FR-019/020/021) |
 | POST | `/api/raster/snapshots/{id}/decisions` | admin, scheduler | Record ReviewDecision (FR-023) |
 | POST | `/api/raster/snapshots/import` | admin | Import pre-computed external snapshot; 409/warn on identity/row-count mismatch (FR-031, later phase) |
+| DELETE | `/api/raster/snapshots/{id}` | admin | Delete a snapshot (indefinite retention otherwise, FR-014a). If it is the newest for its `(district, season)`, require `?confirmLatest=true`; without it, return 409 with a warning payload so the UI can confirm |
 
 Viewer role: all GET only; every POST/PUT above returns 403 for viewer (FR-028). Scheduler: 403 on run start, input upload, user mgmt (FR-027).
 
@@ -69,7 +80,7 @@ Handler in `webapp/worker/`. Input: `{ runId }`.
 
 ## Solver I/O contract (worker ↔ Python)
 
-- **Input**: JSON file — teams (with club, weekday, hall, requested/fixed Rasterzahl), groups (including reviewed `rasterMode` for 6er Doppelrunde), hall capacities, rulebook/spielwochen config.
+- **Input**: JSON file — teams (with resolved canonical club, weekday, hall, requested/fixed Rasterzahl), groups (including reviewed `rasterMode` for 6er Doppelrunde), hall capacities, rulebook/spielwochen config. The `--settings` payload carries `timeLimitSeconds` (default 1800, admin-overridable) which the solver applies as its stop limit (FR-010a).
 - **Output**: JSON file — per-team assigned Rasterzahl + status, solver status, objective value, objective breakdown.
 - Exact schema pinned during implementation in `webapp/src/lib/raster/solver-io.ts` (zod) mirrored on the Python side.
 </content>
