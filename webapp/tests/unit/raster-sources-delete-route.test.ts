@@ -20,7 +20,7 @@ vi.mock("@/services/raster", async (importOriginal) => ({
   deleteRasterSource,
 }));
 
-import { DELETE } from "@/app/api/raster/sources/[id]/route";
+import { DELETE, PATCH } from "@/app/api/raster/sources/[id]/route";
 
 describe("raster source delete route", () => {
   afterEach(() => {
@@ -71,5 +71,62 @@ describe("raster source delete route", () => {
 
     expect(response.status).toBe(404);
     expect(deleteRasterSource).not.toHaveBeenCalled();
+  });
+
+  it("updates corrected parsed JSON for admins", async () => {
+    requireApiUser.mockResolvedValue({
+      user: {
+        id: "admin-1",
+        role: Role.PLATFORM_ADMIN,
+        status: UserStatus.ACTIVE,
+      },
+    });
+    prismaMock.rasterSource.findUnique.mockResolvedValue({
+      id: "source-1",
+      scope: { code: "WTTV" },
+    } as never);
+    prismaMock.rasterSource.update.mockResolvedValue({
+      id: "source-1",
+      parsedJson: '{"wishes":[]}',
+    } as never);
+
+    const response = await PATCH(
+      new Request("http://localhost/api/raster/sources/source-1", {
+        method: "PATCH",
+        body: JSON.stringify({ parsedJson: '{"wishes":[]}' }),
+      }),
+      { params: Promise.resolve({ id: "source-1" }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(prismaMock.rasterSource.update).toHaveBeenCalledWith({
+      where: { id: "source-1" },
+      data: { parsedJson: '{"wishes":[]}' },
+    });
+  });
+
+  it("rejects invalid parsed JSON corrections", async () => {
+    requireApiUser.mockResolvedValue({
+      user: {
+        id: "admin-1",
+        role: Role.PLATFORM_ADMIN,
+        status: UserStatus.ACTIVE,
+      },
+    });
+    prismaMock.rasterSource.findUnique.mockResolvedValue({
+      id: "source-1",
+      scope: { code: "WTTV" },
+    } as never);
+
+    const response = await PATCH(
+      new Request("http://localhost/api/raster/sources/source-1", {
+        method: "PATCH",
+        body: JSON.stringify({ parsedJson: "{" }),
+      }),
+      { params: Promise.resolve({ id: "source-1" }) },
+    );
+
+    expect(response.status).toBe(422);
+    expect(prismaMock.rasterSource.update).not.toHaveBeenCalled();
   });
 });

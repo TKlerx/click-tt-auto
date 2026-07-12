@@ -37,6 +37,7 @@ export function RasterSourcesPanel({
   const router = useRouter();
   const [message, setMessage] = useState<string | null>(null);
   const [refreshingId, setRefreshingId] = useState<string | null>(null);
+  const [savingParsedId, setSavingParsedId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [sourceMessages, setSourceMessages] = useState<Record<string, string>>(
     {},
@@ -146,6 +147,31 @@ export function RasterSourcesPanel({
     }
   }
 
+  async function saveParsedJson(sourceId: string, formData: FormData) {
+    setSavingParsedId(sourceId);
+    setMessage(null);
+    try {
+      const response = await fetch(withBasePath(`/api/raster/sources/${sourceId}`), {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          parsedJson: String(formData.get("parsedJson") ?? ""),
+        }),
+      });
+      if (!response.ok) {
+        const body = (await response.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        setMessage(body.error ?? `Save failed (${response.status})`);
+        return;
+      }
+      setMessage("Parsed data saved");
+      router.refresh();
+    } finally {
+      setSavingParsedId(null);
+    }
+  }
+
   return (
     <section className="overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--panel)]">
       <div className="border-b border-[var(--border)] px-4 py-3">
@@ -212,6 +238,40 @@ export function RasterSourcesPanel({
                 <p className="text-sm text-[var(--muted-foreground)] md:col-span-6">
                   {sourceMessages[source.id]}
                 </p>
+              ) : null}
+              {source.parsedJson ? (
+                <details className="md:col-span-6">
+                  <summary className="cursor-pointer text-sm font-medium">
+                    Parsed data: {parsedSourceSummary(source.parsedJson)}
+                  </summary>
+                  {canEdit ? (
+                    <form
+                      action={(formData) =>
+                        void saveParsedJson(source.id, formData)
+                      }
+                      className="mt-2 grid gap-2"
+                    >
+                      <textarea
+                        className="min-h-80 rounded-md border border-[var(--border)] bg-[var(--background)] p-3 font-mono text-xs"
+                        name="parsedJson"
+                        defaultValue={formatParsedJson(source.parsedJson)}
+                      />
+                      <button
+                        className="h-9 w-fit rounded-md border border-[var(--border)] px-3 text-sm font-medium"
+                        disabled={savingParsedId === source.id}
+                        type="submit"
+                      >
+                        {savingParsedId === source.id
+                          ? "..."
+                          : "Save parsed data"}
+                      </button>
+                    </form>
+                  ) : (
+                    <pre className="mt-2 max-h-96 overflow-auto rounded-md border border-[var(--border)] bg-[var(--background)] p-3 text-xs">
+                      {formatParsedJson(source.parsedJson)}
+                    </pre>
+                  )}
+                </details>
               ) : null}
             </div>
           ))
@@ -401,4 +461,40 @@ export function RasterSourcesPanel({
       ) : null}
     </section>
   );
+}
+
+function parsedSourceSummary(parsedJson: string) {
+  try {
+    const parsed = JSON.parse(parsedJson) as {
+      assignments?: unknown[];
+      clubs?: unknown[];
+      teams?: unknown[];
+      wishes?: unknown[];
+    };
+    return (
+      [
+        countLabel(parsed.assignments, "assignment"),
+        countLabel(parsed.clubs, "club"),
+        countLabel(parsed.teams, "team"),
+        countLabel(parsed.wishes, "wish"),
+      ]
+        .filter(Boolean)
+        .join(", ") || "saved"
+    );
+  } catch {
+    return "saved";
+  }
+}
+
+function formatParsedJson(parsedJson: string) {
+  try {
+    return JSON.stringify(JSON.parse(parsedJson), null, 2);
+  } catch {
+    return parsedJson;
+  }
+}
+
+function countLabel(rows: unknown[] | undefined, label: string) {
+  if (!rows?.length) return null;
+  return `${rows.length} ${label}${rows.length === 1 ? "" : "s"}`;
 }
