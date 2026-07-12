@@ -5,7 +5,7 @@ import {
 import {
   evaluate,
   overUsageFairnessCost,
-} from "../../../../src/raster/score/index.ts";
+} from "../../../../src/raster/score/evaluate.ts";
 import {
   defaultWeights,
   type Assignment,
