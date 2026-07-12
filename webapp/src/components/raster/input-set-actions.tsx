@@ -32,6 +32,17 @@ type HallCapacityReview = {
   missingCount: number;
   insufficientCount: number;
   blockingCount: number;
+  rows: Array<{
+    id: string | null;
+    district: string;
+    clubId: string;
+    hall: string;
+    weekday: string;
+    capacity: number;
+    storedCapacity: number | null;
+    basis: string | null;
+    status: "missing" | "insufficient";
+  }>;
 };
 
 export function CreateInputSetForm({
@@ -234,6 +245,7 @@ export function InputSetRunActions({
             fixedRasterzahlen?: number;
           };
         };
+        capacityReview?: HallCapacityReview;
       };
       if (!response.ok) {
         setMessage(body.error ?? `Failed (${response.status})`);
@@ -304,6 +316,34 @@ export function InputSetRunActions({
           ? `Capacity rows inferred: ${count}. ${needsReview} stored capacities look too low and need review.`
           : `Capacity rows inferred: ${count}. You can queue a run after refresh.`,
       );
+      router.refresh();
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function saveCapacity(row: HallCapacityReview["rows"][number], formData: FormData) {
+    if (!row.id) return;
+    setBusy(row.id);
+    setMessage(null);
+    try {
+      const response = await fetch(withBasePath(`/api/raster/capacity/${row.id}`), {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          district: row.district,
+          capacity: Number(formData.get("capacity")),
+          basis: "REVIEWED",
+        }),
+      });
+      if (!response.ok) {
+        const body = (await response.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        setMessage(body.error ?? `Capacity save failed (${response.status})`);
+        return;
+      }
+      setMessage("Capacity saved. Validate again.");
       router.refresh();
     } finally {
       setBusy(null);
@@ -383,6 +423,14 @@ export function InputSetRunActions({
           <RefreshCw aria-hidden="true" className="h-4 w-4" />
         </button>
       </div>
+      {capacityBlocked && capacityReview ? (
+        <CapacityWizard
+          busy={busy}
+          onInfer={() => void inferCapacities()}
+          onSave={(row, formData) => void saveCapacity(row, formData)}
+          review={capacityReview}
+        />
+      ) : null}
       {runs.length ? (
         <div className="grid gap-2 text-sm">
           {runs.some(
@@ -435,6 +483,113 @@ export function InputSetRunActions({
           ))}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function CapacityWizard({
+  busy,
+  onInfer,
+  onSave,
+  review,
+}: {
+  busy: string | null;
+  onInfer: () => void;
+  onSave: (row: HallCapacityReview["rows"][number], formData: FormData) => void;
+  review: HallCapacityReview;
+}) {
+  const missing = review.rows.filter((row) => row.status === "missing");
+  const insufficient = review.rows.filter(
+    (row) => row.status === "insufficient",
+  );
+  return (
+    <details
+      className="rounded-md border border-[var(--border)] p-3"
+      open
+    >
+      <summary className="cursor-pointer text-sm font-semibold">
+        Hall capacity review
+      </summary>
+      <p className="mt-2 text-sm text-[var(--muted-foreground)]">
+        Confirm capacities before validation can pass. Stored equal or larger
+        capacities are reused automatically.
+      </p>
+      {missing.length ? (
+        <div className="mt-3 grid gap-2">
+          <button
+            className="h-9 w-fit rounded-md border border-[var(--border)] px-3 text-sm font-medium"
+            disabled={busy !== null}
+            onClick={onInfer}
+            type="button"
+          >
+            {busy === "Capacity" ? "..." : "Infer missing capacities"}
+          </button>
+          <CapacityRows rows={missing} />
+        </div>
+      ) : null}
+      {insufficient.length ? (
+        <div className="mt-3 grid gap-2">
+          <p className="text-sm font-medium">Capacities lower than inferred</p>
+          {insufficient.map((row) => (
+            <form
+              action={(formData) => onSave(row, formData)}
+              className="grid gap-2 rounded-md border border-[var(--border)] p-2 md:grid-cols-[minmax(12rem,1fr)_5rem_7rem_auto]"
+              key={row.id ?? `${row.clubId}-${row.hall}-${row.weekday}`}
+            >
+              <span className="text-sm">
+                {row.clubId}, hall {row.hall}, {row.weekday}
+              </span>
+              <span className="text-sm text-[var(--muted-foreground)]">
+                {row.storedCapacity ?? 0} to {row.capacity}
+              </span>
+              <input
+                className="h-9 rounded-md border border-[var(--border)] bg-transparent px-2 text-sm"
+                min={row.capacity}
+                name="capacity"
+                type="number"
+                defaultValue={row.capacity}
+              />
+              <button
+                className="h-9 rounded-md border border-[var(--border)] px-3 text-sm font-medium"
+                disabled={busy !== null}
+                type="submit"
+              >
+                {busy === row.id ? "..." : "Save"}
+              </button>
+            </form>
+          ))}
+        </div>
+      ) : null}
+    </details>
+  );
+}
+
+function CapacityRows({ rows }: { rows: HallCapacityReview["rows"] }) {
+  return (
+    <div className="overflow-x-auto rounded-md border border-[var(--border)]">
+      <table className="w-full text-left text-sm">
+        <thead className="text-xs uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
+          <tr>
+            <th className="px-2 py-2">Club</th>
+            <th className="px-2 py-2">Hall</th>
+            <th className="px-2 py-2">Day</th>
+            <th className="px-2 py-2">Inferred</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr
+              className="border-t border-[var(--border)]"
+              key={`${row.clubId}-${row.hall}-${row.weekday}`}
+            >
+              <td className="px-2 py-2">{row.clubId}</td>
+              <td className="px-2 py-2">{row.hall}</td>
+              <td className="px-2 py-2">{row.weekday}</td>
+              <td className="px-2 py-2 font-medium">{row.capacity}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

@@ -14,11 +14,19 @@ type InferredHallCapacity = {
   capacity: number;
 };
 
+export type HallCapacityReviewRow = InferredHallCapacity & {
+  id: string | null;
+  storedCapacity: number | null;
+  basis: HallCapacityBasis | null;
+  status: "missing" | "insufficient";
+};
+
 export type HallCapacityReview = {
   inferredCount: number;
   missingCount: number;
   insufficientCount: number;
   blockingCount: number;
+  rows: HallCapacityReviewRow[];
 };
 
 export async function listHallCapacities(district: string) {
@@ -120,13 +128,28 @@ export async function reviewHallCapacitiesForInputSet(
   const existing = await existingCapacityMap(inferred);
   let missingCount = 0;
   let insufficientCount = 0;
+  const rows: HallCapacityReviewRow[] = [];
 
   for (const row of inferred) {
     const stored = existing.get(capacityKey(row));
     if (!stored) {
       missingCount += 1;
+      rows.push({
+        ...row,
+        id: null,
+        storedCapacity: null,
+        basis: null,
+        status: "missing",
+      });
     } else if (stored.capacity < row.capacity) {
       insufficientCount += 1;
+      rows.push({
+        ...row,
+        id: stored.id,
+        storedCapacity: stored.capacity,
+        basis: stored.basis,
+        status: "insufficient",
+      });
     }
   }
 
@@ -135,6 +158,7 @@ export async function reviewHallCapacitiesForInputSet(
     missingCount,
     insufficientCount,
     blockingCount: missingCount + insufficientCount,
+    rows,
   };
 }
 
@@ -211,16 +235,23 @@ async function inferCapacityRows(
 }
 
 async function existingCapacityMap(inferred: InferredHallCapacity[]) {
-  if (!inferred.length) return new Map<string, { capacity: number }>();
+  if (!inferred.length) {
+    return new Map<
+      string,
+      { id: string; capacity: number; basis: HallCapacityBasis }
+    >();
+  }
   const districts = [...new Set(inferred.map((row) => row.district))];
   const existing = await prisma.rasterHallCapacity.findMany({
     where: { district: { in: districts } },
     select: {
+      id: true,
       district: true,
       clubId: true,
       hall: true,
       weekday: true,
       capacity: true,
+      basis: true,
     },
   });
   return new Map(existing.map((row) => [capacityKey(row), row]));

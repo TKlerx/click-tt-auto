@@ -10,6 +10,7 @@ import type {
 } from "../../../../src/raster/ingest/index.js";
 import { listRasterSourcesForDistrict } from "./sources";
 import { replaceParsedWishes } from "./wishes";
+import { reviewHallCapacitiesForInputSet } from "./capacity";
 
 type SeasonGroup = {
   id?: string;
@@ -100,6 +101,12 @@ export async function validateInputSet(id: string) {
       }
     }
   }
+  const capacityReview = await reviewHallCapacitiesForInputSet(id);
+  if (capacityReview.blockingCount > 0) {
+    errors.push(
+      `Hall capacity review needed: ${capacityReview.missingCount} missing, ${capacityReview.insufficientCount} lower than inferred.`,
+    );
+  }
 
   const status = errors.length ? InputSetStatus.DRAFT : InputSetStatus.READY;
   if (inputSet.status !== status) {
@@ -109,7 +116,7 @@ export async function validateInputSet(id: string) {
     });
   }
 
-  return { inputSet: { ...inputSet, status }, errors };
+  return { inputSet: { ...inputSet, status }, errors, capacityReview };
 }
 
 export async function syncInputSetSourceCaches(inputSetId: string) {

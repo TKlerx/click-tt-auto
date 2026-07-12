@@ -37,6 +37,7 @@ describe("raster capacity service", () => {
     } as never);
     prismaMock.rasterHallCapacity.findMany.mockResolvedValue([
       {
+        id: "capacity-1",
         district: "OWL",
         clubId: "club-a",
         hall: "1",
@@ -84,6 +85,7 @@ describe("raster capacity service", () => {
       missingCount: 0,
       insufficientCount: 0,
       blockingCount: 0,
+      rows: [],
     });
   });
 
@@ -109,6 +111,7 @@ describe("raster capacity service", () => {
     } as never);
     prismaMock.rasterHallCapacity.findMany.mockResolvedValue([
       {
+        id: "capacity-1",
         district: "OWL",
         clubId: "club-a",
         hall: "1",
@@ -125,6 +128,19 @@ describe("raster capacity service", () => {
       missingCount: 0,
       insufficientCount: 1,
       blockingCount: 1,
+      rows: [
+        {
+          id: "capacity-1",
+          district: "OWL",
+          clubId: "club-a",
+          hall: "1",
+          weekday: "FRIDAY",
+          capacity: 2,
+          storedCapacity: 1,
+          basis: HallCapacityBasis.REVIEWED,
+          status: "insufficient",
+        },
+      ],
     });
   });
 });
