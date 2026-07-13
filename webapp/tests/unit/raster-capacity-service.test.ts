@@ -180,12 +180,14 @@ describe("raster capacity service", () => {
       wishes: [
         {
           clubId: "club-a",
+          teamLabel: "Team I",
           hall: "1",
           homeWeekday: "FRIDAY",
           spielwochePref: "A",
         },
         {
           clubId: "club-a",
+          teamLabel: "Team II",
           hall: "1",
           homeWeekday: "FRIDAY",
           spielwochePref: "A",
@@ -209,6 +211,43 @@ describe("raster capacity service", () => {
           weekday: "FRIDAY",
           capacity: 2,
           status: "missing",
+        }),
+      ],
+    });
+  });
+
+  it("uses wish home slots instead of season-model placeholders for clubs with wishes", async () => {
+    prismaMock.rasterInputSet.findUnique.mockResolvedValue({
+      district: "OWL",
+      seasonModelJson: JSON.stringify({
+        teams: [
+          {
+            clubId: "club-a",
+            hall: "1",
+            homeWeekday: "friday",
+          },
+        ],
+      }),
+      wishes: [
+        {
+          clubId: "club-a",
+          hall: "1",
+          homeWeekday: "MONDAY",
+          spielwochePref: "A",
+        },
+      ],
+    } as never);
+    prismaMock.rasterHallCapacity.findMany.mockResolvedValue([] as never);
+
+    await expect(
+      reviewHallCapacitiesForInputSet("input-1"),
+    ).resolves.toMatchObject({
+      inferredCount: 1,
+      rows: [
+        expect.objectContaining({
+          clubId: "club-a",
+          weekday: "MONDAY",
+          capacity: 1,
         }),
       ],
     });

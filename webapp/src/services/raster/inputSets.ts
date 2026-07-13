@@ -19,6 +19,13 @@ type SeasonGroup = {
   rasterMode?: "single" | "double";
 };
 
+type SeasonModelClub = { id: string; name?: string };
+type SeasonModelTeam = { id: string; clubId: string };
+type SeasonModelWithClubs = {
+  clubs?: SeasonModelClub[];
+  teams?: SeasonModelTeam[];
+};
+
 export async function listInputSets(
   district: string,
   season = normalizeRasterSeason(undefined),
@@ -139,6 +146,9 @@ export async function syncInputSetSourceCaches(inputSetId: string) {
     (source) =>
       source.sourceType.toUpperCase() === "WISHES_PDF" && source.parsedJson,
   );
+  const parsedWishes = wishSources.map(
+    (source) => JSON.parse(source.parsedJson ?? "{}") as WishParseResult,
+  );
   const data: {
     seasonModelJson?: string;
     groupAssignmentJson?: string;
@@ -166,6 +176,7 @@ export async function syncInputSetSourceCaches(inputSetId: string) {
       );
       const model =
         await rasterIngest.buildSeasonModelFromAssignments(supportedAssignments);
+      alignSeasonModelClubIds(model, parsedWishes);
       const existingModes = groupModesByKey(inputSet.seasonModelJson);
       model.groups = model.groups.map((group) => ({
         ...group,
@@ -181,9 +192,6 @@ export async function syncInputSetSourceCaches(inputSetId: string) {
     }
   }
   if (wishSources.length) {
-    const parsedWishes = wishSources.map(
-      (source) => JSON.parse(source.parsedJson ?? "{}") as WishParseResult,
-    );
     data.wishesJson = JSON.stringify({
       sources: wishSources.map((source, index) => ({
         sourceId: source.id,
@@ -205,6 +213,32 @@ export async function syncInputSetSourceCaches(inputSetId: string) {
     where: { id: inputSet.id },
     data,
   });
+}
+
+function alignSeasonModelClubIds(
+  model: SeasonModelWithClubs,
+  parsedWishes: WishParseResult[],
+) {
+  const wishClubIdByName = new Map<string, string>();
+  for (const club of parsedWishes.flatMap((parsed) => parsed.clubs ?? [])) {
+    wishClubIdByName.set(normalizeClubName(club.name), club.id);
+  }
+  const clubIdMap = new Map<string, string>();
+  model.clubs = (model.clubs ?? []).map((club) => {
+    const wishClubId = wishClubIdByName.get(normalizeClubName(club.name));
+    if (!wishClubId || wishClubId === club.id) return club;
+    clubIdMap.set(club.id, wishClubId);
+    return { ...club, id: wishClubId };
+  });
+  if (!clubIdMap.size) return;
+  model.teams = (model.teams ?? []).map((team) => ({
+    ...team,
+    clubId: clubIdMap.get(team.clubId) ?? team.clubId,
+  }));
+}
+
+function normalizeClubName(value: string | undefined) {
+  return (value ?? "").trim().toLowerCase();
 }
 
 function groupModesByKey(seasonModelJson?: string | null) {

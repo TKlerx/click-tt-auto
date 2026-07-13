@@ -241,7 +241,11 @@ async function inferCapacityRows(
     : { teams: [] };
   const bySlot = new Map<string, CapacitySlot[]>();
   const seen = new Set<string>();
+  const clubsWithWishes = new Set(
+    inputSet.wishes.map((wish) => wish.clubId).filter(Boolean),
+  );
   for (const team of model.teams ?? []) {
+    if (team.clubId && clubsWithWishes.has(team.clubId)) continue;
     addCapacitySlot(bySlot, seen, team);
   }
   for (const wish of inputSet.wishes) {
