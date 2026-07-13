@@ -25,7 +25,14 @@ export function findOverUsages(
 ): OverUsage[] {
   const slots = new Map<
     string,
-    { teams: Array<{ id: string; startMinutes: number | null }>; capacity: number }
+    {
+      teams: Array<{
+        id: string;
+        startMinutes: number | null;
+        durationMinutes: number;
+      }>;
+      capacity: number;
+    }
   >();
   const inferredCapacities = new Map<string, number>();
   for (const team of model.teams) {
@@ -53,7 +60,8 @@ export function findOverUsages(
       const bucket = slots.get(key) ?? { teams: [], capacity };
       bucket.teams.push({
         id: team.id,
-        startMinutes: parseStartMinutes(team.startTime)
+        startMinutes: parseStartMinutes(team.startTime),
+        durationMinutes: matchDurationMinutes(team.label)
       });
       bucket.capacity = capacity;
       slots.set(key, bucket);
@@ -79,15 +87,18 @@ export function findOverUsages(
   });
 }
 
-function requiredCapacity(teams: Array<{ startMinutes: number | null }>): number {
+function requiredCapacity(
+  teams: Array<{ startMinutes: number | null; durationMinutes: number }>
+): number {
   const unknownTimes = teams.filter((team) => team.startMinutes === null).length;
   const events = teams
-    .filter((team): team is { startMinutes: number } =>
+    .filter(
+      (team): team is { startMinutes: number; durationMinutes: number } =>
       Number.isInteger(team.startMinutes)
     )
     .flatMap((team) => [
       { minute: team.startMinutes, delta: 1 },
-      { minute: team.startMinutes + 180, delta: -1 }
+      { minute: team.startMinutes + team.durationMinutes, delta: -1 }
     ])
     .sort((a, b) => a.minute - b.minute || a.delta - b.delta);
   let concurrent = 0;
@@ -97,6 +108,10 @@ function requiredCapacity(teams: Array<{ startMinutes: number | null }>): number
     maxConcurrent = Math.max(maxConcurrent, concurrent);
   }
   return maxConcurrent + unknownTimes;
+}
+
+function matchDurationMinutes(label: string): number {
+  return /\bjugend\b/i.test(label) ? 120 : 180;
 }
 
 function parseStartMinutes(value: string | undefined): number | null {

@@ -88,8 +88,21 @@ describe("raster capacity service", () => {
       inferredCount: 1,
       missingCount: 0,
       insufficientCount: 0,
+      higherCount: 1,
       blockingCount: 0,
-      rows: [],
+      rows: [
+        {
+          id: undefined,
+          district: "OWL",
+          clubId: "club-a",
+          hall: "1",
+          weekday: "FRIDAY",
+          capacity: 1,
+          storedCapacity: 2,
+          basis: HallCapacityBasis.REVIEWED,
+          status: "higher",
+        },
+      ],
     });
   });
 
@@ -134,6 +147,7 @@ describe("raster capacity service", () => {
       inferredCount: 1,
       missingCount: 0,
       insufficientCount: 1,
+      higherCount: 0,
       blockingCount: 1,
       rows: [
         {
@@ -186,6 +200,7 @@ describe("raster capacity service", () => {
       inferredCount: 1,
       missingCount: 1,
       insufficientCount: 0,
+      higherCount: 0,
       blockingCount: 1,
       rows: [
         expect.objectContaining({
@@ -230,6 +245,38 @@ describe("raster capacity service", () => {
     });
   });
 
+  it("uses two-hour duration for youth capacity inference", async () => {
+    prismaMock.rasterInputSet.findUnique.mockResolvedValue({
+      district: "OWL",
+      seasonModelJson: JSON.stringify({ teams: [] }),
+      wishes: [
+        {
+          clubId: "club-a",
+          teamLabel: "Jugend 19",
+          hall: "1",
+          homeWeekday: "FRIDAY",
+          startTime: "18:15",
+          spielwochePref: "A",
+        },
+        {
+          clubId: "club-a",
+          teamLabel: "Erwachsene V",
+          hall: "1",
+          homeWeekday: "FRIDAY",
+          startTime: "20:15",
+          spielwochePref: "A",
+        },
+      ],
+    } as never);
+    prismaMock.rasterHallCapacity.findMany.mockResolvedValue([] as never);
+
+    await expect(
+      reviewHallCapacitiesForInputSet("input-1"),
+    ).resolves.toMatchObject({
+      rows: [expect.objectContaining({ capacity: 1 })],
+    });
+  });
+
   it("deduplicates wishes and places missing week preference on the lighter slot", async () => {
     prismaMock.rasterInputSet.findUnique.mockResolvedValue({
       district: "OWL",
@@ -268,6 +315,49 @@ describe("raster capacity service", () => {
     ).resolves.toMatchObject({
       inferredCount: 1,
       rows: [expect.objectContaining({ capacity: 1 })],
+    });
+  });
+
+  it("reports stored capacities that are higher than the current inference", async () => {
+    prismaMock.rasterInputSet.findUnique.mockResolvedValue({
+      district: "OWL",
+      seasonModelJson: JSON.stringify({ teams: [] }),
+      wishes: [
+        {
+          clubId: "club-a",
+          teamLabel: "Team II",
+          hall: "1",
+          homeWeekday: "FRIDAY",
+          startTime: "19:45",
+          spielwochePref: "A",
+        },
+      ],
+    } as never);
+    prismaMock.rasterHallCapacity.findMany.mockResolvedValue([
+      {
+        id: "capacity-1",
+        district: "OWL",
+        clubId: "club-a",
+        hall: "1",
+        weekday: "FRIDAY",
+        capacity: 6,
+        basis: HallCapacityBasis.INFERRED,
+      },
+    ] as never);
+
+    await expect(
+      reviewHallCapacitiesForInputSet("input-1"),
+    ).resolves.toMatchObject({
+      inferredCount: 1,
+      higherCount: 1,
+      blockingCount: 0,
+      rows: [
+        expect.objectContaining({
+          status: "higher",
+          storedCapacity: 6,
+          capacity: 1,
+        }),
+      ],
     });
   });
 });

@@ -79,6 +79,15 @@ describe("raster scoring", () => {
     expect(evaluate(staggered, { a: 6, b: 7 }).overUsages).toHaveLength(0);
   });
 
+  it("uses two-hour duration for youth matches", () => {
+    const youth = model();
+    youth.teams[0]!.label = "Jugend 19";
+    youth.teams[0]!.startTime = "18:15";
+    youth.teams[1]!.startTime = "20:15";
+
+    expect(evaluate(youth, { a: 6, b: 7 }).overUsages).toHaveLength(0);
+  });
+
   it("infers hall-day capacity from Spielwoche wishes", () => {
     const inferred = model();
     inferred.clubs[0]!.venues = [{ hall: "1", name: "Hall" }];

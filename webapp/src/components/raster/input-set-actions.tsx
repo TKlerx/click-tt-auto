@@ -31,6 +31,7 @@ type HallCapacityReview = {
   inferredCount: number;
   missingCount: number;
   insufficientCount: number;
+  higherCount: number;
   blockingCount: number;
   rows: Array<{
     id: string | null;
@@ -41,7 +42,7 @@ type HallCapacityReview = {
     capacity: number;
     storedCapacity: number | null;
     basis: string | null;
-    status: "missing" | "insufficient";
+    status: "missing" | "insufficient" | "higher";
   }>;
 };
 

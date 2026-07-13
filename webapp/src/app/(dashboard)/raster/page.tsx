@@ -158,12 +158,14 @@ export default async function RasterPage({
                     <p className="mb-2 text-sm text-[var(--muted-foreground)]">
                       {inputSet.name}: {review.inferredCount} inferred,{" "}
                       {review.missingCount} missing, {review.insufficientCount}{" "}
-                      lower than inferred.
+                      lower than inferred, {review.higherCount} higher than
+                      inferred.
                     </p>
                     <InferCapacitiesButton
                       inputSetId={inputSet.id}
                       label={`Recheck capacities for ${inputSet.name}`}
                     />
+                    <CapacityReviewRows rows={review.rows} />
                   </div>
                 );
               })}
@@ -252,6 +254,52 @@ export default async function RasterPage({
           </p>
         )}
       </section>
+    </div>
+  );
+}
+
+function CapacityReviewRows({
+  rows,
+}: {
+  rows: Array<{
+    clubId: string;
+    hall: string;
+    weekday: string;
+    capacity: number;
+    storedCapacity: number | null;
+    status: "missing" | "insufficient" | "higher";
+  }>;
+}) {
+  if (!rows.length) return null;
+  return (
+    <div className="mt-3 overflow-x-auto rounded-md border border-[var(--border)]">
+      <table className="w-full text-left text-xs">
+        <thead className="uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
+          <tr>
+            <th className="px-2 py-2">Status</th>
+            <th className="px-2 py-2">Club</th>
+            <th className="px-2 py-2">Hall</th>
+            <th className="px-2 py-2">Day</th>
+            <th className="px-2 py-2">Stored</th>
+            <th className="px-2 py-2">Inferred</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr
+              className="border-t border-[var(--border)]"
+              key={`${row.status}-${row.clubId}-${row.hall}-${row.weekday}`}
+            >
+              <td className="px-2 py-2">{row.status}</td>
+              <td className="px-2 py-2">{row.clubId}</td>
+              <td className="px-2 py-2">{row.hall}</td>
+              <td className="px-2 py-2">{row.weekday}</td>
+              <td className="px-2 py-2">{row.storedCapacity ?? "-"}</td>
+              <td className="px-2 py-2">{row.capacity}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

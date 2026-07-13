@@ -1450,7 +1450,11 @@ def _find_overage_rows(model: dict[str, Any], assignment: dict[str, Any]) -> lis
             )
             slot = slots.setdefault(key, {"teams": [], "capacity": capacity})
             slot["teams"].append(
-                {"id": team_id, "start_minutes": _parse_start_minutes(team.get("startTime"))}
+                {
+                    "id": team_id,
+                    "start_minutes": _parse_start_minutes(team.get("startTime")),
+                    "duration_minutes": _match_duration_minutes(team.get("label")),
+                }
             )
             slot["capacity"] = capacity
     rows: list[dict[str, Any]] = []
@@ -1479,7 +1483,7 @@ def _required_capacity(teams: list[dict[str, Any]]) -> int:
         start = team.get("start_minutes")
         if isinstance(start, int):
             events.append((start, 1))
-            events.append((start + 180, -1))
+            events.append((start + int(team.get("duration_minutes") or 180), -1))
     events.sort(key=lambda event: (event[0], event[1]))
     concurrent = 0
     max_concurrent = 0
@@ -1498,6 +1502,10 @@ def _parse_start_minutes(value: Any) -> int | None:
     if hours > 23 or minutes > 59:
         return None
     return hours * 60 + minutes
+
+
+def _match_duration_minutes(label: Any) -> int:
+    return 120 if re.search(r"\bjugend\b", str(label or ""), re.IGNORECASE) else 180
 
 
 def _capacity_for(

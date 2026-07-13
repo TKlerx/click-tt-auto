@@ -19,19 +19,21 @@ type CapacitySlot = {
   hall: string;
   weekday: RasterWeekday;
   startMinutes: number | null;
+  durationMinutes: number;
 };
 
 export type HallCapacityReviewRow = InferredHallCapacity & {
   id: string | null;
   storedCapacity: number | null;
   basis: HallCapacityBasis | null;
-  status: "missing" | "insufficient";
+  status: "missing" | "insufficient" | "higher";
 };
 
 export type HallCapacityReview = {
   inferredCount: number;
   missingCount: number;
   insufficientCount: number;
+  higherCount: number;
   blockingCount: number;
   rows: HallCapacityReviewRow[];
 };
@@ -135,6 +137,7 @@ export async function reviewHallCapacitiesForInputSet(
   const existing = await existingCapacityMap(inferred);
   let missingCount = 0;
   let insufficientCount = 0;
+  let higherCount = 0;
   const rows: HallCapacityReviewRow[] = [];
 
   for (const row of inferred) {
@@ -157,6 +160,15 @@ export async function reviewHallCapacitiesForInputSet(
         basis: stored.basis,
         status: "insufficient",
       });
+    } else if (stored.capacity > row.capacity) {
+      higherCount += 1;
+      rows.push({
+        ...row,
+        id: stored.id,
+        storedCapacity: stored.capacity,
+        basis: stored.basis,
+        status: "higher",
+      });
     }
   }
 
@@ -164,6 +176,7 @@ export async function reviewHallCapacitiesForInputSet(
     inferredCount: inferred.length,
     missingCount,
     insufficientCount,
+    higherCount,
     blockingCount: missingCount + insufficientCount,
     rows,
   };
@@ -277,6 +290,7 @@ function addCapacitySlot(
     hall: row.hall || "1",
     weekday,
     startMinutes: parseStartMinutes(row.startTime),
+    durationMinutes: matchDurationMinutes(row.teamLabel ?? row.label),
   };
   const identity = [
     row.clubId,
@@ -317,7 +331,7 @@ function requiredCapacity(slots: CapacitySlot[]) {
     )
     .flatMap((slot) => [
       { minute: slot.startMinutes, delta: 1 },
-      { minute: slot.startMinutes + 180, delta: -1 },
+      { minute: slot.startMinutes + slot.durationMinutes, delta: -1 },
     ])
     .sort((a, b) => a.minute - b.minute || a.delta - b.delta);
 
@@ -328,6 +342,10 @@ function requiredCapacity(slots: CapacitySlot[]) {
     maxConcurrent = Math.max(maxConcurrent, concurrent);
   }
   return maxConcurrent + unknownTimes;
+}
+
+function matchDurationMinutes(label: string | null | undefined) {
+  return /\bjugend\b/i.test(label ?? "") ? 120 : 180;
 }
 
 function parseStartMinutes(value: string | null | undefined) {
