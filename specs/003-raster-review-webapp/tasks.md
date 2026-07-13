@@ -192,6 +192,19 @@
 
 ---
 
+## Phase 12: Parsed Source Identity Review Backlog
+
+**Goal**: Prevent duplicate club/team identities when click-TT group assignments and wish PDFs spell the same club differently.
+
+**Independent Test**: Upload/refresh a group assignment and wish PDF where the same club uses an abbreviation or suffix difference; verify the UI proposes the match, an admin can confirm/correct it, and a later upload reuses the confirmed alias.
+
+- [ ] T079 [US1] Add a persisted source-identity alias model for scope/season-aware club and team name mappings.
+- [ ] T080 [US1] Add fuzzy club/team matching in input-set cache sync, using exact normalized matches automatically and marking uncertain matches for review.
+- [ ] T081 [US1] Add parsed source identity review UI so admins can accept a suggestion, pick another club/team, or create a new identity before validation/run.
+- [ ] T082 [US1] Reuse confirmed aliases on future uploads and add tests for abbreviation/suffix cases such as `SC GW Paderborn` vs `SC Grün-Weiß Paderborn`.
+
+---
+
 ## Dependencies & Execution Order
 
 - **Setup (Phase 1)**: T001 governance blocker first; T002→T003 (schema→migration) ordered; T004/T005/T006 parallel after.

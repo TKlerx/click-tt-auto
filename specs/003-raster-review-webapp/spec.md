@@ -156,6 +156,7 @@ An admin imports a snapshot produced by the legacy external optimizer into the s
 - Same-club teams in one group cannot all meet by Spieltag 3 without worsening hall usage; Spieltag 4 is allowed with a high optimizer penalty and must be visible in the run breakdown, while Spieltag 5+ remains invalid.
 - A six-team group is ambiguous after parsing because click-TT may expose the roster size but not whether the official normal 6er or 6er Doppelrunde table should be used; the app must require explicit review before solving.
 - A club name differs between wishes, capacity, and assignment inputs.
+- A club name differs only by spelling, abbreviation, suffix, or typo between click-TT group assignments and wish PDFs; the system should suggest fuzzy matches, let an admin confirm/correct them, and remember confirmed aliases for future uploads/seasons.
 - Hall capacity is only a guessed/inferred default when a run starts.
 - A capacity edit would reduce capacity below the actual number of teams in an already reviewed conflict.
 - Two users edit the same club/hall/weekday capacity at once → last-write-wins (no locking); the audit trail records each change. (Rare: few users, ~annual editing.)
@@ -190,6 +191,7 @@ An admin imports a snapshot produced by the legacy external optimizer into the s
 - **FR-008f**: The system MUST let authorized admins delete wrongly registered raster sources. If the source references an app-stored upload, the stored file MUST be removed as part of deletion.
 - **FR-008g**: The system MUST validate source files enough to catch obvious mismatches: wish PDF uploads MUST be real PDF files, and explicit parser refresh MUST fail clearly when a source cannot be parsed as its selected source type.
 - **FR-008h**: District/scope selection in the UI MUST come from configured Scope records, show or sort by hierarchy, and include WTTV plus all configured WTTV districts rather than relying on free-text district entry.
+- **FR-008i**: When parsed source inputs contain club/team names that do not exactly match existing input-set identities, the system MUST provide a review step with fuzzy match suggestions, manual correction, and persisted aliases so future uploads reuse confirmed mappings.
 
 #### Generation / Optimization
 
