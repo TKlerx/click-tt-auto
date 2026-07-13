@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { prismaMock } from "@/lib/__mocks__/db";
-import { replaceJsonWishes } from "@/services/raster";
+import { replaceParsedWishes } from "@/services/raster";
 
 vi.mock("@/lib/db", () => ({
   prisma: prismaMock,
@@ -11,38 +11,42 @@ describe("raster wishes service", () => {
     vi.clearAllMocks();
   });
 
-  it("caches uploaded wishes before replacing normalized rows", async () => {
+  it("deduplicates parsed wish team rows before storing them", async () => {
     prismaMock.$transaction.mockImplementation(async (callback) =>
       callback(prismaMock),
     );
 
-    await expect(
-      replaceJsonWishes("input-1", [
+    await replaceParsedWishes("input-1", {
+      clubs: [{ id: "club-a", name: "Club A", venues: [], notes: "" }],
+      teams: [
         {
+          id: "club-a-1",
           clubId: "club-a",
-          clubName: "Club A",
-          homeWeekday: "FRIDAY",
+          label: "Erwachsene II",
+          homeWeekday: "monday",
+          hall: "1",
+          startTime: "19:45",
+          spielwochePref: "A",
+          rasterzahl: { kind: "assignable" },
+          confidence: "review",
         },
-      ]),
-    ).resolves.toEqual({ count: 1 });
+        {
+          id: "club-a-1-duplicate",
+          clubId: "club-a",
+          label: "Erwachsene II",
+          homeWeekday: "monday",
+          hall: "1",
+          startTime: "19:45",
+          spielwochePref: "A",
+          rasterzahl: { kind: "assignable" },
+          confidence: "review",
+        },
+      ],
+      warnings: [],
+    });
 
-    expect(prismaMock.rasterInputSet.update).toHaveBeenCalledWith({
-      where: { id: "input-1" },
-      data: {
-        wishesJson: JSON.stringify({
-          wishes: [
-            {
-              clubId: "club-a",
-              clubName: "Club A",
-              homeWeekday: "FRIDAY",
-            },
-          ],
-        }),
-      },
+    expect(prismaMock.rasterWish.createMany).toHaveBeenCalledWith({
+      data: [expect.objectContaining({ teamLabel: "Erwachsene II" })],
     });
-    expect(prismaMock.rasterWish.deleteMany).toHaveBeenCalledWith({
-      where: { inputSetId: "input-1" },
-    });
-    expect(prismaMock.rasterWish.createMany).toHaveBeenCalledOnce();
   });
 });

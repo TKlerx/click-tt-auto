@@ -201,6 +201,7 @@ async function inferCapacityRows(
       wishes: {
         select: {
           clubId: true,
+          teamLabel: true,
           hall: true,
           homeWeekday: true,
           startTime: true,
@@ -215,6 +216,9 @@ async function inferCapacityRows(
     ? (JSON.parse(inputSet.seasonModelJson) as {
         teams?: Array<{
           clubId?: string;
+          id?: string;
+          label?: string;
+          teamLabel?: string;
           hall?: string;
           homeWeekday?: string;
           startTime?: string;
@@ -223,11 +227,12 @@ async function inferCapacityRows(
       })
     : { teams: [] };
   const bySlot = new Map<string, CapacitySlot[]>();
+  const seen = new Set<string>();
   for (const team of model.teams ?? []) {
-    addCapacitySlot(bySlot, team);
+    addCapacitySlot(bySlot, seen, team);
   }
   for (const wish of inputSet.wishes) {
-    addCapacitySlot(bySlot, wish);
+    addCapacitySlot(bySlot, seen, wish);
   }
 
   const inferred = new Map<string, InferredHallCapacity>();
@@ -253,8 +258,12 @@ async function inferCapacityRows(
 
 function addCapacitySlot(
   bySlot: Map<string, CapacitySlot[]>,
+  seen: Set<string>,
   row: {
     clubId?: string | null;
+    id?: string | null;
+    label?: string | null;
+    teamLabel?: string | null;
     hall?: string | null;
     homeWeekday?: string | null;
     startTime?: string | null;
@@ -262,22 +271,42 @@ function addCapacitySlot(
   },
 ) {
   const weekday = normalizeWeekday(row.homeWeekday ?? undefined);
-  if (!row.clubId || !weekday || !row.spielwochePref) return;
-  const key = [
-    row.clubId,
-    row.hall || "1",
+  if (!row.clubId || !weekday) return;
+  const slot: CapacitySlot = {
+    clubId: row.clubId,
+    hall: row.hall || "1",
     weekday,
-    row.spielwochePref,
+    startMinutes: parseStartMinutes(row.startTime),
+  };
+  const identity = [
+    row.clubId,
+    row.teamLabel ?? row.label ?? row.id ?? "",
+    slot.hall,
+    weekday,
+    row.startTime ?? "",
+    row.spielwochePref ?? "",
   ].join("\0");
-  bySlot.set(key, [
-    ...(bySlot.get(key) ?? []),
-    {
-      clubId: row.clubId,
-      hall: row.hall || "1",
+  if (seen.has(identity)) return;
+  seen.add(identity);
+
+  if (row.spielwochePref === "A" || row.spielwochePref === "B") {
+    const key = [
+      row.clubId,
+      slot.hall,
       weekday,
-      startMinutes: parseStartMinutes(row.startTime),
-    },
-  ]);
+      row.spielwochePref,
+    ].join("\0");
+    bySlot.set(key, [...(bySlot.get(key) ?? []), slot]);
+    return;
+  }
+
+  const keyA = [row.clubId, slot.hall, weekday, "A"].join("\0");
+  const keyB = [row.clubId, slot.hall, weekday, "B"].join("\0");
+  const candidateA = [...(bySlot.get(keyA) ?? []), slot];
+  const candidateB = [...(bySlot.get(keyB) ?? []), slot];
+  const targetKey =
+    requiredCapacity(candidateA) <= requiredCapacity(candidateB) ? keyA : keyB;
+  bySlot.set(targetKey, [...(bySlot.get(targetKey) ?? []), slot]);
 }
 
 function requiredCapacity(slots: CapacitySlot[]) {

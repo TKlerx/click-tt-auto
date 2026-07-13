@@ -23,15 +23,16 @@ export async function replaceParsedWishes(
   parsed: WishParseResult,
 ) {
   const clubsById = new Map(parsed.clubs.map((club) => [club.id, club]));
+  const teams = dedupeTeams(parsed.teams);
   await prisma.$transaction(async (tx) => {
     await tx.rasterInputSet.update({
       where: { id: inputSetId },
-      data: { wishesJson: JSON.stringify(parsed) },
+      data: { wishesJson: JSON.stringify({ ...parsed, teams }) },
     });
     await tx.rasterWish.deleteMany({ where: { inputSetId } });
-    if (parsed.teams.length) {
+    if (teams.length) {
       await tx.rasterWish.createMany({
-        data: parsed.teams.map((team) => ({
+        data: teams.map((team) => ({
           inputSetId,
           clubId: team.clubId,
           clubName: clubsById.get(team.clubId)?.name ?? team.clubId,
@@ -53,7 +54,25 @@ export async function replaceParsedWishes(
     }
   });
 
-  return { count: parsed.teams.length };
+  return { count: teams.length };
+}
+
+function dedupeTeams(parsedTeams: WishParseResult["teams"]) {
+  const seen = new Set<string>();
+  return parsedTeams.filter((team) => {
+    const key = [
+      team.clubId,
+      team.label,
+      team.homeWeekday,
+      team.hall,
+      team.startTime ?? "",
+      team.spielwochePref ?? "",
+      JSON.stringify(team.requestedRasterzahl ?? null),
+    ].join("\0");
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 export async function replaceJsonWishes(

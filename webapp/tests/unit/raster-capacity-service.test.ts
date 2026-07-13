@@ -22,12 +22,14 @@ describe("raster capacity service", () => {
       seasonModelJson: JSON.stringify({
         teams: [
           {
+            id: "team-a",
             clubId: "club-a",
             hall: "1",
             homeWeekday: "friday",
             spielwochePref: "A",
           },
           {
+            id: "team-b",
             clubId: "club-a",
             hall: "1",
             homeWeekday: "friday",
@@ -98,12 +100,14 @@ describe("raster capacity service", () => {
       seasonModelJson: JSON.stringify({
         teams: [
           {
+            id: "team-a",
             clubId: "club-a",
             hall: "1",
             homeWeekday: "friday",
             spielwochePref: "A",
           },
           {
+            id: "team-b",
             clubId: "club-a",
             hall: "1",
             homeWeekday: "friday",
@@ -213,6 +217,47 @@ describe("raster capacity service", () => {
           homeWeekday: "FRIDAY",
           startTime: "20:00",
           spielwochePref: "A",
+        },
+      ],
+    } as never);
+    prismaMock.rasterHallCapacity.findMany.mockResolvedValue([] as never);
+
+    await expect(
+      reviewHallCapacitiesForInputSet("input-1"),
+    ).resolves.toMatchObject({
+      inferredCount: 1,
+      rows: [expect.objectContaining({ capacity: 1 })],
+    });
+  });
+
+  it("deduplicates wishes and places missing week preference on the lighter slot", async () => {
+    prismaMock.rasterInputSet.findUnique.mockResolvedValue({
+      district: "OWL",
+      seasonModelJson: JSON.stringify({ teams: [] }),
+      wishes: [
+        {
+          clubId: "club-a",
+          teamLabel: "Team II",
+          hall: "1",
+          homeWeekday: "FRIDAY",
+          startTime: "19:45",
+          spielwochePref: "A",
+        },
+        {
+          clubId: "club-a",
+          teamLabel: "Team II",
+          hall: "1",
+          homeWeekday: "FRIDAY",
+          startTime: "19:45",
+          spielwochePref: "A",
+        },
+        {
+          clubId: "club-a",
+          teamLabel: "Jugend 19",
+          hall: "1",
+          homeWeekday: "FRIDAY",
+          startTime: "18:30",
+          spielwochePref: null,
         },
       ],
     } as never);
