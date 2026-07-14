@@ -61,6 +61,14 @@ Two properties are easy to lose and worth defending in review:
 
 FR-030 to FR-038 are that solution, and FR-035 explicitly covers 005's case. **005's research.md R-008 should be updated to point here** once this lands: it currently records the question as declined with residual risk, which stops being true.
 
+### What `/speckit.analyze` caught
+
+**FR-021 vanished in the reshape and was restored.** It requires combined snapshots to be distinguishable from single-scope ones *in lists*. The rewrite replaced it with FR-036 — which marks **incomplete** runs, a different property. The result was that a *complete* combined snapshot spanning the whole Verband would have sat in a list looking exactly like a Bezirk plan.
+
+This is the characteristic failure of a mid-session reshape: a requirement gets replaced by something that sounds like it and isn't. Two independent markers are needed — incomplete answers "can this be trusted?", combined answers "what is this a plan of?" — and collapsing them loses the fully-valid WTTV-wide plan.
+
+Restoring the original number also repaired dangling references: feature 005's Q4 and research R-008 both cite "006's FR-020/FR-021" as the mechanism that settles 005's Q4.
+
 ### Live risks
 
 - **FR-034's negative case is the fragile one.** A run spanning every scope with no gaps is the only run *not* marked incomplete. It is also the rarest, so the logic deciding "nothing was missing" is the least-exercised path and the most consequential to get wrong — a falsely-complete marking is worse than no marking at all.

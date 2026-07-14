@@ -102,6 +102,7 @@ A scheduler opens a combined run's outcome and can narrow its assignments and co
 1. **Given** a combined snapshot, **When** the scheduler reviews assignments or conflicts, **Then** they can narrow the view to one spanned scope without leaving the snapshot.
 2. **Given** a combined snapshot exists, **When** the scheduler opens a single scope's own snapshots, **Then** those are unchanged and still reviewable.
 3. **Given** a combined snapshot, **When** the scheduler opens it, **Then** it states which scopes it covers rather than appearing to belong to one.
+4. **Given** a list containing both combined and single-scope snapshots, **When** the scheduler scans it, **Then** combined snapshots are distinguishable from single-scope ones without opening either — independently of whether either is marked incomplete.
 
 ---
 
@@ -175,6 +176,7 @@ An admin looks at one place and sees, for a season, which scopes have complete i
 #### Combined results
 
 - **FR-020**: A snapshot produced by a combined run MUST state which scopes it covers, and MUST NOT be presented as belonging to a single scope.
+- **FR-021**: A combined snapshot MUST be distinguishable from a single-scope snapshot wherever snapshots are listed, without opening either. This is distinct from FR-036: that marks incomplete runs, this marks combined ones. A run spanning every scope with no gaps is complete and combined, and both facts matter — the first says it can be trusted, the second says what it is a plan *of*.
 - **FR-022**: A scheduler MUST be able to narrow a combined snapshot's assignments and conflicts to one spanned scope without leaving the snapshot.
 
 #### Readiness overview
@@ -203,6 +205,7 @@ An admin looks at one place and sees, for a season, which scopes have complete i
 - **SC-004**: A combined run's plan for any spanned scope is never constrained by an upper-league Rasterzahl decided in an earlier separate run.
 - **SC-005**: A run's coverage record still describes what it saw at the time, after the underlying data has changed.
 - **SC-006**: Single-scope planning produces identical results before and after this feature exists, save for gaining a coverage record.
+- **SC-010**: A scheduler scanning a snapshot list can tell a combined snapshot from a single-scope one, and separately can tell an incomplete run from a complete one, without opening either.
 - **SC-007**: No user sees readiness for, or includes in a combined selection, a scope they cannot access.
 - **SC-008**: An admin can determine the solver's practical limit by adding scopes to a combined selection until runs stop completing acceptably — without a separate spike.
 - **SC-009**: For any incomplete scope, an admin can identify what is missing and reach the step that fixes it in one interaction.
