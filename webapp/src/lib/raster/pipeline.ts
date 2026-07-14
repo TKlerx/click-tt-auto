@@ -1,6 +1,5 @@
 import { execFile } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import type { TeamRasterAssignmentRow } from "../../../../src/raster/ingest/clicktt-assignments.js";
@@ -8,23 +7,23 @@ import type { WishParseResult } from "../../../../src/raster/ingest/wishes-pdf.j
 import type { Assignment, SeasonModel } from "../../../../src/raster/types.js";
 
 const execFileAsync = promisify(execFile);
-const repoRoot = path.resolve(process.cwd(), "..");
+const repoRoot = process.env.RASTER_REPO_ROOT ?? `${process.cwd()}/..`;
 const ingestIndexUrl = pathToFileURL(
-  path.join(repoRoot, "src/raster/ingest/index.ts"),
+  `${repoRoot}/src/raster/ingest/index.ts`,
 ).href;
 const ingestScrapeUrl = pathToFileURL(
-  path.join(repoRoot, "src/raster/ingest/scrape.ts"),
+  `${repoRoot}/src/raster/ingest/scrape.ts`,
 ).href;
 const ingestWishesPdfUrl = pathToFileURL(
-  path.join(repoRoot, "src/raster/ingest/wishes-pdf.ts"),
+  `${repoRoot}/src/raster/ingest/wishes-pdf.ts`,
 ).href;
 const scoreEvaluateUrl = pathToFileURL(
-  path.join(repoRoot, "src/raster/score/evaluate.ts"),
+  `${repoRoot}/src/raster/score/evaluate.ts`,
 ).href;
 const rulebookUrl = pathToFileURL(
-  path.join(repoRoot, "src/raster/rulebook/rulebook.ts"),
+  `${repoRoot}/src/raster/rulebook/rulebook.ts`,
 ).href;
-const typesUrl = pathToFileURL(path.join(repoRoot, "src/raster/types.ts")).href;
+const typesUrl = pathToFileURL(`${repoRoot}/src/raster/types.ts`).href;
 
 type RasterAssignmentScore = {
   assignment: Assignment;
@@ -159,8 +158,8 @@ async function scoreAssignment(
 async function runRasterTs<T>(code: string): Promise<T> {
   const command =
     process.platform === "win32" ? (process.env.ComSpec ?? "cmd.exe") : "pnpm";
-  const dir = await mkdtemp(path.join(repoRoot, ".tmp-raster-ts-"));
-  const scriptPath = path.join(dir, "run.ts");
+  const dir = await mkdtemp(`${repoRoot}/.tmp-raster-ts-`);
+  const scriptPath = `${dir}/run.ts`;
   await writeFile(
     scriptPath,
     `
