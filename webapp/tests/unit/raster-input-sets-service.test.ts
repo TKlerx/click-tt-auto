@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { prismaMock } from "@/lib/__mocks__/db";
 import {
   syncInputSetSourceCaches,
+  updateGroupPlanningStatus,
   updateGroupRasterMode,
   validateInputSet,
 } from "@/services/raster";
@@ -75,6 +76,57 @@ describe("raster input set service", () => {
     }
   });
 
+  it("blocks groups with missing wish PDFs until reviewed", async () => {
+    prismaMock.rasterInputSet.findUnique.mockResolvedValueOnce({
+      id: "input-1",
+      district: "OWL",
+    } as never);
+    prismaMock.scope.findFirst.mockResolvedValueOnce(null);
+    prismaMock.rasterInputSet.findUnique.mockResolvedValueOnce({
+      id: "input-1",
+      status: InputSetStatus.DRAFT,
+      seasonModelJson: JSON.stringify({
+        ...model,
+        teams: [{ id: "t1", capacityRelevant: false }],
+        groups: [{ ...model.groups[0], rasterMode: "single" }],
+      }),
+      _count: { wishes: 1, fixedRasterzahlen: 0 },
+    } as never);
+
+    await expect(validateInputSet("input-1")).resolves.toMatchObject({
+      errors: [expect.stringContaining("without parsed wish PDFs")],
+    });
+  });
+
+  it("accepts excluded groups with missing wish PDFs", async () => {
+    prismaMock.rasterInputSet.findUnique.mockResolvedValueOnce({
+      id: "input-1",
+      district: "OWL",
+    } as never);
+    prismaMock.scope.findFirst.mockResolvedValueOnce(null);
+    prismaMock.rasterInputSet.findUnique.mockResolvedValueOnce({
+      id: "input-1",
+      status: InputSetStatus.DRAFT,
+      seasonModelJson: JSON.stringify({
+        ...model,
+        teams: [{ id: "t1", capacityRelevant: false }],
+        groups: [
+          {
+            ...model.groups[0],
+            rasterMode: "single",
+            planningStatus: "exclude",
+          },
+        ],
+      }),
+      _count: { wishes: 1, fixedRasterzahlen: 0 },
+    } as never);
+    prismaMock.rasterInputSet.update.mockResolvedValueOnce({} as never);
+
+    await expect(validateInputSet("input-1")).resolves.toMatchObject({
+      errors: [],
+    });
+  });
+
   it("persists reviewed six-team group mode", async () => {
     prismaMock.rasterInputSet.findUnique.mockResolvedValue({
       id: "input-1",
@@ -96,6 +148,65 @@ describe("raster input set service", () => {
         }),
       }),
     );
+  });
+
+  it("updates capacity relevance when group planning status changes", async () => {
+    const seasonModelJson = JSON.stringify({
+      ...model,
+      teams: [
+        { id: "t1", capacityRelevant: true, wishMatchId: "wish-1" },
+        { id: "t2", capacityRelevant: true },
+      ],
+      groups: [{ ...model.groups[0], teamIds: ["t1", "t2"] }],
+    });
+    prismaMock.rasterInputSet.findUnique.mockResolvedValueOnce({
+      id: "input-1",
+      status: InputSetStatus.DRAFT,
+      seasonModelJson,
+    } as never);
+    prismaMock.rasterInputSet.update.mockResolvedValue({} as never);
+
+    await updateGroupPlanningStatus("input-1", "L::G6", "exclude");
+
+    let saved = JSON.parse(
+      prismaMock.rasterInputSet.update.mock.calls[0]?.[0].data
+        .seasonModelJson as string,
+    );
+    expect(saved.teams).toEqual([
+      expect.objectContaining({ id: "t1", capacityRelevant: false }),
+      expect.objectContaining({ id: "t2", capacityRelevant: false }),
+    ]);
+
+    prismaMock.rasterInputSet.update.mockClear();
+    prismaMock.rasterInputSet.findUnique.mockResolvedValueOnce({
+      id: "input-1",
+      status: InputSetStatus.DRAFT,
+      seasonModelJson: JSON.stringify({
+        ...model,
+        teams: [
+          { id: "t1", capacityRelevant: false, wishMatchId: "wish-1" },
+          { id: "t2", capacityRelevant: false },
+        ],
+        groups: [
+          {
+            ...model.groups[0],
+            teamIds: ["t1", "t2"],
+            planningStatus: "exclude",
+          },
+        ],
+      }),
+    } as never);
+
+    await updateGroupPlanningStatus("input-1", "L::G6", "include");
+
+    saved = JSON.parse(
+      prismaMock.rasterInputSet.update.mock.calls[0]?.[0].data
+        .seasonModelJson as string,
+    );
+    expect(saved.teams).toEqual([
+      expect.objectContaining({ id: "t1", capacityRelevant: true }),
+      expect.objectContaining({ id: "t2", capacityRelevant: false }),
+    ]);
   });
 
   it("syncs inherited source caches into input sets", async () => {
@@ -131,6 +242,75 @@ describe("raster input set service", () => {
         groupAssignmentJson: '{"assignments":[]}',
         wishesJson: expect.stringContaining("wish-source"),
       },
+    });
+  });
+
+  it("matches wish clubs with e.V. suffixes to click-TT club names", async () => {
+    prismaMock.rasterInputSet.findUnique.mockResolvedValue({
+      id: "input-1",
+      district: "OWL",
+      season: "2026/27",
+      seasonModelJson: null,
+    } as never);
+    prismaMock.scope.findFirst.mockResolvedValue({
+      id: "owl",
+      parent: { id: "wttv", parent: { id: "de" } },
+    } as never);
+    prismaMock.$transaction.mockImplementation(async (callback) =>
+      callback(prismaMock),
+    );
+    prismaMock.rasterSource.findMany.mockResolvedValue([
+      {
+        id: "group-source",
+        sourceType: "GROUP_ASSIGNMENT",
+        sourceRef: "groups",
+        parsedJson: JSON.stringify({
+          assignments: [1, 2, 3, 4, 5].map((rasterzahl) => ({
+            league: "L",
+            group: "1. Bezirksklasse Erwachsene",
+            rasterzahl,
+            team: rasterzahl === 4 ? "TTV Lage IV" : `Other Club ${rasterzahl}`,
+            sourceUrl: "https://example.test",
+          })),
+        }),
+      },
+      {
+        id: "wish-source",
+        sourceType: "WISHES_PDF",
+        sourceRef: "wishes",
+        parsedJson: JSON.stringify({
+          clubs: [{ id: "ttv-lage-e-v-42614", name: "TTV Lage e.V." }],
+          teams: [
+            {
+              clubId: "ttv-lage-e-v-42614",
+              label: "Erwachsene IV",
+              homeWeekday: "friday",
+              hall: "1",
+              startTime: "20:00",
+              spielwochePref: "B",
+              rasterzahl: { kind: "assignable" },
+              confidence: "review",
+            },
+          ],
+          warnings: [],
+        }),
+      },
+    ] as never);
+    prismaMock.rasterInputSet.update.mockResolvedValue({} as never);
+
+    await syncInputSetSourceCaches("input-1");
+
+    const update = prismaMock.rasterInputSet.update.mock.calls.at(-1)?.[0] as {
+      data: { seasonModelJson?: string };
+    };
+    const synced = JSON.parse(update.data.seasonModelJson ?? "{}") as {
+      teams: Array<{ clubId: string; label: string; startTime?: string }>;
+    };
+    expect(
+      synced.teams.find((team) => team.label === "Erwachsene IV"),
+    ).toMatchObject({
+      clubId: "ttv-lage",
+      startTime: "20:00",
     });
   });
 });

@@ -274,10 +274,9 @@ export async function scrapeCurrentTeamRasterAssignments(
 export async function scrapePublicLeagueAssignmentsFromUrl(
   leaguePageUrl: string
 ): Promise<TeamRasterAssignmentRow[]> {
-  const config = loadConfig();
   const browser = await chromium.launch({
-    headless: !config.headed,
-    slowMo: config.slowMoMs
+    headless: process.env.CLICK_TT_HEADED !== "1",
+    slowMo: Number(process.env.CLICK_TT_SLOW_MO_MS ?? 0)
   });
   const context = await browser.newContext();
   const page = await context.newPage();

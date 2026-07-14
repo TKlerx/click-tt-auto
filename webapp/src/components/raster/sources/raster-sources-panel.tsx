@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { withBasePath } from "@/lib/base-path";
+import { buildProjectionReviewRows } from "./source-projection";
 
 type RasterSourceRow = {
   id: string;
@@ -21,17 +22,24 @@ type RasterScopeOption = {
   name: string;
 };
 
+type RasterInputSetRow = {
+  name: string;
+  seasonModelJson: string | null;
+};
+
 export function RasterSourcesPanel({
   district,
   season,
   scopes,
   sources,
+  inputSet,
   canEdit,
 }: {
   district: string;
   season: string;
   scopes: RasterScopeOption[];
   sources: RasterSourceRow[];
+  inputSet?: RasterInputSetRow | null;
   canEdit: boolean;
 }) {
   const router = useRouter();
@@ -151,13 +159,16 @@ export function RasterSourcesPanel({
     setSavingParsedId(sourceId);
     setMessage(null);
     try {
-      const response = await fetch(withBasePath(`/api/raster/sources/${sourceId}`), {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          parsedJson: String(formData.get("parsedJson") ?? ""),
-        }),
-      });
+      const response = await fetch(
+        withBasePath(`/api/raster/sources/${sourceId}`),
+        {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            parsedJson: String(formData.get("parsedJson") ?? ""),
+          }),
+        },
+      );
       if (!response.ok) {
         const body = (await response.json().catch(() => ({}))) as {
           error?: string;
@@ -244,6 +255,12 @@ export function RasterSourcesPanel({
                   <summary className="cursor-pointer text-sm font-medium">
                     Parsed data: {parsedSourceSummary(source.parsedJson)}
                   </summary>
+                  {source.sourceType.toUpperCase() === "WISHES_PDF" ? (
+                    <ProjectionReview
+                      inputSet={inputSet}
+                      sourceJson={source.parsedJson}
+                    />
+                  ) : null}
                   {canEdit ? (
                     <form
                       action={(formData) =>
@@ -386,7 +403,10 @@ export function RasterSourcesPanel({
             <summary className="cursor-pointer text-sm font-semibold">
               Advanced: register external source
             </summary>
-            <form action={submitLink} className="mt-4 grid gap-3 md:grid-cols-2">
+            <form
+              action={submitLink}
+              className="mt-4 grid gap-3 md:grid-cols-2"
+            >
               <input name="season" type="hidden" value={season} />
               <p className="text-sm text-[var(--muted-foreground)] md:col-span-2">
                 Paste a normal click-TT league page URL instead of uploading a
@@ -460,6 +480,64 @@ export function RasterSourcesPanel({
         </div>
       ) : null}
     </section>
+  );
+}
+
+function ProjectionReview({
+  inputSet,
+  sourceJson,
+}: {
+  inputSet?: RasterInputSetRow | null;
+  sourceJson: string;
+}) {
+  const rows = buildProjectionReviewRows(
+    sourceJson,
+    inputSet?.seasonModelJson ?? null,
+  );
+  if (!inputSet?.seasonModelJson) {
+    return (
+      <p className="mt-3 text-sm text-[var(--muted-foreground)]">
+        No input set model to compare against yet.
+      </p>
+    );
+  }
+  if (!rows.length) return null;
+
+  return (
+    <details className="mt-3 rounded-md border border-[var(--border)] p-3">
+      <summary className="cursor-pointer text-sm font-medium">
+        Projection review against {inputSet.name}:{" "}
+        {rows.filter((row) => row.status === "missing").length} unmatched
+      </summary>
+      <div className="mt-3 overflow-auto">
+        <table className="w-full min-w-[52rem] text-left text-xs">
+          <thead className="text-[var(--muted-foreground)]">
+            <tr>
+              <th className="py-2 pr-3 font-medium">Status</th>
+              <th className="py-2 pr-3 font-medium">PDF club</th>
+              <th className="py-2 pr-3 font-medium">PDF team</th>
+              <th className="py-2 pr-3 font-medium">Parsed</th>
+              <th className="py-2 pr-3 font-medium">Matched id</th>
+              <th className="py-2 pr-3 font-medium">Applied</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, index) => (
+              <tr className="border-t border-[var(--border)]" key={index}>
+                <td className="py-2 pr-3">
+                  {row.status === "matched" ? "matched" : "missing"}
+                </td>
+                <td className="py-2 pr-3">{row.sourceClub}</td>
+                <td className="py-2 pr-3">{row.sourceTeam}</td>
+                <td className="py-2 pr-3">{row.parsed}</td>
+                <td className="py-2 pr-3">{row.matchedTeam || "-"}</td>
+                <td className="py-2 pr-3">{row.applied || "-"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </details>
   );
 }
 

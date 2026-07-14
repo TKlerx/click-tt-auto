@@ -115,6 +115,8 @@
 - [x] T042 Update `specs/004-compare-raster-runs/quickstart.md` with any implementation-specific route names
 - [x] T043 Run `pnpm --dir webapp run typecheck` and fix 004 regressions
 - [x] T044 Run focused unit tests for 004 and root scoring tests
+- [ ] T045 [Backlog] Add infeasibility diagnostics that identify which hard constraint family blocks a CP-SAT run in `scripts/solve-raster-cpsat.py` and `webapp/worker/src/starter_worker/main.py`
+- [ ] T046 [Backlog] Show infeasibility diagnostics next to the no-solution run state in `webapp/src/components/raster/input-set-actions.tsx`
 
 ---
 

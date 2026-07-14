@@ -3,10 +3,8 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
-import type {
-  TeamRasterAssignmentRow,
-  WishParseResult,
-} from "../../../../src/raster/ingest/index.js";
+import type { TeamRasterAssignmentRow } from "../../../../src/raster/ingest/clicktt-assignments.js";
+import type { WishParseResult } from "../../../../src/raster/ingest/wishes-pdf.js";
 import type { Assignment, SeasonModel } from "../../../../src/raster/types.js";
 
 const execFileAsync = promisify(execFile);
@@ -160,20 +158,20 @@ async function scoreAssignment(
 
 async function runRasterTs<T>(code: string): Promise<T> {
   const command =
-    process.platform === "win32" ? process.env.ComSpec ?? "cmd.exe" : "pnpm";
+    process.platform === "win32" ? (process.env.ComSpec ?? "cmd.exe") : "pnpm";
   const dir = await mkdtemp(path.join(repoRoot, ".tmp-raster-ts-"));
   const scriptPath = path.join(dir, "run.ts");
   await writeFile(
     scriptPath,
     `
     function emit(value) {
-      console.log("__RASTER_JSON__" + JSON.stringify(value));
+      process.stdout.write("__RASTER_JSON__" + JSON.stringify(value) + "\\n");
     }
     async function main() {
       ${code}
     }
     main().catch((error) => {
-      console.error(error);
+      process.stderr.write(String(error) + "\\n");
       process.exit(1);
     });
   `,

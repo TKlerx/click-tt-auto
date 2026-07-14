@@ -27,6 +27,10 @@ export async function expectOnDashboard(page: Page) {
   ).toBeVisible({ timeout: 15000 });
 }
 
+export async function openUserMenu(page: Page) {
+  await page.getByRole("button", { name: "Open user menu" }).click();
+}
+
 export async function loginWithSso(
   page: Page,
   args: { email: string; name: string },

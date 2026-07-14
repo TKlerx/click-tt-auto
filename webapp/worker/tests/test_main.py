@@ -14,6 +14,8 @@ from unittest.mock import patch
 from starter_worker.config import WorkerConfig, load_config
 from starter_worker.db import JobStore, _find_overage_rows, normalize_postgres_database_url
 from starter_worker.main import (
+    RasterSolverInfeasible,
+    _exclude_unplanned_groups,
     _log_job_claimed,
     _log_job_completed,
     _log_job_failed,
@@ -295,6 +297,21 @@ class WorkerTests(unittest.TestCase):
         self.assertTrue(Path(command[0]).name.lower().startswith("pnpm"))
         self.assertEqual(command[1:3], ["exec", "tsx"])
 
+    def test_raster_solver_maps_infeasible_metadata_to_domain_error(self) -> None:
+        def run_solver(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+            metadata_path = Path(command[command.index("--metadata") + 1])
+            metadata_path.write_text('{"status": "INFEASIBLE"}', encoding="utf-8")
+            return subprocess.CompletedProcess(
+                args=command,
+                returncode=1,
+                stdout="",
+                stderr="CP-SAT did not find an assignment: INFEASIBLE",
+            )
+
+        with patch("starter_worker.main.subprocess.run", side_effect=run_solver):
+            with self.assertRaisesRegex(RasterSolverInfeasible, "No feasible assignment"):
+                _solve_raster_model({"clubs": [], "teams": [], "groups": []}, {})
+
     def test_persisted_overages_use_inferred_capacity(self) -> None:
         model = {
             "clubs": [{"id": "club", "name": "Club", "venues": [{"hall": "1"}]}],
@@ -329,6 +346,91 @@ class WorkerTests(unittest.TestCase):
 
         self.assertTrue(rows)
         self.assertEqual(rows[0]["capacity"], 1)
+
+    def test_persisted_overages_do_not_duplicate_same_team_home_week(self) -> None:
+        model = {
+            "clubs": [{"id": "club", "name": "Club", "venues": [{"hall": "1", "capacity": 1}]}],
+            "teams": [
+                {
+                    "id": "team-a",
+                    "clubId": "club",
+                    "hall": "1",
+                    "homeWeekday": "friday",
+                    "rasterzahl": {"kind": "assignable"},
+                },
+                {
+                    "id": "team-b",
+                    "clubId": "club",
+                    "hall": "1",
+                    "homeWeekday": "friday",
+                    "rasterzahl": {"kind": "assignable"},
+                },
+            ],
+            "groups": [
+                {
+                    "ref": {"league": "L", "name": "G12"},
+                    "size": 12,
+                    "teamIds": ["team-a", "team-b"],
+                }
+            ],
+        }
+
+        rows = _find_overage_rows(model, {"team-a": 7, "team-b": 8})
+        week_11 = next(row for row in rows if row["week"] == 11)
+
+        self.assertEqual([team["id"] for team in week_11["teams"]], ["team-a", "team-b"])
+        self.assertEqual(week_11["actualCount"], 2)
+        self.assertEqual(week_11["excess"], 1)
+
+    def test_persisted_overages_ignore_capacity_irrelevant_teams(self) -> None:
+        model = {
+            "clubs": [{"id": "club", "name": "Club", "venues": [{"hall": "1", "capacity": 1}]}],
+            "teams": [
+                {
+                    "id": "team-a",
+                    "clubId": "club",
+                    "hall": "1",
+                    "homeWeekday": "friday",
+                    "rasterzahl": {"kind": "assignable"},
+                },
+                {
+                    "id": "team-b",
+                    "clubId": "club",
+                    "hall": "1",
+                    "homeWeekday": "friday",
+                    "capacityRelevant": False,
+                    "rasterzahl": {"kind": "assignable"},
+                },
+            ],
+            "groups": [
+                {
+                    "ref": {"league": "L", "name": "G12"},
+                    "size": 12,
+                    "teamIds": ["team-a", "team-b"],
+                }
+            ],
+        }
+
+        rows = _find_overage_rows(model, {"team-a": 7, "team-b": 8})
+
+        self.assertEqual(rows, [])
+
+    def test_excludes_unplanned_groups_before_solver(self) -> None:
+        model = {
+            "teams": [
+                {"id": "planned"},
+                {"id": "skipped"},
+            ],
+            "groups": [
+                {"teamIds": ["planned"], "planningStatus": "include"},
+                {"teamIds": ["skipped"], "planningStatus": "exclude"},
+            ],
+        }
+
+        filtered = _exclude_unplanned_groups(model)
+
+        self.assertEqual(filtered["groups"], [{"teamIds": ["planned"], "planningStatus": "include"}])
+        self.assertEqual(filtered["teams"], [{"id": "planned"}])
 
     def test_process_inbound_mail_poll_stores_bounces_and_entity_links(self) -> None:
         with (
@@ -505,6 +607,22 @@ class WorkerTests(unittest.TestCase):
         self.assertEqual(row["status"], "FAILED")
         self.assertEqual(row["error"], "bad job")
         self.assertEqual(row["workerId"], "worker-test")
+        self.assertIsNotNone(row["finishedAt"])
+        self.assertIsNone(row["lockedAt"])
+
+    def test_sqlite_job_store_can_skip_retries_for_terminal_failure(self) -> None:
+        self._insert_job(job_id="job-terminal", job_type="echo", payload={"message": "x"})
+        store = self._make_store(max_attempts=3)
+
+        job = store.claim_next_job()
+
+        self.assertIsNotNone(job)
+        assert job is not None
+        store.fail_job(job.id, "no feasible assignment", retry=False)
+        row = self._fetch_job("job-terminal")
+
+        self.assertEqual(row["status"], "FAILED")
+        self.assertEqual(row["error"], "no feasible assignment")
         self.assertIsNotNone(row["finishedAt"])
         self.assertIsNone(row["lockedAt"])
 

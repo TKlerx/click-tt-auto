@@ -634,7 +634,7 @@ function Test-SupplyChainAudit {
         }
 
         $reportPath = ".artifacts\supply-chain-audit\validate-$Phase.json"
-        $result = Invoke-NativeCommandCaptured "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/supply-chain-audit.ps1 -ReportPath ""$reportPath"""
+        $result = Invoke-NativeCommandCaptured "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/supply-chain-audit.ps1 -ExceptionFile ""webapp/supply-chain-audit-exceptions.json"" -ReportPath ""$reportPath"""
         if ($result.ExitCode -ne 0) {
             $result.Output | Out-Host
             throw "supply-chain audit failed"
@@ -1301,6 +1301,36 @@ if ($Phase -in "all", "full", "test", "commit") {
 
         Write-Fail "tests failed"
         $failures += "tests"
+    }
+}
+
+if ($Phase -in "all", "test", "commit") {
+    Write-Step "E2E regression - raster source projection"
+    try {
+        $commandLine = if ($IsWindows -or $env:OS -eq "Windows_NT") {
+            "set CI=1 && set E2E_PORT=3290 && pnpm run test:e2e:projection"
+        } else {
+            "CI=1 E2E_PORT=3290 pnpm run test:e2e:projection"
+        }
+
+        $result = Invoke-NativeCommandCaptured $commandLine
+        if ($result.ExitCode -ne 0) {
+            $result.Output | Out-Host
+            throw "raster source projection e2e failed"
+        }
+
+        $summaryLine = $result.Output |
+            Select-String -Pattern '^\s*\d+\s+passed\s+\(.+\)$' |
+            Select-Object -Last 1
+
+        if ($summaryLine) {
+            Write-Pass "raster source projection e2e passed ($($summaryLine.Line.Trim()))"
+        } else {
+            Write-Pass "raster source projection e2e passed"
+        }
+    } catch {
+        Write-Fail "raster source projection e2e failed"
+        $failures += "e2e-projection"
     }
 }
 

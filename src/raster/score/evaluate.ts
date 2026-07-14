@@ -1,6 +1,7 @@
 import {
   derbySpieltag,
   numericRasterSize,
+  relation,
   rasterSizeForGroupSize
 } from "../rulebook/rulebook.js";
 import { deriveHomeWeeks, unusedRasterzahl } from "./derive.js";
@@ -113,26 +114,8 @@ export function evaluate(
   }
 
   const overUsages = findOverUsages(model, assignment);
-  for (const usage of overUsages.filter((usage) => usage.excess > 1)) {
-    hardViolations.push({
-      kind: "capacity-overflow",
-      detail: `${usage.clubId}/${usage.weekday}/hall ${usage.hall}/week ${usage.week} has ${usage.teams.length} teams, capacity ${usage.capacity}`
-    });
-  }
   const wishResults = evaluateWishes(model, assignment);
-  const spielwocheMisses = model.teams.flatMap((team) => {
-    if (!team.spielwochePref) return [];
-    const group = model.groups.find((candidate) =>
-      candidate.teamIds.includes(team.id)
-    );
-    const rz = assignment[team.id];
-    if (!group || rz === undefined) return [];
-    const bye = unusedRasterzahl(group, assignment);
-    const got = deriveHomeWeeks(group.size, rz, group.rasterMode, bye).slot;
-    return got === team.spielwochePref
-      ? []
-      : [{ teamId: team.id, want: team.spielwochePref, got }];
-  });
+  const spielwocheMisses = evaluateSpielwocheRhythm(model, assignment);
   const brokenWechsel = wishResults.filter(
     (result) =>
       result.status === "unfulfilled" && result.wish.relation === "wechsel"
@@ -158,4 +141,66 @@ export function evaluate(
     spielwocheMisses,
     perGroup
   };
+}
+
+function evaluateSpielwocheRhythm(
+  model: SeasonModel,
+  assignment: Assignment
+): EvaluationResult["spielwocheMisses"] {
+  const misses: EvaluationResult["spielwocheMisses"] = [];
+  const teams = model.teams.filter(
+    (team) => team.capacityRelevant !== false && team.spielwochePref
+  );
+  for (const [leftIndex, left] of teams.entries()) {
+    for (const right of teams.slice(leftIndex + 1)) {
+      if (
+        left.clubId !== right.clubId ||
+        left.hall !== right.hall ||
+        left.homeWeekday !== right.homeWeekday
+      ) {
+        continue;
+      }
+      const groupA = model.groups.find((group) => group.teamIds.includes(left.id));
+      const groupB = model.groups.find((group) => group.teamIds.includes(right.id));
+      const rzA = assignment[left.id];
+      const rzB = assignment[right.id];
+      if (!groupA || !groupB || rzA === undefined || rzB === undefined) continue;
+      const byeA = unusedRasterzahl(groupA, assignment);
+      const byeB = unusedRasterzahl(groupB, assignment);
+      const derivedA = deriveHomeWeeks(
+        groupA.size,
+        rzA,
+        groupA.rasterMode,
+        byeA
+      );
+      const derivedB = deriveHomeWeeks(
+        groupB.size,
+        rzB,
+        groupB.rasterMode,
+        byeB
+      );
+      const got =
+        byeA !== null || byeB !== null
+          ? relationFromWeeks(derivedA.weeks, derivedB.weeks)
+          : relation(derivedA.rasterSize, rzA, derivedB.rasterSize, rzB);
+      const want =
+        left.spielwochePref === right.spielwochePref ? "zeitgleich" : "wechsel";
+      if (got !== want) {
+        misses.push({ teamA: left.id, teamB: right.id, want, got });
+      }
+    }
+  }
+  return misses;
+}
+
+function relationFromWeeks(
+  weeksA: number[],
+  weeksB: number[]
+): "wechsel" | "zeitgleich" | "neither" {
+  const a = new Set(weeksA);
+  const b = new Set(weeksB);
+  const overlap = [...a].filter((week) => b.has(week)).length;
+  if (overlap === 0) return "wechsel";
+  if (overlap === Math.min(a.size, b.size)) return "zeitgleich";
+  return "neither";
 }

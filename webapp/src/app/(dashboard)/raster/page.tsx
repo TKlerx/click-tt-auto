@@ -10,6 +10,8 @@ import {
 } from "@/lib/raster/season";
 import {
   GroupModeReview,
+  GroupPlanningReview,
+  type GroupPlanningReviewRow,
   type GroupModeReviewRow,
 } from "@/components/raster/group-mode-review";
 import {
@@ -39,6 +41,20 @@ type SeasonGroup = {
   ref?: { league?: string; name?: string };
   size?: number;
   rasterMode?: "single" | "double";
+  planningStatus?: "include" | "exclude";
+  teamIds?: string[];
+};
+
+type ParsedWishRow = {
+  id: string;
+  clubId: string;
+  clubName: string;
+  teamLabel: string | null;
+  homeWeekday: string;
+  hall: string | null;
+  startTime: string | null;
+  spielwochePref: string | null;
+  requestedRasterzahl: string | null;
 };
 
 export default async function RasterPage({
@@ -78,10 +94,13 @@ export default async function RasterPage({
   ]);
   const capacityReviews = new Map(
     await Promise.all(
-      inputSets.map(async (inputSet) => [
-        inputSet.id,
-        await reviewHallCapacitiesForInputSet(inputSet.id),
-      ] as const),
+      inputSets.map(
+        async (inputSet) =>
+          [
+            inputSet.id,
+            await reviewHallCapacitiesForInputSet(inputSet.id),
+          ] as const,
+      ),
     ),
   );
 
@@ -135,6 +154,7 @@ export default async function RasterPage({
       <RasterSourcesPanel
         canEdit={user.role === Role.PLATFORM_ADMIN}
         district={district}
+        inputSet={inputSets[0] ?? null}
         season={season}
         scopes={scopes}
         sources={sources}
@@ -142,7 +162,7 @@ export default async function RasterPage({
 
       <details className="overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--panel)]">
         <summary className="cursor-pointer border-b border-[var(--border)] px-4 py-3 text-sm font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
-          Hall capacities ({capacities.length})
+          Gym capacities ({capacities.length})
         </summary>
         <div className="grid gap-3 p-4">
           {user.role === Role.PLATFORM_ADMIN ? (
@@ -165,7 +185,6 @@ export default async function RasterPage({
                       inputSetId={inputSet.id}
                       label={`Recheck capacities for ${inputSet.name}`}
                     />
-                    <CapacityReviewRows rows={review.rows} />
                   </div>
                 );
               })}
@@ -173,6 +192,7 @@ export default async function RasterPage({
           ) : null}
           <CapacityTable
             canEdit={user.role === Role.PLATFORM_ADMIN}
+            district={district}
             rows={capacities}
           />
         </div>
@@ -204,6 +224,11 @@ export default async function RasterPage({
               inputSet.id,
               inputSet.seasonModelJson,
             );
+            const planningGroups = extractPlanningGroups(
+              inputSet.id,
+              inputSet.seasonModelJson,
+              inputSet.wishes,
+            );
             const warnings = extractModelWarnings(inputSet.seasonModelJson);
             return (
               <div
@@ -223,6 +248,12 @@ export default async function RasterPage({
                   />
                 ) : null}
                 <ModelWarnings warnings={warnings} />
+                <GroupPlanningReview
+                  key={planningGroups
+                    .map((group) => `${group.groupId}:${group.planningStatus}`)
+                    .join("|")}
+                  groups={planningGroups}
+                />
                 <GroupModeReview groups={sixTeamGroups} />
                 {user.role === Role.PLATFORM_ADMIN ? (
                   <InputSetRunActions
@@ -258,49 +289,207 @@ export default async function RasterPage({
   );
 }
 
-function CapacityReviewRows({
-  rows,
-}: {
-  rows: Array<{
-    clubId: string;
-    hall: string;
-    weekday: string;
-    capacity: number;
-    storedCapacity: number | null;
-    status: "missing" | "insufficient" | "higher";
-  }>;
-}) {
-  if (!rows.length) return null;
+function extractPlanningGroups(
+  inputSetId: string,
+  seasonModelJson: string | null,
+  wishes: ParsedWishRow[],
+): GroupPlanningReviewRow[] {
+  if (!seasonModelJson) return [];
+  let parsed: {
+    groups?: SeasonGroup[];
+    teams?: Array<{
+      id?: string;
+      label?: string;
+      name?: string;
+      clubId?: string;
+      capacityRelevant?: boolean;
+      homeWeekday?: string;
+      hall?: string;
+      startTime?: string;
+      spielwochePref?: string;
+      wishMatchId?: string;
+      wishMatchSource?: "auto" | "manual";
+    }>;
+  };
+  try {
+    parsed = JSON.parse(seasonModelJson) as typeof parsed;
+  } catch {
+    return [];
+  }
+  const teams = new Map((parsed.teams ?? []).map((team) => [team.id, team]));
+  return (parsed.groups ?? [])
+    .map((group) => {
+      const teamRows = (group.teamIds ?? [])
+        .map((teamId) => teams.get(teamId))
+        .filter((team) => team?.id)
+        .map((team) => {
+          const selectedWish = selectedWishForTeam(team!, wishes);
+          const candidates = wishCandidatesForTeam(team!, wishes, selectedWish);
+          return {
+            id: team!.id!,
+            label: team!.label ?? team!.name ?? team!.id!,
+            fields: formatWishFields(team!),
+            missing: missingWishFields(team!).join(", ") || "-",
+            spielwochePref: normalizeWeekSlot(
+              team!.spielwochePref ?? selectedWish?.spielwochePref ?? undefined,
+            ),
+            parsedSpielwochePref: normalizeWeekSlot(
+              selectedWish?.spielwochePref ?? undefined,
+            ),
+            selectedWishId: selectedWish?.id ?? null,
+            wishMatchSource:
+              team!.wishMatchSource ?? (selectedWish ? "auto" : null),
+            wishCandidates: candidates,
+          };
+        });
+      const groupId =
+        group.id ??
+        [group.ref?.league, group.ref?.name].filter(Boolean).join("::");
+      return {
+        inputSetId,
+        groupId,
+        label:
+          [group.ref?.league, group.ref?.name].filter(Boolean).join(" / ") ||
+          groupId ||
+          "Group",
+        missingTeams: teamRows.filter((team) => team.missing !== "-").length,
+        planningStatus: group.planningStatus ?? null,
+        teams: teamRows,
+      };
+    })
+    .filter((group) => group.groupId);
+}
+
+function wishCandidatesForTeam(
+  team: { clubId?: string; label?: string; name?: string },
+  wishes: ParsedWishRow[],
+  selectedWish: ParsedWishRow | null = null,
+) {
+  const candidates = wishes
+    .map((wish) => ({
+      wish,
+      score:
+        similarity(
+          normalizeMatchText(team.clubId),
+          normalizeMatchText(wish.clubId),
+        ) +
+        similarity(
+          normalizeMatchText(team.name),
+          normalizeMatchText(wish.clubName),
+        ) +
+        similarity(
+          normalizeMatchText(team.label),
+          normalizeMatchText(wish.teamLabel ?? ""),
+        ),
+    }))
+    .sort((left, right) => right.score - left.score)
+    .slice(0, 30)
+    .map(({ wish, score }) => ({ wish, score }));
+  if (
+    selectedWish &&
+    !candidates.some((candidate) => candidate.wish.id === selectedWish.id)
+  ) {
+    candidates.unshift({ wish: selectedWish, score: 999 });
+  }
+  return candidates.map(({ wish, score }) => ({
+    id: wish.id,
+    label: `${wish.clubName}${wish.teamLabel ? ` ${wish.teamLabel}` : ""}`,
+    fields: formatWishFields({
+      homeWeekday: wish.homeWeekday.toLowerCase(),
+      hall: wish.hall ?? undefined,
+      startTime: wish.startTime ?? undefined,
+      spielwochePref: wish.spielwochePref ?? undefined,
+    }),
+    score: Math.min(100, Math.round((score / 15) * 100)),
+  }));
+}
+
+function selectedWishForTeam(
+  team: {
+    clubId?: string;
+    label?: string;
+    homeWeekday?: string;
+    hall?: string;
+    startTime?: string;
+    spielwochePref?: string;
+    wishMatchId?: string;
+  },
+  wishes: ParsedWishRow[],
+) {
+  const stored = wishes.find((wish) => wish.id === team.wishMatchId);
+  if (stored) return stored;
   return (
-    <div className="mt-3 overflow-x-auto rounded-md border border-[var(--border)]">
-      <table className="w-full text-left text-xs">
-        <thead className="uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
-          <tr>
-            <th className="px-2 py-2">Status</th>
-            <th className="px-2 py-2">Club</th>
-            <th className="px-2 py-2">Hall</th>
-            <th className="px-2 py-2">Day</th>
-            <th className="px-2 py-2">Stored</th>
-            <th className="px-2 py-2">Inferred</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr
-              className="border-t border-[var(--border)]"
-              key={`${row.status}-${row.clubId}-${row.hall}-${row.weekday}`}
-            >
-              <td className="px-2 py-2">{row.status}</td>
-              <td className="px-2 py-2">{row.clubId}</td>
-              <td className="px-2 py-2">{row.hall}</td>
-              <td className="px-2 py-2">{row.weekday}</td>
-              <td className="px-2 py-2">{row.storedCapacity ?? "-"}</td>
-              <td className="px-2 py-2">{row.capacity}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    wishes.find(
+      (wish) =>
+        normalizeMatchText(wish.clubId) === normalizeMatchText(team.clubId) &&
+        normalizeMatchText(wish.teamLabel ?? "") ===
+          normalizeMatchText(team.label) &&
+        wish.homeWeekday.toLowerCase() === team.homeWeekday &&
+        (wish.hall ?? "") === (team.hall ?? "") &&
+        (wish.startTime ?? "") === (team.startTime ?? "") &&
+        (wish.spielwochePref ?? "") === (team.spielwochePref ?? ""),
+    ) ?? null
+  );
+}
+
+function normalizeMatchText(value: string | null | undefined) {
+  return (value ?? "")
+    .normalize("NFKD")
+    .replace(/\p{Diacritic}/gu, "")
+    .replace(/[^a-z0-9]/gi, "")
+    .toLowerCase();
+}
+
+function similarity(left: string, right: string) {
+  if (!left || !right) return 0;
+  if (left === right) return 6;
+  if (left.includes(right) || right.includes(left)) return 3;
+  return 0;
+}
+
+function normalizeWeekSlot(value?: string): "A" | "B" | null {
+  return value === "A" || value === "B" ? value : null;
+}
+
+function isWishIncomplete(team: {
+  capacityRelevant?: boolean;
+  homeWeekday?: string;
+  hall?: string;
+  startTime?: string;
+  spielwochePref?: string;
+}) {
+  return team.capacityRelevant === false || missingWishFields(team).length > 0;
+}
+
+function missingWishFields(team: {
+  capacityRelevant?: boolean;
+  homeWeekday?: string;
+  hall?: string;
+  startTime?: string;
+}) {
+  if (team.capacityRelevant === false) return ["wish PDF match"];
+  return [
+    !team.homeWeekday ? "weekday" : "",
+    !team.hall ? "gym" : "",
+    !team.startTime ? "start time" : "",
+  ].filter(Boolean);
+}
+
+function formatWishFields(team: {
+  homeWeekday?: string;
+  hall?: string;
+  startTime?: string;
+  spielwochePref?: string;
+}) {
+  return (
+    [
+      team.homeWeekday,
+      team.startTime,
+      team.hall ? `Gym ${team.hall}` : "",
+      team.spielwochePref ? `W${team.spielwochePref}` : "",
+    ]
+      .filter(Boolean)
+      .join(", ") || "-"
   );
 }
 

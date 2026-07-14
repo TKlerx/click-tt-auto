@@ -51,8 +51,11 @@ export async function validateManualAssignmentDraft(id: string) {
     where: { id },
     include: { inputSet: true },
   });
+  const inputSet = await prisma.rasterInputSet.findUniqueOrThrow({
+    where: { id: draft.inputSetId },
+  });
   const validation = validateManualAssignmentRows(
-    parseSeasonModel(draft.inputSet.seasonModelJson),
+    parseSeasonModel(inputSet.seasonModelJson),
     parseRows(draft.rowsJson),
   );
   await prisma.rasterManualAssignmentDraft.update({
@@ -67,7 +70,10 @@ export async function scoreManualAssignmentDraft(id: string, userId: string) {
     where: { id },
     include: { inputSet: true },
   });
-  const model = parseSeasonModel(draft.inputSet.seasonModelJson);
+  const inputSet = await prisma.rasterInputSet.findUniqueOrThrow({
+    where: { id: draft.inputSetId },
+  });
+  const model = parseSeasonModel(inputSet.seasonModelJson);
   const validation = validateManualAssignmentRows(
     model,
     parseRows(draft.rowsJson),
@@ -134,7 +140,9 @@ export async function scoreManualAssignmentDraft(id: string, userId: string) {
           capacity: row.capacity,
           actualCount: row.teams.length,
           excess: row.excess,
-          teams: JSON.stringify(row.teams),
+          teams: JSON.stringify(
+            conflictTeams(row.teams, model, validation.assignment),
+          ),
         })),
       });
     }
@@ -164,6 +172,36 @@ function parseRows(value: string): ManualAssignmentRow[] {
 function parseSeasonModel(value: string | null): SeasonModel {
   if (!value) throw new Error("Input set has no season model");
   return JSON.parse(value) as SeasonModel;
+}
+
+function conflictTeams(
+  teamIds: string[],
+  model: SeasonModel,
+  assignment: Assignment,
+) {
+  return teamIds.map((teamId) => {
+    const team = model.teams.find((candidate) => candidate.id === teamId);
+    const group = model.groups.find((candidate) =>
+      candidate.teamIds.includes(teamId),
+    );
+    return {
+      id: teamId,
+      league: group?.ref.league,
+      group: group?.ref.name,
+      label: team?.label,
+      assignedRasterzahl: assignment[teamId],
+      requestedRasterzahl: team?.requestedRasterzahl,
+      assignmentStatus:
+        team?.rasterzahl.kind === "fixed"
+          ? "FIXED"
+          : team?.rasterzahl.kind === "pinned"
+            ? "PINNED"
+            : "OPTIMIZED",
+      weekSlot: team?.spielwochePref,
+      startTime: team?.startTime,
+      durationMinutes: /\bjugend\b/i.test(team?.label ?? "") ? 120 : 180,
+    };
+  });
 }
 
 function assignmentRows(

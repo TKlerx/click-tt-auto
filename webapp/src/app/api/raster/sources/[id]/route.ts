@@ -21,7 +21,11 @@ export async function PATCH(
     return NextResponse.json({ error: "Source not found" }, { status: 404 });
   }
 
-  const access = await assertRasterAccess(auth.user, source.scope.code, "admin");
+  const access = await assertRasterAccess(
+    auth.user,
+    source.scope.code,
+    "admin",
+  );
   if (access !== true) return access.error;
 
   const body = (await request.json().catch(() => ({}))) as {
@@ -73,7 +77,11 @@ export async function DELETE(
     return NextResponse.json({ error: "Source not found" }, { status: 404 });
   }
 
-  const access = await assertRasterAccess(auth.user, source.scope.code, "admin");
+  const access = await assertRasterAccess(
+    auth.user,
+    source.scope.code,
+    "admin",
+  );
   if (access !== true) return access.error;
 
   await deleteRasterSource(source.id);

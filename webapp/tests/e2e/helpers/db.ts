@@ -122,6 +122,15 @@ export function updateUserStatus(email: string, status: UserStatus) {
   );
 }
 
+export function deactivatePlatformAdminsExcept(email: string) {
+  return runDbWorker<{ email: string }, null>(
+    "deactivatePlatformAdminsExcept",
+    {
+      email,
+    },
+  );
+}
+
 export function assignUserToScope(
   email: string,
   scope: { code: string; name: string },
@@ -152,6 +161,24 @@ export function seedRasterSource(input: {
   parsedJson?: unknown;
 }) {
   return runDbWorker<typeof input, string>("seedRasterSource", input);
+}
+
+export function seedRasterProjectionFixture(input: {
+  email: string;
+  suffix: string;
+}) {
+  return runDbWorker<
+    typeof input,
+    {
+      inputSetId: string;
+      teamCount: number;
+      uniqueClubLabelKeys: number;
+      youthStartTime?: string;
+      adultWeekday?: string;
+      defaultOnlyCount: number;
+      relationalWishes: number;
+    }
+  >("seedRasterProjectionFixture", input);
 }
 
 export function addAuditEntryFixture(input: {

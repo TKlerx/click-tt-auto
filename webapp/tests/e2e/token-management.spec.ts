@@ -4,6 +4,7 @@ import {
   appBasePath,
   expectOnDashboard,
   loginWithPassword,
+  openUserMenu,
 } from "./helpers/auth";
 import { seedLocalUser } from "./helpers/db";
 
@@ -128,6 +129,7 @@ test("token pages stay usable on mobile and in dark mode", async ({ page }) => {
   );
   await expectOnDashboard(page);
 
+  await openUserMenu(page);
   await page.getByRole("button", { name: "Dark mode" }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
 

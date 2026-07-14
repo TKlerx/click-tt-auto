@@ -42,7 +42,7 @@ describe("raster district-scale views", () => {
 
     const startedAt = performance.now();
     renderToStaticMarkup(<AssignmentTable assignments={assignments} />);
-    renderToStaticMarkup(<CapacityTable rows={capacities} />);
+    renderToStaticMarkup(<CapacityTable district="OWL" rows={capacities} />);
     renderToStaticMarkup(<ConflictOverview conflicts={conflicts} />);
     const foundAssignments = assignments.filter((row) =>
       row.team.includes("Team 599"),

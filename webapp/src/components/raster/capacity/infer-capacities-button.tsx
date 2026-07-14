@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { withBasePath } from "@/lib/base-path";
+import { BusyLabel } from "@/components/ui/busy-label";
 
 export function InferCapacitiesButton({
   inputSetId,
@@ -48,7 +49,7 @@ export function InferCapacitiesButton({
         onClick={() => void infer()}
         type="button"
       >
-        {busy ? "..." : label}
+        {busy ? <BusyLabel label="Inferring" /> : label}
       </button>
       {message ? (
         <span className="text-sm text-[var(--muted-foreground)]">

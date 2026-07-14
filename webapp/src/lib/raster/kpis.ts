@@ -35,7 +35,8 @@ export function kpiSummaryFromSnapshot(
   snapshot: SnapshotKpiSource,
 ): RasterKpiSummary {
   const breakdown = parseObjectiveBreakdown(snapshot.objectiveBreakdown);
-  const wishMisses = Number(breakdown.wechsel ?? 0) + Number(breakdown.zeitgleich ?? 0);
+  const wishMisses =
+    Number(breakdown.wechsel ?? 0) + Number(breakdown.zeitgleich ?? 0);
 
   return {
     objective: snapshot.run?.objectiveValue ?? null,
@@ -44,9 +45,6 @@ export function kpiSummaryFromSnapshot(
     affectedClubs: snapshot.affectedClubs,
     wishMisses,
     sameClubDerbyIssues: Number(breakdown.sameClubDerbySt4 ?? 0),
-    status:
-      snapshot.run?.outcome ??
-      snapshot.run?.solverStatus ??
-      "completed",
+    status: snapshot.run?.outcome ?? snapshot.run?.solverStatus ?? "completed",
   };
 }

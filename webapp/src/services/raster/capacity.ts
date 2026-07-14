@@ -26,7 +26,7 @@ export type HallCapacityReviewRow = InferredHallCapacity & {
   id: string | null;
   storedCapacity: number | null;
   basis: HallCapacityBasis | null;
-  status: "missing" | "insufficient" | "higher";
+  status: "missing" | "insufficient" | "ok" | "higher";
 };
 
 export type HallCapacityReview = {
@@ -122,12 +122,13 @@ export async function inferHallCapacitiesFromInputSet(
     });
     count += 1;
   }
+  const pruned = await pruneStaleInferredCapacities(inferred);
   if (count > 0) {
     await markDistrictSnapshotsStale([
       ...new Set(inferred.map((row) => row.district)),
     ]);
   }
-  return { count, needsReview };
+  return { count, needsReview, pruned };
 }
 
 export async function reviewHallCapacitiesForInputSet(
@@ -168,6 +169,14 @@ export async function reviewHallCapacitiesForInputSet(
         storedCapacity: stored.capacity,
         basis: stored.basis,
         status: "higher",
+      });
+    } else {
+      rows.push({
+        ...row,
+        id: stored.id,
+        storedCapacity: stored.capacity,
+        basis: stored.basis,
+        status: "ok",
       });
     }
   }
@@ -308,12 +317,7 @@ function addCapacitySlot(
   seen.add(identity);
 
   if (row.spielwochePref === "A" || row.spielwochePref === "B") {
-    const key = [
-      row.clubId,
-      slot.hall,
-      weekday,
-      row.spielwochePref,
-    ].join("\0");
+    const key = [row.clubId, slot.hall, weekday, row.spielwochePref].join("\0");
     bySlot.set(key, [...(bySlot.get(key) ?? []), slot]);
     return;
   }
@@ -328,7 +332,9 @@ function addCapacitySlot(
 }
 
 function requiredCapacity(slots: CapacitySlot[]) {
-  const unknownTimes = slots.filter((slot) => slot.startMinutes === null).length;
+  const unknownTimes = slots.filter(
+    (slot) => slot.startMinutes === null,
+  ).length;
   const events = slots
     .filter((slot): slot is CapacitySlot & { startMinutes: number } =>
       Number.isInteger(slot.startMinutes),
@@ -382,6 +388,34 @@ async function existingCapacityMap(inferred: InferredHallCapacity[]) {
     },
   });
   return new Map(existing.map((row) => [capacityKey(row), row]));
+}
+
+async function pruneStaleInferredCapacities(inferred: InferredHallCapacity[]) {
+  const districts = [...new Set(inferred.map((row) => row.district))];
+  if (!districts.length) return 0;
+  const currentKeys = new Set(inferred.map(capacityKey));
+  const stale = await prisma.rasterHallCapacity.findMany({
+    where: {
+      district: { in: districts },
+      basis: HallCapacityBasis.INFERRED,
+    },
+    select: {
+      id: true,
+      district: true,
+      clubId: true,
+      hall: true,
+      weekday: true,
+    },
+  });
+  const staleIds = stale
+    .filter((row) => !currentKeys.has(capacityKey(row)))
+    .map((row) => row.id);
+  if (!staleIds.length) return 0;
+  await prisma.rasterHallCapacity.deleteMany({
+    where: { id: { in: staleIds } },
+  });
+  await markDistrictSnapshotsStale(districts);
+  return staleIds.length;
 }
 
 function capacityKey(row: {

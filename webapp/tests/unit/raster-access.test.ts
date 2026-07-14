@@ -19,10 +19,7 @@ describe("raster access", () => {
     prismaMock.scope.findFirst.mockResolvedValue({ id: "owl" } as never);
 
     await expect(
-      canAccessRasterDistrict(
-        { id: "user-1", role: Role.SCOPE_USER },
-        "OWL",
-      ),
+      canAccessRasterDistrict({ id: "user-1", role: Role.SCOPE_USER }, "OWL"),
     ).resolves.toBe(true);
 
     expect(prismaMock.scope.findFirst).toHaveBeenCalledWith({
@@ -127,9 +124,6 @@ describe("raster access", () => {
 
     await expect(
       listAccessibleRasterScopes({ id: "admin-1", role: Role.PLATFORM_ADMIN }),
-    ).resolves.toMatchObject([
-      { code: "AACHEN_EUREGIO" },
-      { code: "OWL" },
-    ]);
+    ).resolves.toMatchObject([{ code: "AACHEN_EUREGIO" }, { code: "OWL" }]);
   });
 });

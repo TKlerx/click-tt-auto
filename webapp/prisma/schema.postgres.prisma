@@ -657,6 +657,7 @@ model RasterOptimizationRun {
   settings           String                  @default("{}")
   createdAt          DateTime                @default(now())
   finishedAt         DateTime?
+  archivedAt         DateTime?
   inputSet           RasterInputSet          @relation(fields: [inputSetId], references: [id], onDelete: Restrict)
   startedBy          User                    @relation("RasterRunStarter", fields: [startedById], references: [id], onDelete: Restrict)
   snapshot           RasterSnapshot?
@@ -679,6 +680,7 @@ model RasterSnapshot {
   affectedClubs      Int                    @default(0)
   objectiveBreakdown String                 @default("{}")
   createdAt          DateTime               @default(now())
+  archivedAt         DateTime?
   run                RasterOptimizationRun? @relation(fields: [runId], references: [id], onDelete: SetNull)
   assignments        RasterAssignment[]
   conflicts          RasterConflict[]

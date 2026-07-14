@@ -105,6 +105,7 @@ As a district admin, I want to inspect why one scenario is better or worse than 
 - **FR-018**: System MUST mark scenarios as stale when the underlying input set or scoring assumptions change after the scenario was created.
 - **FR-019**: System MUST allow failed, cancelled, or no-solution runs to remain visible in history without treating them as valid assignment scenarios.
 - **FR-020**: Users MUST be able to identify which scenario was produced by a colleague/manual import versus an optimizer strategy.
+- **FR-021**: System SHOULD explain infeasible optimizer outcomes with actionable hard-constraint diagnostics, especially when a previous heuristic or manual assignment existed for the same input.
 
 ### Key Entities *(include if feature involves data)*
 
@@ -133,6 +134,7 @@ As a district admin, I want to inspect why one scenario is better or worse than 
 - Existing validated input sets remain the prerequisite for optimizer runs and manual scenario scoring.
 - CP-SAT runs may take several minutes and are acceptable as background jobs; the feature should show honest status rather than a fake percentage.
 - CP-SAT with a time budget can produce optimal, feasible, infeasible, failed, or no-solution outcomes; feasible outcomes are still useful for comparison.
+- CP-SAT solvers may report only "infeasible"; diagnosing the blocking constraint may require a separate relaxation or diagnostic pass.
 - Manual assignment import v1 supports common table formats with group, team, and schedule-number columns; complex OCR or arbitrary PDF parsing is out of scope for this feature.
 - Visual manual entry is required for v1, but advanced spreadsheet-like editing can be incremental as long as users can complete and correct an assignment.
 - Scenario comparison is limited to compatible scenarios from the same district, season, and input set version unless explicitly marked otherwise.

@@ -37,6 +37,7 @@ Raw inputs arrive today mostly as PDFs; the app must accept structured versions 
 - Q: Can the app run without any fixed Rasterzahlen? → A: Yes. Fixed schedule numbers are optional. A full WTTV or district run may proceed with zero fixed numbers; the optimizer assigns schedule numbers subject to the available group, wish, and capacity inputs.
 - Q: How should districts and seasons be selected? → A: District/scope selection must come from configured scope data, not free text, and should show or sort by hierarchy. The seeded WTTV hierarchy includes WTTV plus all listed WTTV districts. Season is part of the input-set/source identity and must be selectable in the UI.
 - Q: How are wrong uploads handled? → A: Admins must be able to delete wrongly registered sources. PDF uploads must at least be checked as real PDF files before storage, and explicit parser refresh must report when a document cannot be parsed as the expected source type.
+- Q: How should Spielwoche A/B from wish PDFs be handled? → A: A/B is a relative rhythm hint inside one club/hall/weekday, not an absolute per-team calendar target. Equal labels mean same rhythm, different labels mean alternating rhythm. Missing A/B remains editable but flexible and must not block validation by itself.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -192,6 +193,7 @@ An admin imports a snapshot produced by the legacy external optimizer into the s
 - **FR-008g**: The system MUST validate source files enough to catch obvious mismatches: wish PDF uploads MUST be real PDF files, and explicit parser refresh MUST fail clearly when a source cannot be parsed as its selected source type.
 - **FR-008h**: District/scope selection in the UI MUST come from configured Scope records, show or sort by hierarchy, and include WTTV plus all configured WTTV districts rather than relying on free-text district entry.
 - **FR-008i**: When parsed source inputs contain club/team names that do not exactly match existing input-set identities, the system MUST provide a review step with fuzzy match suggestions, manual correction, and persisted aliases so future uploads reuse confirmed mappings.
+- **FR-008j**: The source review UI MUST present Spielwoche A/B as a relative same/opposite rhythm hint. Missing A/B MUST remain editable for correction but MUST NOT by itself make a team/group incomplete or block validation.
 
 #### Generation / Optimization
 
@@ -272,6 +274,11 @@ An admin imports a snapshot produced by the legacy external optimizer into the s
 - **SC-012**: At least 95% of completed runs display their final outcome, objective value, and generated snapshot link without manual log inspection.
 - **SC-013**: Users can distinguish proven-optimal, feasible-only, and imported heuristic snapshots within 5 seconds of opening a snapshot.
 - **SC-014**: If a generated snapshot uses any Spieltag-4 same-club derby fallback, a scheduler can see the count and affected objective component within 5 seconds of opening the snapshot; no Spieltag-5-or-later same-club derby is stored as a valid generated snapshot.
+
+## Future UX Backlog
+
+- Rework the Raster page into a guided left-navigation flow once the data model settles: Import data, Review data, Run optimizer, Review optimization runs. The source-to-input-set projection/merge review belongs in Review data and should normally be completed once after import or source refresh, not repeated for every optimizer run.
+- Add a general source-to-model matching review for clubs and teams: normalize names, suggest fuzzy matches with confidence, show unmatched/low-confidence rows, and let admins confirm or override matches before projection. Do not rely on hard-coded club aliases as the long-term solution.
 
 ## Assumptions
 

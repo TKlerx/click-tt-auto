@@ -52,8 +52,8 @@ describe("snapshot hard constraints", () => {
       "elsen-1": 1,
       "elsen-2": 7,
     });
-    expect(result.hardViolations.map((violation) => violation.detail).join("; ")).toMatch(
-      /Spieltag/,
-    );
+    expect(
+      result.hardViolations.map((violation) => violation.detail).join("; "),
+    ).toMatch(/Spieltag/);
   });
 });

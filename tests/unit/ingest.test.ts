@@ -56,7 +56,7 @@ describe("assignment table ingestion", () => {
     const sizes = splitIntoSupportedGroupSizes(277);
 
     expect(sizes.reduce((total, size) => total + size, 0)).toBe(277);
-    expect(sizes.every((size) => size >= 6 && size <= 14)).toBe(true);
+    expect(sizes.every((size) => size >= 6 && size <= 12)).toBe(true);
   });
 
   it("keeps fixed table rows fixed and maps current rows to internal ids", async () => {
@@ -71,18 +71,18 @@ describe("assignment table ingestion", () => {
 
     expect(fixedTeam?.rasterzahl).toEqual({ kind: "fixed", value: 1 });
     expect(assignmentFromRows(model, rows)).toEqual({
-      "g-1-club-a": 1,
-      "g-2-club-b": 2,
-      "g-3-club-c": 3,
-      "g-4-club-d": 4,
-      "g-5-club-e": 5,
-      "g-6-club-f": 6,
-      "g-7-club-g": 7,
-      "g-8-club-h": 8,
-      "g-9-club-i": 9,
-      "g-10-club-j": 10,
-      "g-11-club-k": 11,
-      "g-12-club-l": 12
+      "g-club-a": 1,
+      "g-club-b": 2,
+      "g-club-c": 3,
+      "g-club-d": 4,
+      "g-club-e": 5,
+      "g-club-f": 6,
+      "g-club-g": 7,
+      "g-club-h": 8,
+      "g-club-i": 9,
+      "g-club-j": 10,
+      "g-club-k": 11,
+      "g-club-l": 12
     });
   });
 
@@ -121,6 +121,23 @@ describe("assignment table ingestion", () => {
     ]);
 
     expect(model.teams.find((team) => team.name === "Club A")?.rasterzahl.kind).toBe("assignable");
+  });
+
+  it("labels teams from the competition category instead of defaulting to adults", async () => {
+    const rows = [
+      { league: "L", group: "G", division: "Jugend 13", rasterzahl: 1, team: "SC GW Paderborn", sourceUrl: "" },
+      { league: "L", group: "G", division: "Damen", rasterzahl: 2, team: "TTV Borgholz II", sourceUrl: "" },
+      { league: "L", group: "G", division: "Erwachsene", rasterzahl: 3, team: "TSV Belle III", sourceUrl: "" },
+      { league: "L", group: "G", division: "Erwachsene", rasterzahl: 4, team: "A", sourceUrl: "" },
+      { league: "L", group: "G", division: "Erwachsene", rasterzahl: 5, team: "B", sourceUrl: "" },
+      { league: "L", group: "G", division: "Erwachsene", rasterzahl: 6, team: "C", sourceUrl: "" }
+    ];
+
+    const model = await buildSeasonModelFromAssignments(rows);
+
+    expect(model.teams.find((team) => team.name === "SC GW Paderborn")?.label).toBe("Jugend 13");
+    expect(model.teams.find((team) => team.name === "TTV Borgholz II")?.label).toBe("Damen II");
+    expect(model.teams.find((team) => team.name === "TSV Belle III")?.label).toBe("Erwachsene III");
   });
 });
 

@@ -2,11 +2,15 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { logRasterAudit } from "@/lib/raster/audit";
 import { requireRasterInputSet } from "@/lib/raster/route-context";
-import { updateGroupRasterMode } from "@/services/raster";
+import {
+  updateGroupPlanningStatus,
+  updateGroupRasterMode,
+} from "@/services/raster";
 import { AuditAction } from "../../../../../../../../generated/prisma/enums";
 
 const bodySchema = z.object({
-  rasterMode: z.enum(["single", "double"]),
+  rasterMode: z.enum(["single", "double"]).optional(),
+  planningStatus: z.enum(["include", "exclude"]).optional(),
 });
 
 export async function PUT(
@@ -18,18 +22,38 @@ export async function PUT(
   if ("error" in context) return context.error;
 
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) {
+  if (
+    !parsed.success ||
+    (!parsed.data.rasterMode && !parsed.data.planningStatus)
+  ) {
     return NextResponse.json(
-      { error: "Invalid group mode", issues: parsed.error.issues },
+      {
+        error: "Invalid group review",
+        issues: parsed.success ? [] : parsed.error.issues,
+      },
       { status: 422 },
     );
   }
 
-  const inputSet = await updateGroupRasterMode(
-    context.inputSet.id,
-    decodeURIComponent(groupId),
-    parsed.data.rasterMode,
-  );
+  const decodedGroupId = decodeURIComponent(groupId);
+  let inputSet:
+    | Awaited<ReturnType<typeof updateGroupRasterMode>>
+    | Awaited<ReturnType<typeof updateGroupPlanningStatus>>
+    | null = null;
+  if (parsed.data.rasterMode) {
+    inputSet = await updateGroupRasterMode(
+      context.inputSet.id,
+      decodedGroupId,
+      parsed.data.rasterMode,
+    );
+  }
+  if (parsed.data.planningStatus) {
+    inputSet = await updateGroupPlanningStatus(
+      context.inputSet.id,
+      decodedGroupId,
+      parsed.data.planningStatus,
+    );
+  }
   if (!inputSet) {
     return NextResponse.json({ error: "Group not found" }, { status: 404 });
   }
@@ -42,8 +66,9 @@ export async function PUT(
     entityId: context.inputSet.id,
     details: {
       type: "group-mode",
-      groupId: decodeURIComponent(groupId),
+      groupId: decodedGroupId,
       rasterMode: parsed.data.rasterMode,
+      planningStatus: parsed.data.planningStatus,
     },
   });
 

@@ -41,6 +41,7 @@ export function findOverUsages(
     inferredCapacities.set(key, (inferredCapacities.get(key) ?? 0) + 1);
   }
   for (const team of model.teams) {
+    if (team.capacityRelevant === false) continue;
     const group = model.groups.find((candidate) =>
       candidate.teamIds.includes(team.id)
     );

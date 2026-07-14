@@ -103,7 +103,10 @@ function runFixture(overrides = {}) {
     objectiveValue: scenario.kpiSummary?.objective ?? 0,
     objectiveBreakdown: null,
     solverStatus: "OPTIMAL",
-    settings: JSON.stringify({ strategy: scenario.strategy, name: scenario.name }),
+    settings: JSON.stringify({
+      strategy: scenario.strategy,
+      name: scenario.name,
+    }),
     createdAt: new Date(scenario.createdAt),
     finishedAt: new Date(scenario.finishedAt!),
     inputSet: { district: scenario.district, season: scenario.season },

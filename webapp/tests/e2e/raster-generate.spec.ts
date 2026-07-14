@@ -9,6 +9,7 @@ import {
 } from "./helpers/auth";
 import {
   assignUserToScope,
+  seedRasterProjectionFixture,
   seedLocalUser,
   seedRasterScopeHierarchy,
   seedRasterSource,
@@ -119,11 +120,18 @@ test("admin can generate and review a raster snapshot", async ({ page }) => {
   expect(wishesResponse.status()).toBe(200);
 
   await page.goto(`${appBasePath}/raster?district=${district}`);
-  await expect(page.getByText(`E2E generated ${suffix}`)).toBeVisible();
+  await expect(
+    page.getByText(`E2E generated ${suffix}`, { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Infer missing capacities" })
+    .first()
+    .click();
+  await expect(page.getByText(/Capacity rows inferred/)).toBeVisible();
   await page.getByRole("button", { name: "Validate" }).click();
-  await expect(page.getByText("Validate done")).toBeVisible();
-  await page.getByRole("button", { name: "Start run" }).click();
-  await expect(page.getByText("Run done")).toBeVisible();
+  await expect(page.getByText(/Validation passed/)).toBeVisible();
+  await page.getByRole("button", { name: "Queue run" }).click();
+  await expect(page.getByText(/Run queued/)).toBeVisible();
 
   const runListResponse = await page.request.get(
     `${appBasePath}/api/raster/input-sets?district=${district}`,
@@ -137,7 +145,7 @@ test("admin can generate and review a raster snapshot", async ({ page }) => {
     ?.runs.at(0);
   expect(runBody?.id).toBeTruthy();
 
-  processNextWorkerJob();
+  processRasterWorkerJob(runBody!.id);
 
   const runStatusResponse = await page.request.get(
     `${appBasePath}/api/raster/runs/${runBody?.id}`,
@@ -229,6 +237,29 @@ test("admin can use the guided source workflow", async ({ page }) => {
   await expect(page.getByText(wishName)).not.toBeVisible();
 });
 
+test("source projection preserves team categories and parsed wishes", async () => {
+  const suffix = Date.now().toString();
+  const email = `e2e-raster-projection-${suffix}@example.com`;
+
+  await seedRasterScopeHierarchy();
+  await seedLocalUser({
+    email,
+    name: "E2E Raster Projection",
+    role: Role.PLATFORM_ADMIN,
+    password: "RasterProjection123",
+    mustChangePassword: false,
+  });
+
+  const projection = await seedRasterProjectionFixture({ email, suffix });
+
+  expect(projection.teamCount).toBe(7);
+  expect(projection.uniqueClubLabelKeys).toBe(7);
+  expect(projection.youthStartTime).toBe("10:00");
+  expect(projection.adultWeekday).toBe("monday");
+  expect(projection.defaultOnlyCount).toBe(3);
+  expect(projection.relationalWishes).toBe(1);
+});
+
 test("admin can score and compare manual raster scenarios", async ({
   page,
 }) => {
@@ -287,11 +318,16 @@ test("admin can score and compare manual raster scenarios", async ({
     const scoreResponse = await page.request.post(
       `${appBasePath}/api/raster/manual-assignments/${draftBody.draft.id}/score`,
     );
-    expect(scoreResponse.status()).toBe(201);
     const scoreBody = (await scoreResponse.json()) as {
-      run: { id: string };
+      run?: { id: string };
+      error?: string;
+      issues?: unknown[];
     };
-    scenarioIds.push(scoreBody.run.id);
+    expect(scoreResponse.status(), JSON.stringify(scoreBody, null, 2)).toBe(
+      201,
+    );
+    expect(scoreBody.run).toBeDefined();
+    scenarioIds.push(scoreBody.run!.id);
   }
 
   const compareResponse = await page.request.post(
@@ -347,7 +383,7 @@ function buildSeasonModel() {
   };
 }
 
-function processNextWorkerJob() {
+function processRasterWorkerJob(runId: string) {
   const workerDir = path.join(process.cwd(), "worker");
   const repoRoot = path.dirname(process.cwd());
   const databaseUrl =
@@ -367,10 +403,17 @@ function processNextWorkerJob() {
         "from starter_worker.main import _process_claimed_job",
         "config = WorkerConfig(database_url=os.environ['DATABASE_URL'], poll_interval_seconds=0.1, worker_id='e2e-worker', max_attempts=1, retry_backoff_seconds=0, stale_lock_seconds=300, teams_poll_interval_seconds=60)",
         "store = JobStore(config)",
-        "job = store.claim_next_job()",
-        "assert job is not None",
-        "_process_claimed_job(store, config, job)",
-      ].join("; "),
+        `target_run_id = ${JSON.stringify(runId)}`,
+        "processed = False",
+        "for _ in range(20):",
+        "    job = store.claim_next_job()",
+        "    assert job is not None",
+        "    _process_claimed_job(store, config, job)",
+        "    if job.job_type == 'raster_run' and str(job.payload.get('runId') or '').strip() == target_run_id:",
+        "        processed = True",
+        "        break",
+        "assert processed",
+      ].join("\n"),
     ],
     {
       cwd: workerDir,

@@ -50,7 +50,7 @@ Team {
   homeWeekday: Weekday       // fixed by wish
   hall: "1"|"2"|"3"
   startTime?: string
-  spielwochePref?: WeekSlot  // structured A/B preference, if stated
+  spielwochePref?: WeekSlot  // structured A/B rhythm hint, if stated; relative to sibling teams in the same club/hall/weekday
   rasterzahl:
     | { kind: "assignable" }
     | { kind: "fixed"; value: Rasterzahl }        // higher-league given
@@ -96,7 +96,7 @@ EvaluationResult {
   hardViolations: HardViolation[]              // permutation / fixed / derby breaches
   overUsages: OverUsage[]                       // (club, hall, weekday, week) count>capacity
   wishResults: WishResult[]                     // per wish: fulfilled|unfulfilled|unfulfillable|unknown + reason
-  spielwocheMisses: { teamId; want: WeekSlot; got: WeekSlot }[]
+  spielwocheMisses: { teamA; teamB; want: "wechsel" | "zeitgleich"; got: "wechsel" | "zeitgleich" | "neither" }[]
   perGroup: Array<{ group: GroupRef; assignment: Map<TeamId,Rasterzahl>; valid: boolean }>
 }
 OverUsage   { clubId; hall; weekday: Weekday; week: number; teams: TeamId[]; capacity: number }

@@ -1,5 +1,5 @@
 FROM node:24-bookworm-slim AS base
-WORKDIR /app
+WORKDIR /repo/webapp
 ENV COREPACK_HOME=/corepack
 RUN apt-get update -y \
     && apt-get upgrade -y \
@@ -10,22 +10,22 @@ RUN mkdir -p /corepack \
     && corepack prepare pnpm@11.1.0 --activate
 
 FROM base AS deps
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY webapp/package.json webapp/pnpm-lock.yaml webapp/pnpm-workspace.yaml webapp/.npmrc ./
 RUN pnpm install --frozen-lockfile
 
 FROM base AS dependency-audit
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY webapp/package.json webapp/pnpm-lock.yaml webapp/pnpm-workspace.yaml webapp/.npmrc ./
 RUN pnpm install --prod --frozen-lockfile
 CMD ["pnpm", "audit", "--prod", "--no-optional", "--json"]
 
 FROM base AS migrate-deps
 WORKDIR /migrate-runtime
-COPY docker/migrate/package.json ./package.json
-COPY pnpm-workspace.yaml ./
+COPY webapp/docker/migrate/package.json ./package.json
+COPY webapp/pnpm-workspace.yaml ./
 RUN pnpm install --prod
 
 FROM base AS builder
-WORKDIR /app
+WORKDIR /repo/webapp
 ARG BASE_PATH
 ARG APP_VERSION
 ARG APP_REVISION
@@ -40,8 +40,10 @@ ENV AUTH_BASE_URL=http://localhost:3270
 ENV BETTER_AUTH_SECRET=docker-build-secret-change-me-at-least-32-characters
 ENV APP_DATABASE_URL=postgresql://starter:starter@localhost:5432/business_app_starter
 ENV DATABASE_URL=postgresql://starter:starter@localhost:5432/business_app_starter
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
+COPY --from=deps /repo/webapp/node_modules ./node_modules
+RUN ln -s /repo/webapp/node_modules /repo/node_modules
+COPY webapp/. .
+COPY src/raster /repo/src/raster
 RUN pnpm exec prisma generate && pnpm run build
 
 FROM base AS migrate-runner
@@ -55,10 +57,10 @@ LABEL org.opencontainers.image.revision=$APP_REVISION
 LABEL org.opencontainers.image.created=$APP_BUILT_AT
 LABEL org.opencontainers.image.source="https://github.com/TKlerx/webapp-template"
 COPY --from=migrate-deps /migrate-runtime/node_modules ./node_modules
-COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
-COPY --from=builder /app/scripts ./scripts
+COPY --from=builder /repo/webapp/package.json ./package.json
+COPY --from=builder /repo/webapp/prisma ./prisma
+COPY --from=builder /repo/webapp/prisma.config.ts ./prisma.config.ts
+COPY --from=builder /repo/webapp/scripts ./scripts
 RUN rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/pnpm /usr/local/bin/pnpx \
     && rm -rf /usr/local/lib/node_modules/npm /corepack
 
@@ -79,10 +81,10 @@ ENV APP_VERSION=$APP_VERSION
 ENV APP_REVISION=$APP_REVISION
 ENV APP_BUILD_ID=$APP_BUILD_ID
 ENV APP_BUILT_AT=$APP_BUILT_AT
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/generated ./generated
-COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /repo/webapp/.next/standalone ./
+COPY --from=builder /repo/webapp/.next/static ./.next/static
+COPY --from=builder /repo/webapp/generated ./generated
+COPY --from=builder /repo/webapp/package.json ./package.json
 RUN rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/pnpm /usr/local/bin/pnpx \
     && rm -rf /usr/local/lib/node_modules/npm /corepack \
     && groupadd --system --gid 1001 nodejs \

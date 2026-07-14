@@ -19,7 +19,10 @@ export async function POST(request: Request) {
     .getAll("file")
     .filter((file): file is File => file instanceof File && file.size > 0);
   if (!scopeCode || !sourceType || files.length === 0) {
-    return NextResponse.json({ error: "Invalid source upload" }, { status: 422 });
+    return NextResponse.json(
+      { error: "Invalid source upload" },
+      { status: 422 },
+    );
   }
 
   const access = await assertRasterAccess(auth.user, scopeCode, "admin");

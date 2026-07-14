@@ -19,7 +19,11 @@ export async function POST(
     return NextResponse.json({ error: "Source not found" }, { status: 404 });
   }
 
-  const access = await assertRasterAccess(auth.user, source.scope.code, "admin");
+  const access = await assertRasterAccess(
+    auth.user,
+    source.scope.code,
+    "admin",
+  );
   if (access !== true) return access.error;
 
   try {
@@ -31,8 +35,7 @@ export async function POST(
   } catch (error) {
     return NextResponse.json(
       {
-        error:
-          error instanceof Error ? error.message : "Source refresh failed",
+        error: error instanceof Error ? error.message : "Source refresh failed",
       },
       { status: 422 },
     );

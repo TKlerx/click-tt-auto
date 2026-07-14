@@ -70,6 +70,7 @@ export interface Team {
     | { kind: "fixed"; value: Rasterzahl }
     | { kind: "pinned"; value: Rasterzahl };
   requestedRasterzahl?: Rasterzahl[];
+  capacityRelevant?: boolean;
   confidence: "ok" | "review";
 }
 
@@ -142,7 +143,12 @@ export interface EvaluationResult {
   hardViolations: HardViolation[];
   overUsages: OverUsage[];
   wishResults: WishResult[];
-  spielwocheMisses: Array<{ teamId: string; want: WeekSlot; got: WeekSlot }>;
+  spielwocheMisses: Array<{
+    teamA: string;
+    teamB: string;
+    want: "wechsel" | "zeitgleich";
+    got: "wechsel" | "zeitgleich" | "neither";
+  }>;
   perGroup: Array<{ group: GroupRef; assignment: Assignment; valid: boolean }>;
 }
 

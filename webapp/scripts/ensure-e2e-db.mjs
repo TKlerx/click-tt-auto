@@ -15,7 +15,7 @@ if (
 
 const parsed = new URL(databaseUrl);
 const containerName =
-  process.env.E2E_POSTGRES_CONTAINER || "webapp-template-e2e-postgres";
+  process.env.E2E_POSTGRES_CONTAINER || "click-tt-e2e-postgres";
 const postgresUser = decodeURIComponent(parsed.username || "starter");
 const postgresPassword = decodeURIComponent(
   parsed.password || "starter_e2e_password",

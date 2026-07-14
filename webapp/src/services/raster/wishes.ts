@@ -5,7 +5,7 @@ import {
   RasterWishSource,
   RasterWeekday,
 } from "../../../generated/prisma/enums";
-import type { WishParseResult } from "../../../../src/raster/ingest/index.js";
+import type { WishParseResult } from "../../../../src/raster/ingest/wishes-pdf.js";
 import type { Team } from "../../../../src/raster/types.js";
 
 const weekdayMap: Record<Team["homeWeekday"], RasterWeekday> = {

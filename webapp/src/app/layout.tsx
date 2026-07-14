@@ -19,6 +19,11 @@ const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
 });
 
+const themePaint = {
+  DARK: { backgroundColor: "#0c1320", colorScheme: "dark" },
+  LIGHT: { backgroundColor: "#f5f7fa", colorScheme: "light" },
+} as const;
+
 export const metadata: Metadata = {
   title: "Business App Starter",
   description: "Reusable internal business app starter",
@@ -31,15 +36,21 @@ export default async function RootLayout({
 }>) {
   const sessionPromise = getSessionUser();
   const configuredBasePath = process.env.BASE_PATH ?? "";
-  const locale = await getLocale();
+  const [locale, user] = await Promise.all([getLocale(), sessionPromise]);
+  const initialTheme = user?.themePreference ?? "DARK";
 
   return (
-    <html lang={locale} suppressHydrationWarning>
+    <html
+      data-theme={initialTheme.toLowerCase()}
+      lang={locale}
+      style={themePaint[initialTheme]}
+      suppressHydrationWarning
+    >
       <body
         className={`${geistSans.variable} ${geistMono.variable}`}
         data-base-path={configuredBasePath}
       >
-        <SessionLayout locale={locale} sessionPromise={sessionPromise}>
+        <SessionLayout locale={locale} user={user}>
           {children}
         </SessionLayout>
       </body>
@@ -49,14 +60,13 @@ export default async function RootLayout({
 
 async function SessionLayout({
   locale,
-  sessionPromise,
+  user,
   children,
 }: {
   locale: Awaited<ReturnType<typeof getLocale>>;
-  sessionPromise: ReturnType<typeof getSessionUser>;
+  user: Awaited<ReturnType<typeof getSessionUser>>;
   children: React.ReactNode;
 }) {
-  const user = await sessionPromise;
   const initialTheme = user?.themePreference ?? "DARK";
   const messages = await getMessages();
 

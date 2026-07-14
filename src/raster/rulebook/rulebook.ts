@@ -12,7 +12,7 @@ import type {
   Template
 } from "../types.js";
 
-const supportedSizes = [6, "6d", 8, 10, 12, 14] as const;
+const supportedSizes = [6, "6d", 8, 10, 12] as const;
 
 export function numericRasterSize(size: RasterSize): number {
   return size === "6d" ? 6 : size;
@@ -27,9 +27,8 @@ export function rasterSizeForGroupSize(
   if (size === 7 || size === 8) return 8;
   if (size === 9 || size === 10) return 10;
   if (size === 11 || size === 12) return 12;
-  if (size === 13 || size === 14) return 14;
   throw new Error(
-    `Unsupported group size ${size}; supported district sizes are 5..14.`
+    `Unsupported group size ${size}; supported district sizes are 5..12.`
   );
 }
 

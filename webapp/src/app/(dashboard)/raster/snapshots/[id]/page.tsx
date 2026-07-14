@@ -48,7 +48,7 @@ export default async function RasterSnapshotPage({
         <Metric label="Optimality" value={snapshot.optimality} />
         <Metric label="Conflicts" value={snapshot.totalConflicts} />
         <Metric label="Total excess" value={snapshot.totalExcess} />
-        <Metric label="Max excess" value={snapshot.maxExcess} />
+        <Metric label="Max slot excess" value={snapshot.maxExcess} />
       </section>
 
       <section className="overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--panel)]">
@@ -65,12 +65,53 @@ export default async function RasterSnapshotPage({
             >
               <span className="font-medium">{club.clubName}</span>
               <span>{club.rows} rows</span>
-              <span>{club.excess} excess</span>
+              <span>{club.excess} total excess</span>
             </div>
           ))
         ) : (
           <p className="px-4 py-6 text-sm text-[var(--muted-foreground)]">
             No conflict summary.
+          </p>
+        )}
+      </section>
+
+      <section className="overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--panel)]">
+        <div className="border-b border-[var(--border)] px-4 py-3">
+          <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
+            Worst gym slots
+          </h2>
+          <p className="mt-2 text-sm text-[var(--muted-foreground)]">
+            Top 10 concrete gym/day/week slots by excess.
+          </p>
+        </div>
+        {conflicts.length ? (
+          conflicts.slice(0, 10).map((conflict) => (
+            <div
+              className="grid gap-3 border-b border-[var(--border)] px-4 py-3 text-sm last:border-b-0"
+              key={conflict.id}
+            >
+              <div className="grid gap-2 md:grid-cols-[minmax(12rem,1fr)_5rem_7rem_6rem_6rem_6rem]">
+                <span className="font-medium">{conflict.clubName}</span>
+                <span>W{conflict.matchWeek}</span>
+                <span>{conflict.weekday}</span>
+                <span>Gym {conflict.hall}</span>
+                <span>cap {conflict.capacity}</span>
+                <span>
+                  peak {conflict.actualCount}, +{conflict.excess}
+                </span>
+              </div>
+              <ul className="grid gap-1 text-sm text-[var(--muted-foreground)] md:grid-cols-2">
+                {parseConflictTeams(conflict.teams).map((team, index) => (
+                  <li key={`${conflict.id}-${index}`}>
+                    <ConflictTeamLine team={team} />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))
+        ) : (
+          <p className="px-4 py-6 text-sm text-[var(--muted-foreground)]">
+            No gym slot excesses.
           </p>
         )}
       </section>
@@ -112,7 +153,14 @@ export default async function RasterSnapshotPage({
               <span>W{conflict.matchWeek}</span>
               <span>{conflict.weekday}</span>
               <span>+{conflict.excess}</span>
-              <span>{conflict.teams}</span>
+              <span className="grid gap-1">
+                {parseConflictTeams(conflict.teams).map((team, index) => (
+                  <ConflictTeamLine
+                    key={`${conflict.id}-full-${index}`}
+                    team={team}
+                  />
+                ))}
+              </span>
             </div>
           ))
         ) : (
@@ -123,6 +171,83 @@ export default async function RasterSnapshotPage({
       </section>
     </div>
   );
+}
+
+type ConflictTeam = {
+  id: string;
+  league?: string;
+  group?: string;
+  label?: string;
+  assignedRasterzahl?: number;
+  requestedRasterzahl?: number[];
+  assignmentStatus?: string;
+  weekSlot?: string;
+  startTime?: string;
+  durationMinutes?: number;
+};
+
+function ConflictTeamLine({ team }: { team: ConflictTeam }) {
+  return (
+    <span>
+      {team.label ?? team.id}
+      {team.assignedRasterzahl ? `, RZ ${team.assignedRasterzahl}` : ""}
+      {team.requestedRasterzahl?.length
+        ? `, wished RZ ${team.requestedRasterzahl.join("/")}`
+        : ", no RZ wish"}
+      {team.assignmentStatus ? `, ${team.assignmentStatus.toLowerCase()}` : ""}
+      {team.weekSlot ? `, W${team.weekSlot}` : ", no week wish"}
+      {team.startTime ? `, ${team.startTime}` : ", time unknown"}
+      {team.durationMinutes ? ` (${team.durationMinutes} min)` : ""}
+      {team.league || team.group
+        ? `, ${[team.league, team.group].filter(Boolean).join(" / ")}`
+        : ""}
+    </span>
+  );
+}
+
+function parseConflictTeams(value: string): ConflictTeam[] {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (Array.isArray(parsed)) {
+      return parsed.map((team) => {
+        if (team && typeof team === "object") {
+          const row = team as Record<string, unknown>;
+          return {
+            id: String(row.id ?? row.label ?? ""),
+            league: row.league ? String(row.league) : undefined,
+            group: row.group ? String(row.group) : undefined,
+            label: row.label ? String(row.label) : undefined,
+            assignedRasterzahl:
+              typeof row.assignedRasterzahl === "number"
+                ? row.assignedRasterzahl
+                : undefined,
+            requestedRasterzahl: Array.isArray(row.requestedRasterzahl)
+              ? row.requestedRasterzahl
+                  .map((value) => Number(value))
+                  .filter(Number.isInteger)
+              : undefined,
+            assignmentStatus: row.assignmentStatus
+              ? String(row.assignmentStatus)
+              : undefined,
+            weekSlot: row.weekSlot ? String(row.weekSlot) : undefined,
+            startTime: row.startTime ? String(row.startTime) : undefined,
+            durationMinutes:
+              typeof row.durationMinutes === "number"
+                ? row.durationMinutes
+                : undefined,
+          };
+        }
+        return { id: String(team) };
+      });
+    }
+  } catch {
+    // Stored imports may contain plain text.
+  }
+  return value
+    .split(/\r?\n|,\s*/)
+    .map((team) => team.trim())
+    .filter(Boolean)
+    .map((id) => ({ id }));
 }
 
 function Metric({ label, value }: { label: string; value: string | number }) {

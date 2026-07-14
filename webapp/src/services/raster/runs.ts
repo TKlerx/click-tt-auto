@@ -1,9 +1,10 @@
 import { prisma } from "@/lib/db";
 import type { RunSettingsInput } from "@/lib/raster/schemas";
+import { syncInputSetSourceCaches } from "./inputSets";
 
 export async function listOptimizationRuns(inputSetId: string) {
   return prisma.rasterOptimizationRun.findMany({
-    where: { inputSetId },
+    where: { inputSetId, archivedAt: null },
     orderBy: { createdAt: "desc" },
   });
 }
@@ -43,11 +44,26 @@ export async function cancelOptimizationRun(id: string) {
   });
 }
 
+export async function archiveOptimizationRun(id: string) {
+  const archivedAt = new Date();
+  return prisma.$transaction(async (tx) => {
+    await tx.rasterSnapshot.updateMany({
+      where: { runId: id },
+      data: { archivedAt },
+    });
+    return tx.rasterOptimizationRun.update({
+      where: { id },
+      data: { archivedAt },
+    });
+  });
+}
+
 export async function startOptimizationRun(params: {
   inputSetId: string;
   startedById: string;
   settings: RunSettingsInput;
 }) {
+  await syncInputSetSourceCaches(params.inputSetId);
   return prisma.$transaction(async (tx) => {
     const run = await tx.rasterOptimizationRun.create({
       data: {

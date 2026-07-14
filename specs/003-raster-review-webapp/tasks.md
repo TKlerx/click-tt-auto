@@ -202,6 +202,7 @@
 - [ ] T080 [US1] Add fuzzy club/team matching in input-set cache sync, using exact normalized matches automatically and marking uncertain matches for review.
 - [ ] T081 [US1] Add parsed source identity review UI so admins can accept a suggestion, pick another club/team, or create a new identity before validation/run.
 - [ ] T082 [US1] Reuse confirmed aliases on future uploads and add tests for abbreviation/suffix cases such as `SC GW Paderborn` vs `SC Grün-Weiß Paderborn`.
+- [ ] T083 [US1] Add a focused club-alias review table: parsed PDF club identity → canonical click-TT club identity, match confidence/source, admin override, and persisted alias reuse so capacity inference cannot create duplicate club rows after future imports.
 
 ---
 

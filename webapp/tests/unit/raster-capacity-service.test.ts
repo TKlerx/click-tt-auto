@@ -51,7 +51,7 @@ describe("raster capacity service", () => {
 
     await expect(
       inferHallCapacitiesFromInputSet("input-1", "admin-1"),
-    ).resolves.toEqual({ count: 0, needsReview: 0 });
+    ).resolves.toEqual({ count: 0, needsReview: 0, pruned: 0 });
 
     expect(prismaMock.rasterHallCapacity.create).not.toHaveBeenCalled();
   });
@@ -68,6 +68,12 @@ describe("raster capacity service", () => {
             homeWeekday: "friday",
             spielwochePref: "A",
           },
+          {
+            clubId: "club-b",
+            hall: "1",
+            homeWeekday: "saturday",
+            spielwochePref: "A",
+          },
         ],
       }),
     } as never);
@@ -80,12 +86,18 @@ describe("raster capacity service", () => {
         capacity: 2,
         basis: HallCapacityBasis.REVIEWED,
       },
+      {
+        district: "OWL",
+        clubId: "club-b",
+        hall: "1",
+        weekday: "SATURDAY",
+        capacity: 1,
+        basis: HallCapacityBasis.REVIEWED,
+      },
     ] as never);
 
-    await expect(
-      reviewHallCapacitiesForInputSet("input-1"),
-    ).resolves.toEqual({
-      inferredCount: 1,
+    await expect(reviewHallCapacitiesForInputSet("input-1")).resolves.toEqual({
+      inferredCount: 2,
       missingCount: 0,
       insufficientCount: 0,
       higherCount: 1,
@@ -101,6 +113,17 @@ describe("raster capacity service", () => {
           storedCapacity: 2,
           basis: HallCapacityBasis.REVIEWED,
           status: "higher",
+        },
+        {
+          id: undefined,
+          district: "OWL",
+          clubId: "club-b",
+          hall: "1",
+          weekday: "SATURDAY",
+          capacity: 1,
+          storedCapacity: 1,
+          basis: HallCapacityBasis.REVIEWED,
+          status: "ok",
         },
       ],
     });
@@ -141,9 +164,7 @@ describe("raster capacity service", () => {
       },
     ] as never);
 
-    await expect(
-      reviewHallCapacitiesForInputSet("input-1"),
-    ).resolves.toEqual({
+    await expect(reviewHallCapacitiesForInputSet("input-1")).resolves.toEqual({
       inferredCount: 1,
       missingCount: 0,
       insufficientCount: 1,

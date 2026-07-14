@@ -36,6 +36,10 @@ BOUNCE_SUBJECT_PATTERN = re.compile(
 BOUNCE_SENDER_PATTERN = re.compile(r"(mailer-daemon|postmaster)", re.IGNORECASE)
 
 
+class RasterSolverInfeasible(ValueError):
+    """Raised when the optimizer proves that no assignment satisfies hard constraints."""
+
+
 def process_job(job: BackgroundJob) -> dict[str, object]:
     if job.job_type == "noop":
         return {
@@ -97,7 +101,9 @@ def process_raster_run(store: JobStore, job: BackgroundJob) -> dict[str, object]
             "processedAt": datetime.now(timezone.utc).isoformat(),
         }
     model = _model_with_capacity_overrides(
-        _parse_json_object(context["seasonModelJson"], "seasonModelJson"),
+        _exclude_unplanned_groups(
+            _parse_json_object(context["seasonModelJson"], "seasonModelJson")
+        ),
         store.list_raster_hall_capacities(str(context["district"])),
     )
     settings = _parse_json_object(context.get("settings") or "{}", "settings")
@@ -130,6 +136,36 @@ def _parse_json_object(value: object, name: str) -> dict[str, object]:
     if not isinstance(parsed, dict):
         raise ValueError(f"{name} must be a JSON object")
     return parsed
+
+
+def _exclude_unplanned_groups(model: dict[str, object]) -> dict[str, object]:
+    groups = model.get("groups")
+    teams = model.get("teams")
+    if not isinstance(groups, list) or not isinstance(teams, list):
+        return model
+    kept_groups = [
+        group
+        for group in groups
+        if not (
+            isinstance(group, dict)
+            and str(group.get("planningStatus") or "") == "exclude"
+        )
+    ]
+    kept_team_ids = {
+        str(team_id)
+        for group in kept_groups
+        if isinstance(group, dict)
+        for team_id in group.get("teamIds", [])
+    }
+    return {
+        **model,
+        "groups": kept_groups,
+        "teams": [
+            team
+            for team in teams
+            if isinstance(team, dict) and str(team.get("id") or "") in kept_team_ids
+        ],
+    }
 
 
 def _model_with_capacity_overrides(
@@ -211,12 +247,35 @@ def _solve_raster_model(model: dict[str, object], settings: dict[str, object]) -
             timeout=max(time_limit + 30, 60),
         )
         if completed.returncode != 0:
-            raise ValueError((completed.stderr or completed.stdout or "CP-SAT failed").strip())
+            metadata = _read_json_file(metadata_path)
+            status = str(metadata.get("status") or "").upper() if metadata else ""
+            message = (completed.stderr or completed.stdout or "CP-SAT failed").strip()
+            if status == "INFEASIBLE":
+                raise RasterSolverInfeasible(_infeasible_message())
+            raise ValueError(message)
         assignment = json.loads(out_path.read_text(encoding="utf-8"))
         metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     if not isinstance(assignment, dict) or not isinstance(metadata, dict):
         raise ValueError("Raster solver returned invalid JSON")
     return {"assignment": assignment, "metadata": metadata}
+
+
+def _read_json_file(path: Path) -> dict[str, Any] | None:
+    try:
+        parsed = json.loads(path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def _infeasible_message() -> str:
+    return (
+        "No feasible assignment exists with the current hard constraints. "
+        "The remaining hard constraints are fixed schedule numbers, valid schedule tables "
+        "for each group size, unused slot selection, and the same-club derby rule after "
+        "matchday 4. Hall-capacity excess is a penalty now, so capacity alone should not "
+        "make a run infeasible."
+    )
 
 
 def _raster_solver_command(
@@ -755,9 +814,13 @@ def _process_claimed_job(store: JobStore, config: WorkerConfig, job: BackgroundJ
                 will_retry=job.attempt_count < config.max_attempts,
             )
         raster_run_id = str(job.payload.get("runId") or "").strip()
+        is_infeasible = isinstance(error, RasterSolverInfeasible)
         if job.job_type == RASTER_RUN_JOB_TYPE and raster_run_id:
-            store.mark_raster_run_failed(raster_run_id, str(error))
-        store.fail_job(job.id, str(error))
+            if is_infeasible:
+                store.mark_raster_run_infeasible(raster_run_id, str(error))
+            else:
+                store.mark_raster_run_failed(raster_run_id, str(error))
+        store.fail_job(job.id, str(error), retry=not is_infeasible)
         _log_job_failed(job, error)
 
 
