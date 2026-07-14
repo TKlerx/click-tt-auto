@@ -1,11 +1,13 @@
 # click-tt-automation Development Guidelines
 
-Auto-generated from all feature plans. Last updated: 2026-07-12
+Auto-generated from all feature plans. Last updated: 2026-07-14
 
 ## Active Technologies
 
 - TypeScript 5.9 strict for webapp/root raster code; Python 3.12 for the existing CP-SAT subprocess + Existing Next.js 16, React 19, Prisma 7, better-auth, next-intl, zod, Tailwind/shadcn; existing root `src/raster/*`; existing Python OR-Tools CP-SAT script (004-compare-raster-runs)
 - Existing Prisma SQLite dev / PostgreSQL prod schema, extended with scenario/manual-assignment fields as needed (004-compare-raster-runs)
+- TypeScript 5.9 (strict), Node.js LTS 22.x + Next.js 16 (App Router), React 19, Prisma 7, better-auth, next-intl, zod, Tailwind 4 / shadcn — all already present in `webapp/`; this feature adds none (005-raster-guided-navigation)
+- PostgreSQL via `webapp/prisma/schema.postgres.prisma` (single schema; no dev SQLite schema in this repo) (005-raster-guided-navigation)
 
 - TypeScript 5.x, Node.js LTS (22.x) + Playwright (browser automation), dotenv (credentials), minimist (CLI args) (main)
 
@@ -25,7 +27,7 @@ npm test; npm run lint
 TypeScript 5.x, Node.js LTS (22.x): Follow standard conventions
 
 ## Recent Changes
-
+- 005-raster-guided-navigation: Added TypeScript 5.9 (strict), Node.js LTS 22.x + Next.js 16 (App Router), React 19, Prisma 7, better-auth, next-intl, zod, Tailwind 4 / shadcn — all already present in `webapp/`; this feature adds none
 - 004-compare-raster-runs: Added TypeScript 5.9 strict for webapp/root raster code; Python 3.12 for the existing CP-SAT subprocess + Existing Next.js 16, React 19, Prisma 7, better-auth, next-intl, zod, Tailwind/shadcn; existing root `src/raster/*`; existing Python OR-Tools CP-SAT script
 
 - main: Added TypeScript 5.x, Node.js LTS (22.x) + Playwright (browser automation), dotenv (credentials), minimist (CLI args)
