@@ -2,6 +2,7 @@
 
 **Purpose**: Validate specification completeness and quality before proceeding to planning  
 **Created**: 2026-07-14  
+**Updated**: 2026-07-14 (clarify session — feature reshaped from a gated all-WTTV run to a subset run with persisted incompleteness)  
 **Feature**: [spec.md](../spec.md)
 
 ## Content Quality
@@ -29,13 +30,45 @@
 - [x] Feature meets measurable outcomes defined in Success Criteria
 - [x] No implementation details leak into specification
 
-**Status: User Story 1 is ready for `/speckit.plan`. User Story 2 should not be planned until Q1 is answered.**
+**Status: ready for `/speckit.plan`.** Q2 and Q4 are planning decisions, not specification gaps. Q1 is no longer a blocker.
 
 ## Notes
 
-- **Q1 is the whole risk of this feature.** Whether the existing CP-SAT optimizer can solve the Verband plus 13 Bezirke in acceptable time is unestablished, and FR-013 makes the problem harder rather than merely bigger: unfixing the upper-league Rasterzahlen adds decision freedom. Recommend a feasibility spike against real or realistic data before planning User Story 2. If it fails, this spec's shape changes — decomposition or a different objective — while User Story 1 survives untouched.
-- **The priority order front-loads the safe value.** User Story 1 (readiness overview) has no solver risk, is useful every season regardless of whether combined running ever ships, and answers the question that gates everything else. It is deliberately P1 even though it is not the point of the feature.
-- **FR-013 is the feature's actual value, and it is easy to miss.** Combined planning is not "one big run" — it removes a sequencing dependency. Today a Bezirk inherits the Verband's already-decided upper-league Rasterzahlen as hard constraints, so Bezirk plans are downstream of a decision made without knowledge of their cost. `specs/003-raster-review-webapp/spec.md` records both halves of this: the optimizer runs "respecting the fixed upper-league Rasterzahlen ... as constraints", and "a full WTTV or district run may proceed with zero fixed numbers".
-- **This feature was deferred once already, deliberately.** `specs/003-raster-review-webapp/spec.md` scoped the first release to district scale and named county-wide scale (~1,400 clubs/teams) as a later step the data model should not preclude. This spec is that later step; it is not new scope creep.
-- **One data-model change**: FR-011, an input set spanning several scopes. Feature 005's FR-026 exists to keep it buildable — if 005's scope reference is designed as a single hard foreign key with no room for a spanning variant, this feature pays for it.
-- **The gate is organizational, not technical** (FR-002 across all 13 Bezirke). No code change makes the combined selection available; it becomes available when the Bezirke finish their data entry. User Story 1 is the lever that helps, and that is another reason it is P1.
+### The clarify session inverted this feature
+
+The original spec was built on the opening framing: combined planning "only works if all inputs are already filled for all clubs/teams for the whole wttv". Everything followed from that — an all-or-nothing scope selection, a hard completeness gate, an organisational blocker, and a P1 readiness overview whose job was to gatekeep.
+
+That framing did not survive contact with how the tool is used. Groups are excluded not only to wait for wishes but **to exercise the optimizer with deliberately incomplete constraints and see what it does**. The same intent applies to combined runs: two Bezirke with gaps, run today, is the near-term value.
+
+So completeness became a **recorded property of the run** rather than a precondition for it. Consequences:
+
+- **The organisational blocker is gone.** It was the strongest of the three arguments for splitting 006 out of 005 and deferring it. The split still holds on the other two — a scope-spanning data model, and unproven solver behaviour — but "unusable until 13 Bezirke finish" no longer applies. This feature is buildable now.
+- **Q1 stopped being a risk and became a measurement.** It previously demanded a spike before the combined run could be planned at all. With subset runs, the solver's practical limit is discovered by adding Bezirke until runs stop completing acceptably (SC-008). If the full ~1,400-team problem proves intractable, the feature still delivers everything short of it.
+- **Priorities inverted.** The readiness overview fell P1 → P3: it was the gatekeeper, now it is a planning aid. The combined run rose P2 → P1.
+
+### The coverage record is doing the safety work
+
+Allowing incomplete runs is only safe because they are *known* to be incomplete — which is why User Story 2 is also P1 and ships alongside User Story 1. A subset run with gaps that looks like a finished plan is worse than having no subset runs at all.
+
+Two properties are easy to lose and worth defending in review:
+
+- **FR-038: written at start, never revised.** Recomputing the record later would make an old snapshot retroactively flattering — filling the gaps would silently rewrite history to claim the run saw them. It did not.
+- **FR-035: it applies to single-scope runs too.** A Bezirk run with excluded groups is incomplete by the same rule. Scoping the marker to combined runs only would leave 005's partial runs unmarked, which is the exact hazard this mechanism exists to close.
+
+### This settles feature 005's Q4
+
+005 asked whether a partial run's snapshot should be marked as partial, and declined it — arguing (research R-008) that it was "the same hazard feature 006 must solve for combined snapshots, and solving it once, coherently, across both beats bolting a flag onto this feature".
+
+FR-030 to FR-038 are that solution, and FR-035 explicitly covers 005's case. **005's research.md R-008 should be updated to point here** once this lands: it currently records the question as declined with residual risk, which stops being true.
+
+### Live risks
+
+- **FR-034's negative case is the fragile one.** A run spanning every scope with no gaps is the only run *not* marked incomplete. It is also the rarest, so the logic deciding "nothing was missing" is the least-exercised path and the most consequential to get wrong — a falsely-complete marking is worse than no marking at all.
+- **FR-012 removes a refusal.** The system will now start runs it previously would have blocked. FR-012a (show what is missing before starting) is what keeps that a choice rather than an accident.
+- **Q4 (retrofitting the record onto existing runs)** contradicts FR-038 if answered naively — you cannot honestly record what an old run saw. No production data exists, so the cheap answer is to verify none survives rather than to invent records for it.
+
+### Deferred deliberately
+
+- **Q2** — wall-clock limit for a combined run. Depends on Q1's evidence.
+- **Q3** — which snapshot wins when combined and single-scope disagree. Operational convention; the coverage record at least makes the incomplete one identifiable, which is the part that would hurt.
+- **The WTTV-wide scheduler** (007's FR-014). Not needed here: FR-015 only requires that a user cannot include scopes they cannot access, so a Bezirk admin can combine the Bezirke they already hold.
