@@ -12,6 +12,8 @@ Auto-generated from all feature plans. Last updated: 2026-07-15
 - TypeScript 5.9 (strict), Node.js LTS 22.x + Next.js 16 (App Router), React 19, Prisma 7, better-auth, next-intl, zod, Tailwind 4 / shadcn — all already present in `webapp/`; this feature adds none (005-raster-guided-navigation)
 - PostgreSQL via `webapp/prisma/schema.postgres.prisma` (single schema; no dev SQLite schema in this repo) (005-raster-guided-navigation)
 - TypeScript 5.9 (strict), Node.js LTS 22.x; Python 3.12 for the existing CP-SAT solver, invoked as a subprocess + Next.js 16 (App Router), React 19, Prisma 7, better-auth, next-intl, zod, Tailwind 4 / shadcn — all present; this feature adds none (006-combined-wttv-planning)
+- TypeScript 5.9 (strict), Node.js LTS 22.x + Next.js 16 (App Router), React 19, Prisma 7, better-auth, next-intl, zod — all present; this feature adds none (007-scope-access-management)
+- PostgreSQL via `webapp/prisma/schema.postgres.prisma`. **No schema change** — `UserScopeAssignment` already exists with `@@unique([userId, scopeId])` (007-scope-access-management)
 
 - TypeScript 5.x, Node.js LTS (22.x) + Playwright (browser automation), dotenv (credentials), minimist (CLI args) (main)
 
@@ -34,6 +36,7 @@ TypeScript 5.x, Node.js LTS (22.x): Follow standard conventions
 - 009-nuliga-team-roster-import: Added TypeScript 5.9 (strict), Node.js LTS 22.x — both halves + CLI — Playwright, dotenv, minimist (all present). Webapp — Next.js 16, Prisma 7, zod (all present). **One new dependency is likely**: a zip reader for the webapp's bundle path (FR-019a), justified below.
 - 008-wish-import-conflicts: Added TypeScript 5.9 (strict), Node.js LTS 22.x + Next.js 16, React 19, Prisma 7, zod — all present; this feature adds none
 - 006-combined-wttv-planning: Added TypeScript 5.9 (strict), Node.js LTS 22.x; Python 3.12 for the existing CP-SAT solver, invoked as a subprocess + Next.js 16 (App Router), React 19, Prisma 7, better-auth, next-intl, zod, Tailwind 4 / shadcn — all present; this feature adds none
+- 007-scope-access-management: Added TypeScript 5.9 (strict), Node.js LTS 22.x + Next.js 16 (App Router), React 19, Prisma 7, better-auth, next-intl, zod — all present; this feature adds none
 - 005-raster-guided-navigation: Added TypeScript 5.9 (strict), Node.js LTS 22.x + Next.js 16 (App Router), React 19, Prisma 7, better-auth, next-intl, zod, Tailwind 4 / shadcn — all already present in `webapp/`; this feature adds none
 - 004-compare-raster-runs: Added TypeScript 5.9 strict for webapp/root raster code; Python 3.12 for the existing CP-SAT subprocess + Existing Next.js 16, React 19, Prisma 7, better-auth, next-intl, zod, Tailwind/shadcn; existing root `src/raster/*`; existing Python OR-Tools CP-SAT script
 

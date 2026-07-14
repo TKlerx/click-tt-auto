@@ -55,8 +55,14 @@ Roles, `UserScopeAssignment`, platform admins seeing everything, and scoped filt
 ### Live risks
 
 - **FR-017 is the risky one.** Replacing seven page-level platform-admin checks with level-based checks widens who can act. Each needs its own API-side enforcement (FR-019); the page gate is not a security boundary. Getting one wrong grants a scope user the ability to start runs.
-- **FR-025 opens user management to a new role.** The page is gated once, in the page component. Widening it means every action needs its own authorisation.
-- **FR-021 to FR-024 are the escalation surface.** A scope admin must not grant beyond their own scopes or raise a role above their own, enforced at the API regardless of what the UI offers.
+- **FR-025 opens user management to a new role.** The page is gated once, in the page component, and then loads *every* user. Widening it means every action needs its own authorisation — and the **order** of tasks T018–T022 is the safety property, not a preference: widening the gate before the per-action checks exist, even for one commit, hands the directory to every Bezirk admin.
+- **FR-021 to FR-024 are the escalation surface.** A scope admin must not grant beyond their own scopes or raise a role above their own, enforced at the API regardless of what the UI offers. **FR-023 (no self-modification) is what makes FR-021 durable** — without it, a scope admin grants themselves a scope and FR-021 then passes for it. FR-021 constrains an instant; FR-023 constrains the sequence.
+- **FR-012a is already implemented** (found at planning, 2026-07-15). `ensureAdminUserCanChange` in `services/api/user-admin.ts` already refuses to change or deactivate the last admin, inside a `Serializable` transaction with retry. The clarify session asked whether to prevent lockout; the answer was already in the code. T013 tests it rather than building it — nothing currently pins the behaviour, which is the real gap.
+
+### What `/speckit.analyze` caught (2026-07-15)
+
+- **The 005 dependency was described as cosmetic. It is structural.** plan.md claimed this "could be built against 004 with the labels renamed", while T004 reuses 005's `lib/raster/scope-level.ts` and T015 replaces the hardcoded checks *in the step pages 005 creates*. Corrected in both. A wrong dependency claim is worse than no claim — it invites someone to start on a base missing the prerequisites.
+- **FR-014 has no task, deliberately.** Like 005's FR-026, it is a constraint on a design rather than a deliverable: exact match must not foreclose a WTTV-wide scheduler. Nothing is built for it; it constrains what T003 and T007 may do. Treated the same way 005 treats FR-026.
 
 ### Deferred deliberately
 
