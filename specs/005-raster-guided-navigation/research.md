@@ -43,6 +43,10 @@ FR-026 requires not foreclosing a spanning input set. A single `scopeId` FK does
 
 `RasterHallCapacity.district` is included because it is the same scope-shaped string with the same defect, and leaving it as text while the input set moves to an FK would guarantee they drift. Its unique constraint becomes `(scopeId, clubId, hall, weekday)`.
 
+**`RasterSnapshot.district` is included for exactly the same reason** (added 2026-07-15, found while planning feature 006). The schema carries the string in **three** places — `RasterInputSet`, `RasterHallCapacity`, and `RasterSnapshot` — and this research originally caught only the first two. The argument above applies verbatim to the third: rekeying two of three guarantees drift between them, and leaves the schema still carrying a scope-shaped string after a feature whose whole point was removing them. The cleanup task (T047) would not have caught it either, since it inspects `webapp/src/` rather than the schema. Its index becomes `@@index([scopeId, createdAt])`.
+
+Feature 006 needs a snapshot to span several scopes, but that is additive there and does not change this decision: one owning `scopeId` here, a spanned set later — the same shape as the input set.
+
 **Alternatives considered**:
 - *Keep the string, validate on write*: cheaper, but preserves the code-or-name ambiguity and the ability to store a value matching no scope.
 - *Rekey the input set only, leave capacities as strings*: smaller diff, but capacities are looked up per district on every capacity review; two keying schemes for the same concept is how the current inconsistency arose in the first place.
@@ -124,6 +128,10 @@ It does not belong here, for two reasons. First, the spec's Out of Scope forbids
 
 **Residual risk, stated plainly**: a scheduler opening a partial run's snapshot from run comparison has nothing telling them it is partial. Acceptable for now because runs are the scope's own work and the person who excluded the groups is the person reading the result, days apart at most. It stops being acceptable once snapshots are shared or long-lived, or once combined runs exist alongside single-scope ones.
 
+**Update 2026-07-15 — the residual risk is closed by feature 006.** This section predicted the marking would be feature 006's to specify. It now is: `specs/006-combined-wttv-planning/` FR-030 to FR-038 define a coverage record — what a run spanned and what it lacked, written at run start and never revised — and **FR-035 applies it to single-scope runs explicitly**, so a Bezirk run with excluded groups is marked incomplete by the same rule. That is precisely this question.
+
+Nothing about this feature changes as a result: 005 still does not build the marking, and its task list is unaffected. The decision to decline stands; what changes is that the residual risk has an owner and a specification rather than being merely acknowledged. It is closed when 006 lands, not before.
+
 **Alternatives considered**:
 - *Mark the snapshot now*: directly contradicts the spec's Out of Scope, and would design the marking without knowing what feature 006 needs it to express.
 - *Leave it silently deferred*: what the plan originally did. The question then belongs to no artifact and resurfaces as a bug report.
@@ -141,6 +149,6 @@ It does not belong here, for two reasons. First, the spec's Out of Scope forbids
 | R-005 | Bezirk/Verband | Derived from hierarchy position; proper names via next-intl |
 | R-006 | Discarding data | Drop and recreate, but verify irreplaceable data is absent first |
 | R-007 | Readiness | One shared module; carries exclusion alongside state |
-| R-008 | Marking partial snapshots (spec Q4) | Not here. Belongs with feature 006's combined-snapshot marking; residual risk stated |
+| R-008 | Marking partial snapshots (spec Q4) | Not here. Feature 006 now specifies it (its FR-030–FR-038, FR-035 covering single-scope runs) |
 
 **No NEEDS CLARIFICATION remain.** Spec Q4 is answered by R-008 — declined with reasons, not deferred again.

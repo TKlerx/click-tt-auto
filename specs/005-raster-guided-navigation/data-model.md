@@ -48,6 +48,23 @@ Included because it carries the *same* scope-shaped string with the same defect.
 
 ---
 
+## Changed: RasterSnapshot
+
+The **third** carrier of the scope-shaped string, and the one this plan originally missed (found 2026-07-15 while planning feature 006). The schema holds `district: String` in three places; rekeying two of them leaves the third to drift, and leaves a released schema still carrying the defect this feature exists to remove.
+
+| Field | Change | Notes |
+|---|---|---|
+| `district: String` | **removed** | |
+| `scopeId: String` | **added** | FK to `Scope`. Required. The snapshot's owning scope |
+| `scope: Scope` | **added** | Relation |
+| `origin`, `optimality`, `stale`, conflict counts, `objectiveBreakdown`, `runId`, relations | unchanged | |
+
+**Indexes**: `@@index([scopeId, createdAt])` replaces `@@index([district, createdAt])`.
+
+Feature 006 adds a spanned-scope set for combined snapshots. That is additive and changes nothing here — one owning `scopeId` now, a set later, the same shape as the input set (research R-003, and 006's R-104).
+
+---
+
 ## New: RasterMatchReview
 
 Records that a specific record's source-to-model match was reviewed, and against what content, so a later source change can mark exactly the changed records outstanding while the rest stay settled (FR-009, FR-010, FR-010a).
@@ -102,7 +119,7 @@ These are read by this feature and must not be altered.
 | `RasterHallCapacity.basis` | `REVIEWED \| INFERRED \| MISSING`. There is **no** reviewed flag beyond this; capacity review is recomputed per render by comparing stored against inferred |
 | `RasterInputSet.status` | `READY` already gates run start. FR-014 keeps this |
 | `RasterSource.scopeId` | Already a proper FK. The model this feature copies |
-| `RasterOptimizationRun`, `RasterSnapshot` | Untouched. Spec Out of Scope forbids changing snapshot contents; Q4 (marking partial-run snapshots) is deferred |
+| `RasterOptimizationRun` | Untouched. Feature 006 adds the coverage record to it |
 
 ---
 

@@ -47,7 +47,9 @@
 
 - **FR-024 rests entirely on "no production data".** If a real deployment exists by build time, revisit it: gym capacities marked `REVIEWED` and review decisions with notes carry human work that no reimport restores. Everything else (sources, wishes, groups, runs, snapshots) is reimportable.
 - **FR-010 needs real change detection.** "Only records whose parsed data actually changed" means comparing a re-parse against what was reviewed, not just noticing that a source was touched. FR-010a (an identical re-parse changes nothing) is the test that keeps this honest.
-- **FR-026 remains a constraint on FR-020's design.** Feature 006 needs a scope-spanning input set; the scope reference chosen here must leave that buildable.
+- **FR-026 remains a constraint on FR-020's design.** Feature 006 needs a scope-spanning input set; the scope reference chosen here must leave that buildable. **Update 2026-07-15: it did.** 006's research R-101 confirms the join-table approach works against this design with nothing undone — the owning `scopeId` stays, and the unique constraint on `(scopeId, season, name)` rather than `(scopeId, season)` is what leaves room for a spanning row.
+- **FR-020 touches three models, not two.** `RasterInputSet`, `RasterHallCapacity`, **and `RasterSnapshot`** (T004a). The third was missed until feature 006's planning found it on 2026-07-15. Rekeying two of three would have released a schema still carrying a scope-shaped string — precisely the drift research R-003 invoked to justify including capacities in the first place. T047 now names the schema explicitly, because checking only `webapp/src/` is why it slipped.
+- **Q4 now has an owner** (2026-07-15). Feature 006's FR-030–FR-038 specify the coverage record, and its FR-035 applies it to single-scope runs — so a Bezirk run with excluded groups gets marked incomplete. R-008's decision to decline here still stands and this feature's tasks are unchanged; the residual risk simply stops being unowned. It closes when 006 lands.
 
 ### Cross-spec check — 006 is correct as written (earlier claim retracted)
 
