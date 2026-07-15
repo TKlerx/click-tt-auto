@@ -2,7 +2,6 @@ import {
   isComparableScenario,
   type RasterScenario,
 } from "@/lib/raster/scenarios";
-import { getScenariosByIds } from "@/services/raster/scenarios";
 
 export type ScenarioComparison = {
   scenarios: RasterScenario[];
@@ -19,14 +18,10 @@ const kpiKeys = [
   "sameClubDerbyIssues",
 ] as const;
 
-export async function compareScenarioIds(
-  scenarioIds: string[],
-  baselineScenarioId?: string | null,
-) {
-  const scenarios = await getScenariosByIds([...new Set(scenarioIds)]);
-  return compareScenarios(scenarios, baselineScenarioId);
-}
-
+// compareScenarioIds used to live here: it fetched scenarios by id and compared
+// them in one call, which left callers no point at which to authorize the
+// districts it had just loaded. Its only caller did the access check afterwards,
+// on the first scenario alone. Fetch and authorize in the route, then call this.
 export function compareScenarios(
   scenarios: RasterScenario[],
   baselineScenarioId?: string | null,
