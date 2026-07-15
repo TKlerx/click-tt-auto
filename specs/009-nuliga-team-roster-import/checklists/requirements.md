@@ -29,7 +29,19 @@
 - [x] Feature meets measurable outcomes defined in Success Criteria
 - [x] No implementation details leak into specification
 
-**Status: ready for `/speckit.clarify` or `/speckit.plan`.** Q1 should be answered before planning; Q2 and Q3 can be settled at planning.
+**Updated**: 2026-07-15 (clarify session — Q1 resolved; CLI collection and bundle upload added)
+
+**Status: ready for `/speckit.plan`.** Q2 and Q3 remain, and both can be settled at planning.
+
+### What the clarify session settled, and a correction
+
+**Q1 resolved: the CLI downloads the export.** I had recommended leaving it manual, reasoning the roster changes "about once a season". That was wrong twice over — the roster changes whenever a team registers or withdraws, and the export takes about five seconds, so the wait is no obstacle. I had reached for the option that avoided the constitution question rather than the one that answers it.
+
+**The constitution worry was largely moot, and checking the code showed it.** `scrapeSeasonModel` (`src/raster/ingest/scrape.ts:91`) already launches Chromium with `acceptDownloads: true`, signs in with credentials from `.env`, and downloads wish PDFs into `reports/raster/clicktt-downloads`. Credentialed click-TT automation is capability 1 and already exists. Adding the nuLiga Downloads navigation is one more step on a working session — not a new credential surface, and the webapp stays read-only toward click-TT exactly as Principle II requires (FR-018).
+
+**Bundle upload (FR-019a-d).** With the CSV landing beside the wish PDFs, a scope's inputs are one directory, so the CLI emits one bundle and the webapp takes one upload. The load-bearing part is FR-019b: an incomplete bundle must say what is missing. Importing what is present and reporting success is how a scope ends up half-loaded with nobody aware — the same class of silent-success failure as the character-set hazard below.
+
+**One assumption worth testing early**: FR-014 assumes the credentials the CLI already uses reach nuLiga admin. click-TT runs on nuLiga (`nuLigaTTDE.woa` in the scraped URLs), so one login plausibly reaches both — but if the admin area needs a separate account, FR-014 needs revisiting.
 
 ## Notes
 
@@ -71,8 +83,8 @@ Umlauts are common in German club names, so this is the normal case. FR-012 ther
 
 ### Live risks
 
-- **Q1 is a constitution question, not a convenience one.** Automating the download needs an authenticated nuLiga admin session. The existing scraper reads *public* pages; capability 1 (CLI) is where credentialed automation lives, and Principle II keeps the webapp read-only toward click-TT. A webapp holding click-TT admin credentials would be the largest change here and the one most in tension with the constitution. This spec assumes manual export and leaves the question open.
-- **The export is generated asynchronously** — Exportieren, then wait for a link. Any automation must handle a wait of unknown length, not a direct download.
+- **FR-014 assumes one login reaches both click-TT and nuLiga admin.** Plausible — click-TT runs on nuLiga (`nuLigaTTDE.woa`) — but unverified. If the admin area needs a separate account, this needs revisiting. Worth checking before planning the CLI half.
+- **The export is generated asynchronously** — Exportieren, then wait for a link, roughly 5 seconds. Short, but it is a wait, not a fetch: FR-015 requires waiting for the link and saving nothing partial if it never comes.
 - **FR-032 keeps this additive.** Scopes with no imported roster behave exactly as before. That is what lets 008 ship without this feature, at the cost of a noisier review.
 
 ### Relationship to other features

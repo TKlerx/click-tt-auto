@@ -7,6 +7,13 @@
 
 **Raised from**: feature `008-wish-import-conflicts` clarification, 2026-07-15. 008 anchors conflict detection on canonical team identity, which nothing currently provides.
 
+## Clarifications
+
+### Session 2026-07-15
+
+- Q: Should the nuLiga admin export download be automated, and where? → A: **In the CLI**, via Playwright, alongside the wish PDFs it already downloads. `scrapeSeasonModel` (`src/raster/ingest/scrape.ts:91`) already launches Chromium with `acceptDownloads: true`, signs in with credentials from `.env`, and collects wish PDFs into `reports/raster/clicktt-downloads`. Adding the nuLiga Downloads navigation is an increment on that, not a new credential surface — the webapp stays read-only toward click-TT, and credentialed automation stays in capability 1 where the constitution puts it. With both the wish PDFs and the CSV in one directory, the last step is bundling them.
+- Q: Should the webapp accept a zip of CSV + wish PDFs as one upload? → A: Yes, in this feature. The CLI produces a bundle; the webapp accepts it as a single upload. Where a bundle is incomplete — no CSV, or no wish PDFs — the system says so plainly rather than importing what it has and staying quiet about the rest.
+
 ## Context: click-TT knows the club number; nothing takes it
 
 The click-TT scraper (`src/raster/ingest/clicktt-assignments.ts`) reads a team's **name** out of a table cell, along with its league, group and Rasterzahl. It captures no club number. Everything downstream inherits that: `splitTeamName` (`src/raster/ingest/model.ts:53`) has to regex a display string to decide whether a team is `Jugend`, `Damen` or `Erwachsene`, and the parsed-identity backlog (`specs/003-raster-review-webapp/tasks.md` Phase 12, T079-T082) exists solely because two spellings of one club cannot otherwise be recognised as the same club.
@@ -33,13 +40,20 @@ By hand, today:
 3. Download → **"Tabellen (aktuelle Tabellen - Filter Meisterschaft)"**
 4. Meisterschaft → the Bezirk and season (e.g. "Bezirk Ostwestfalen/Lippe 2026/27")
 5. Zeichensatz → character set, **defaulting to ISO-8859-15**
-6. **Exportieren**, then wait for a download link to appear
+6. **Exportieren**, then wait for a download link to appear — roughly 5 seconds
 
-Three things follow:
+Four things follow:
 
 - **The export is per Meisterschaft** — one Bezirk and season at a time, matching how input sets are scoped.
-- **It is generated asynchronously.** The link appears after a wait; it is not a direct download.
+- **It is generated asynchronously.** The link appears after a wait; it is not a direct download. Short, but it is a wait, not a fetch.
 - **The character set is a choice with a bad default.** See below.
+- **The CLI is already most of the way there.** `scrapeSeasonModel` (`src/raster/ingest/scrape.ts:91`) launches Chromium with `acceptDownloads: true`, signs in with credentials from `.env`, and downloads wish PDFs into `reports/raster/clicktt-downloads`. This flow is the same browser, the same session, and one more navigation. That is why the download belongs in the CLI (capability 1) rather than the webapp, which the constitution keeps read-only toward click-TT.
+
+## Context: one bundle instead of many uploads
+
+Wish PDFs already reach the CLI's download directory. Once the CSV lands beside them, a season's inputs for a scope are a single directory — so the CLI emits one bundle and the webapp takes one upload, rather than an admin uploading a CSV plus one PDF per club.
+
+This matters most when a bundle is **incomplete**. A zip with no CSV, or with no wish PDFs, is a normal mistake — a half-finished collection, or the wrong directory. Importing what is there and staying quiet about the rest is how a scope ends up half-loaded without anyone noticing, so the system says what is missing instead.
 
 ## Context: the character set is a real hazard
 
@@ -94,7 +108,43 @@ Club names survive the import intact, whether the admin left the Zeichensatz at 
 
 ---
 
-### User Story 3 - Match parsed sources against the known roster (Priority: P2)
+### User Story 3 - Collect a season's inputs with one command (Priority: P2)
+
+An admin runs the existing CLI and gets the roster export alongside the wish PDFs it already downloads, bundled together, ready to upload in one go.
+
+**Why this priority**: The manual export is a small chore, but it is a chore each time the roster changes — a team registering or withdrawing, not once a season. The CLI already signs in and downloads wish PDFs, so this is one more navigation on a working session rather than new machinery. It ranks below the import itself because a hand-exported file imports identically; this is about how the file arrives.
+
+**Independent Test**: Run the CLI for a Bezirk and season, and verify it produces a bundle containing the Tabellen CSV and the wish PDFs, without any manual download.
+
+**Acceptance Scenarios**:
+
+1. **Given** valid credentials, **When** the admin runs the collection command for a Bezirk and season, **Then** it signs in, requests the Tabellen export for that Meisterschaft, waits for the link, and saves the CSV alongside the wish PDFs.
+2. **Given** the export takes time to generate, **When** the command runs, **Then** it waits for the download link rather than failing immediately.
+3. **Given** the export never appears, **When** the wait elapses, **Then** the command reports what it was waiting for and saves nothing partial.
+4. **Given** downloads complete, **When** the command finishes, **Then** it emits a single bundle of the CSV and the wish PDFs.
+5. **Given** the command runs, **When** it authenticates, **Then** it uses credentials from the environment, and no credential reaches the webapp.
+
+---
+
+### User Story 4 - Upload a season's inputs as one bundle (Priority: P2)
+
+An admin uploads one bundle rather than a CSV plus a PDF per club, and is told plainly if it is missing anything.
+
+**Why this priority**: The counterpart to User Story 3 — a bundle nothing accepts is not worth producing. It ships with it.
+
+**Independent Test**: Upload a bundle of the CSV plus wish PDFs and verify both are imported. Upload one with no CSV and verify the omission is reported rather than silently importing only the PDFs.
+
+**Acceptance Scenarios**:
+
+1. **Given** a bundle of a Tabellen CSV and wish PDFs, **When** an admin uploads it, **Then** each file is imported as its own source type.
+2. **Given** a bundle with no CSV, **When** it is uploaded, **Then** the system reports the roster is missing rather than importing only the wish PDFs.
+3. **Given** a bundle with no wish PDFs, **When** it is uploaded, **Then** the system reports them missing rather than importing only the roster.
+4. **Given** a bundle containing files of neither kind, **When** it is uploaded, **Then** they are reported as unrecognised rather than ignored silently.
+5. **Given** a bare CSV rather than a bundle, **When** it is uploaded, **Then** it imports exactly as before. The bundle is an additional way in, not the only one.
+
+---
+
+### User Story 5 - Match parsed sources against the known roster (Priority: P2)
 
 Where click-TT group assignments or wish PDFs name a club, the system resolves that name to a canonical club rather than inventing an identity from the spelling.
 
@@ -110,7 +160,7 @@ Where click-TT group assignments or wish PDFs name a club, the system resolves t
 
 ---
 
-### User Story 4 - Know which teams are missing or unexpected (Priority: P3)
+### User Story 6 - Know which teams are missing or unexpected (Priority: P3)
 
 An admin can see which teams the roster expects but no parsed source mentions, and which parsed teams the roster does not contain.
 
@@ -158,6 +208,21 @@ An admin can see which teams the roster expects but no parsed source mentions, a
 - **FR-012**: Where the character set cannot be established with confidence, the system MUST refuse the import rather than record names that may be corrupt. A roster of mojibake is worse than no roster: it looks imported.
 - **FR-013**: Club names containing umlauts or ß MUST be recorded exactly as they appear in nuLiga.
 
+#### Collection (CLI)
+
+- **FR-014**: The CLI MUST be able to download the Tabellen export for a Meisterschaft, reusing the authenticated Playwright session it already uses to download wish PDFs (`scrapeSeasonModel`, `src/raster/ingest/scrape.ts:91`).
+- **FR-015**: The CLI MUST wait for the export's download link rather than assuming an immediate download. Where it never appears, the CLI MUST report what it was waiting for and save nothing partial.
+- **FR-016**: The CLI MUST request the export in a character set it can read reliably, rather than accepting whatever the form defaults to (see FR-010 to FR-013).
+- **FR-017**: The CLI MUST emit the CSV and the wish PDFs for a scope and season as one bundle.
+- **FR-018**: Credentials MUST come from the environment and remain in the CLI. The webapp MUST NOT hold click-TT credentials or drive an authenticated click-TT session — it stays read-only toward click-TT, per constitution Principle II.
+
+#### Bundle upload
+
+- **FR-019a**: The webapp MUST accept a bundle containing a Tabellen CSV and wish PDFs as a single upload, importing each file as its own source type.
+- **FR-019b**: Where a bundle lacks a CSV, or lacks wish PDFs, the system MUST say what is missing rather than importing what is present and staying quiet. A half-loaded scope that reports success is the failure this avoids.
+- **FR-019c**: Files in a bundle matching no known source type MUST be reported as unrecognised, not ignored.
+- **FR-019d**: A bare CSV MUST import exactly as it does without a bundle. The bundle is an additional way in, not a replacement.
+
 #### Identity
 
 - **FR-020**: Canonical identity MUST follow `VereinNr`, not the club name. A club renamed between exports keeps its identity.
@@ -193,10 +258,15 @@ An admin can see which teams the roster expects but no parsed source mentions, a
 - **SC-006**: With a roster imported, a parsed source naming a club by an exact roster name resolves without a review step.
 - **SC-007**: An admin can answer "which teams are missing from my sources?" for a scope without leaving the app.
 - **SC-008**: Scopes with no imported roster behave exactly as before this feature.
+- **SC-009**: An admin can collect a scope's roster and wish PDFs, and upload them, without downloading any file by hand.
+- **SC-010**: An incomplete bundle is never imported silently — what is missing is always stated.
+- **SC-011**: No click-TT credential is held by, or reaches, the webapp.
 
 ## Assumptions
 
-- The export is obtained by hand from nuLiga admin. Automating it needs an authenticated admin session, which the constitution scopes to the CLI capabilities rather than the webapp (the existing scraper reads public pages only). That is deliberately out of scope here — see Q1.
+- The export is downloaded by the CLI, alongside the wish PDFs it already collects. This is not a new credential surface: `scrapeSeasonModel` already launches Playwright with `acceptDownloads: true` and signs in with credentials from `.env`. The webapp never authenticates against click-TT.
+- nuLiga admin is reachable with the credentials the CLI already uses. If the admin area needs a different account from the one the match-approval flow uses, FR-014 needs revisiting — it assumes one login reaches both.
+- A hand-exported CSV imports identically to a CLI-collected one. The collection path is convenience; the import path is the feature.
 - One export covers one Meisterschaft: a Bezirk and a season, matching how input sets are scoped.
 - The export's standings columns are ignored. They are zero before a season starts and irrelevant to planning regardless.
 - `VereinNr` is stable across exports within a season. This is what makes it identity. It is not assumed stable across seasons, which nothing here requires.
@@ -205,14 +275,14 @@ An admin can see which teams the roster expects but no parsed source mentions, a
 
 ## Out of Scope
 
-- Automating the nuLiga admin download (see Q1). This feature imports a file it is given.
 - Any change to wish parsing, wish conflict review (feature 008), or the guided flow (feature 005).
+- Downloading wish PDFs. The CLI already does this; this feature adds the CSV beside them and bundles the result.
 - Replacing the click-TT group assignment scraper. The roster complements it; the scraper still supplies Rasterzahlen, which this export does not carry.
 - Retiring Phase 12's fuzzy matching (T079-T082). This feature is expected to shrink that work by making the match target canonical, but wish PDFs still carry names rather than numbers, so matching names to the roster remains necessary.
 - Importing rosters for scopes outside the WTTV hierarchy already modelled.
 
 ## Open Questions
 
-- **Q1 (scope, decide before planning)**: Should the nuLiga download be automated, and if so, where? The flow is automatable — sign in, Downloads, select the export and Meisterschaft, Exportieren, wait for the link — and the repo already has Playwright plus credentialed click-TT automation. But that is capability 1 (CLI), and the constitution keeps the webapp read-only toward click-TT with no click-TT admin credentials. Options: leave it manual (this spec); a CLI command that downloads the file for an admin to upload; or the webapp holding admin credentials, which is the largest change and the one most in tension with the constitution.
+- **Q1 (resolved 2026-07-15)**: The CLI downloads the export via Playwright, alongside the wish PDFs it already collects, and emits one bundle; the webapp accepts that bundle and reports anything missing. This is not a new credential surface — `scrapeSeasonModel` already signs in with `.env` credentials and downloads with `acceptDownloads: true` — so the constitution's read-only guarantee for the webapp is untouched. See FR-014 to FR-019d.
 - **Q2 (scope)**: Should the roster replace `splitTeamName`'s label parsing? `Altersklasse` is canonical and exact, and the derived label (`Jugend 19`, `Damen`, `Erwachsene`) currently drives the match-duration heuristic that PR #10 had to align across three implementations. Reading the roster instead would remove that heuristic entirely — but only for teams the roster covers, so the label path cannot be deleted while unrostered scopes exist.
 - **Q3**: What happens to an existing input set when a later export changes the roster underneath it — a team withdrew, or a new team registered? Feature 008 answers the equivalent question for wishes (propose, never overwrite). The same answer probably applies, but the roster is authoritative in a way wishes are not, which may argue for different handling.
