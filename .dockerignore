@@ -1,0 +1,15 @@
+.git/
+.next/
+node_modules/
+webapp/.next/
+webapp/node_modules/
+webapp/.artifacts/
+webapp/coverage/
+webapp/test-results/
+webapp/uploads/
+webapp/worker/.venv/
+**/.terraform/
+**/.terraform.lock.hcl
+*.log
+*.tsbuildinfo
+data/

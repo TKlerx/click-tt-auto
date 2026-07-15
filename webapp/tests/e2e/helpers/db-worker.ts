@@ -1,6 +1,7 @@
 import "dotenv/config";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
+import { syncInputSetSourceCaches } from "@/services/raster/inputSets";
 import {
   AuthMethod,
   NotificationEventType,
@@ -16,9 +17,11 @@ type Operation =
   | "seedSsoUser"
   | "findUserByEmail"
   | "updateUserStatus"
+  | "deactivatePlatformAdminsExcept"
   | "assignUserToScope"
   | "seedRasterScopeHierarchy"
   | "seedRasterSource"
+  | "seedRasterProjectionFixture"
   | "addAuditEntryFixture"
   | "seedBackgroundJob"
   | "seedNotificationTypeConfiguration"
@@ -54,7 +57,7 @@ async function readJson<T>() {
   return (input ? JSON.parse(input) : {}) as T;
 }
 
-// eslint-disable-next-line complexity, sonarjs/cognitive-complexity
+// eslint-disable-next-line complexity, max-lines-per-function, sonarjs/cognitive-complexity
 async function main() {
   const operation = process.argv[2] as Operation | undefined;
   if (!operation) {
@@ -192,6 +195,21 @@ async function main() {
       await prisma.user.update({
         where: { email: normalizeEmail(email) },
         data: { status },
+      });
+
+      process.stdout.write("null");
+      break;
+    }
+
+    case "deactivatePlatformAdminsExcept": {
+      const { email } = await readJson<{ email: string }>();
+      await prisma.user.updateMany({
+        where: {
+          email: { not: normalizeEmail(email) },
+          role: Role.PLATFORM_ADMIN,
+          status: UserStatus.ACTIVE,
+        },
+        data: { status: UserStatus.INACTIVE },
       });
 
       process.stdout.write("null");
@@ -338,6 +356,198 @@ async function main() {
       });
 
       process.stdout.write(JSON.stringify(source.id));
+      break;
+    }
+
+    case "seedRasterProjectionFixture": {
+      const input = await readJson<{ email: string; suffix: string }>();
+      const user = await prisma.user.findUnique({
+        where: { email: normalizeEmail(input.email) },
+        select: { id: true },
+      });
+      if (!user) throw new Error(`User not found: ${input.email}`);
+
+      const scope = await prisma.scope.upsert({
+        where: { code: "OWL" },
+        update: { name: "Ostwestfalen/Lippe" },
+        create: { code: "OWL", name: "Ostwestfalen/Lippe" },
+        select: { id: true },
+      });
+      const inputSet = await prisma.rasterInputSet.create({
+        data: {
+          name: `E2E projection ${input.suffix}`,
+          district: "OWL",
+          season: "2026/27",
+          createdById: user.id,
+        },
+        select: { id: true },
+      });
+      await prisma.rasterSource.createMany({
+        data: [
+          {
+            scopeId: scope.id,
+            season: "2026/27",
+            sourceType: "GROUP_ASSIGNMENT",
+            sourceRef: `e2e://groups-${input.suffix}`,
+            displayName: "E2E groups",
+            parsedJson: JSON.stringify({
+              assignments: [
+                {
+                  league: "L",
+                  group: "G",
+                  division: "Jugend 13",
+                  rasterzahl: 1,
+                  team: "SC GW Paderborn",
+                  sourceUrl: "",
+                },
+                {
+                  league: "L",
+                  group: "G",
+                  division: "Erwachsene",
+                  rasterzahl: 2,
+                  team: "SC GW Paderborn",
+                  sourceUrl: "",
+                },
+                {
+                  league: "L",
+                  group: "G",
+                  division: "Erwachsene",
+                  rasterzahl: 3,
+                  team: "SC GW Paderborn II",
+                  sourceUrl: "",
+                },
+                {
+                  league: "L",
+                  group: "G",
+                  division: "Damen",
+                  rasterzahl: 4,
+                  team: "TTV Borgholz",
+                  sourceUrl: "",
+                },
+                {
+                  league: "L",
+                  group: "G",
+                  division: "Erwachsene",
+                  rasterzahl: 5,
+                  team: "Club A",
+                  sourceUrl: "",
+                },
+                {
+                  league: "L",
+                  group: "G",
+                  division: "Erwachsene",
+                  rasterzahl: 6,
+                  team: "Club B",
+                  sourceUrl: "",
+                },
+                {
+                  league: "L",
+                  group: "G",
+                  division: "Erwachsene",
+                  rasterzahl: 7,
+                  team: "Club C",
+                  sourceUrl: "",
+                },
+              ],
+            }),
+          },
+          {
+            scopeId: scope.id,
+            season: "2026/27",
+            sourceType: "WISHES_PDF",
+            sourceRef: `e2e://wishes-${input.suffix}`,
+            displayName: "E2E wishes",
+            parsedJson: JSON.stringify({
+              clubs: [
+                {
+                  id: "sc-gw-paderborn-42706",
+                  name: "SC GW Paderborn",
+                  venues: [{ hall: "1", name: "Halle 1" }],
+                  notes: "1. und 2. Mannschaft im Wechsel",
+                },
+                {
+                  id: "ttv-borgholz",
+                  name: "TTV Borgholz",
+                  venues: [{ hall: "1", name: "Halle 1" }],
+                  notes: "",
+                },
+              ],
+              teams: [
+                {
+                  id: "wish-youth",
+                  clubId: "sc-gw-paderborn-42706",
+                  label: "Jugend 13",
+                  homeWeekday: "sunday",
+                  hall: "1",
+                  startTime: "10:00",
+                  confidence: "ok",
+                },
+                {
+                  id: "wish-adult",
+                  clubId: "sc-gw-paderborn-42706",
+                  label: "Erwachsene",
+                  homeWeekday: "friday",
+                  hall: "1",
+                  startTime: "19:45",
+                  spielwochePref: "A",
+                  confidence: "ok",
+                },
+                {
+                  id: "wish-adult-2",
+                  clubId: "sc-gw-paderborn-42706",
+                  label: "Erwachsene II",
+                  homeWeekday: "monday",
+                  hall: "1",
+                  startTime: "19:45",
+                  spielwochePref: "A",
+                  confidence: "ok",
+                },
+                {
+                  id: "wish-damen",
+                  clubId: "ttv-borgholz",
+                  label: "Damen",
+                  homeWeekday: "tuesday",
+                  hall: "1",
+                  startTime: "19:30",
+                  confidence: "ok",
+                },
+              ],
+              warnings: [],
+            }),
+          },
+        ],
+      });
+
+      const synced = await syncInputSetSourceCaches(inputSet.id);
+      const model = JSON.parse(synced?.seasonModelJson ?? "{}") as {
+        teams?: Array<Record<string, unknown>>;
+        wishes?: unknown[];
+      };
+      const keys = new Set(
+        (model.teams ?? []).map((team) => `${team.clubId}|${team.label}`),
+      );
+      const youth = (model.teams ?? []).find(
+        (team) =>
+          team.clubId === "sc-gw-paderborn" && team.label === "Jugend 13",
+      );
+      const adult = (model.teams ?? []).find(
+        (team) =>
+          team.clubId === "sc-gw-paderborn" && team.label === "Erwachsene II",
+      );
+      const defaultOnly = (model.teams ?? []).filter(
+        (team) => team.capacityRelevant === false,
+      );
+      process.stdout.write(
+        JSON.stringify({
+          inputSetId: inputSet.id,
+          teamCount: model.teams?.length ?? 0,
+          uniqueClubLabelKeys: keys.size,
+          youthStartTime: youth?.startTime,
+          adultWeekday: adult?.homeWeekday,
+          defaultOnlyCount: defaultOnly.length,
+          relationalWishes: model.wishes?.length ?? 0,
+        }),
+      );
       break;
     }
 

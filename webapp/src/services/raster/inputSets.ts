@@ -4,18 +4,46 @@ import { rasterIngest } from "@/lib/raster/pipeline";
 import { normalizeRasterSeason } from "@/lib/raster/season";
 import { seasonModelSchema, type SeasonModelInput } from "@/lib/raster/schemas";
 import { InputSetStatus } from "../../../generated/prisma/enums";
-import type {
-  TeamRasterAssignmentRow,
-  WishParseResult,
-} from "../../../../src/raster/ingest/index.js";
+import type { TeamRasterAssignmentRow } from "../../../../src/raster/ingest/clicktt-assignments.js";
+import type { WishParseResult } from "../../../../src/raster/ingest/wishes-pdf.js";
+import { extractRelationalWishes } from "../../../../src/raster/ingest/wishes-freetext.js";
+import type { Team } from "../../../../src/raster/types.js";
 import { listRasterSourcesForDistrict } from "./sources";
 import { replaceParsedWishes } from "./wishes";
+import { reviewHallCapacitiesForInputSet } from "./capacity";
 
 type SeasonGroup = {
   id?: string;
   ref?: { league?: string; name?: string };
   size?: number;
   rasterMode?: "single" | "double";
+  planningStatus?: "include" | "exclude";
+  teamIds?: string[];
+};
+
+type SeasonModelClub = {
+  id: string;
+  name?: string;
+  notes?: string;
+  venues?: unknown[];
+};
+type SeasonModelTeam = {
+  id: string;
+  clubId: string;
+  label?: string;
+  homeWeekday?: string;
+  hall?: string;
+  startTime?: string;
+  spielwochePref?: string;
+  requestedRasterzahl?: number[];
+  wishMatchId?: string;
+  wishMatchSource?: "auto" | "manual";
+  confidence?: "ok" | "review";
+};
+type SeasonModelWithClubs = {
+  clubs?: SeasonModelClub[];
+  teams?: SeasonModelTeam[];
+  wishes?: unknown[];
 };
 
 export async function listInputSets(
@@ -23,7 +51,10 @@ export async function listInputSets(
   season = normalizeRasterSeason(undefined),
 ) {
   return prisma.rasterInputSet.findMany({
-    where: { ...rasterDistrictWhere(district), season: normalizeRasterSeason(season) },
+    where: {
+      ...rasterDistrictWhere(district),
+      season: normalizeRasterSeason(season),
+    },
     orderBy: { createdAt: "desc" },
     include: {
       fixedRasterzahlen: {
@@ -35,7 +66,22 @@ export async function listInputSets(
           source: true,
         },
       },
+      wishes: {
+        orderBy: [{ clubName: "asc" }, { teamLabel: "asc" }],
+        select: {
+          id: true,
+          clubId: true,
+          clubName: true,
+          teamLabel: true,
+          homeWeekday: true,
+          hall: true,
+          startTime: true,
+          spielwochePref: true,
+          requestedRasterzahl: true,
+        },
+      },
       runs: {
+        where: { archivedAt: null },
         orderBy: { createdAt: "desc" },
         take: 5,
         include: { snapshot: { select: { id: true } } },
@@ -87,18 +133,24 @@ export async function validateInputSet(id: string) {
     if (!parsed.success) {
       errors.push("The structured season model is invalid.");
     } else {
-      for (const group of parsed.data.groups as SeasonGroup[]) {
-        if (
-          Number(group.size) === 6 &&
-          group.rasterMode !== "single" &&
-          group.rasterMode !== "double"
-        ) {
-          errors.push(
-            `Six-team group ${groupLabel(group)} needs normal 6er or 6er Doppelrunde confirmation.`,
-          );
-        }
+      errors.push(...validateSeasonModelGroups(parsed.data));
+      const undecidedGroups = groupsWithMissingWishData(parsed.data).filter(
+        (group) =>
+          group.planningStatus !== "include" &&
+          group.planningStatus !== "exclude",
+      );
+      if (undecidedGroups.length) {
+        errors.push(
+          `${undecidedGroups.length} group(s) contain teams without parsed wish PDFs. Choose include or exclude before running.`,
+        );
       }
     }
+  }
+  const capacityReview = await reviewHallCapacitiesForInputSet(id);
+  if (capacityReview.blockingCount > 0) {
+    errors.push(
+      `Review gym capacities: ${capacityReview.missingCount} missing, ${capacityReview.insufficientCount} lower than inferred.`,
+    );
   }
 
   const status = errors.length ? InputSetStatus.DRAFT : InputSetStatus.READY;
@@ -109,7 +161,30 @@ export async function validateInputSet(id: string) {
     });
   }
 
-  return { inputSet: { ...inputSet, status }, errors };
+  return { inputSet: { ...inputSet, status }, errors, capacityReview };
+}
+
+function validateSeasonModelGroups(model: SeasonModelInput) {
+  const errors: string[] = [];
+  for (const group of model.groups as SeasonGroup[]) {
+    if (group.planningStatus === "exclude") continue;
+    if (Number(group.size) < 5 || Number(group.size) > 12) {
+      errors.push(
+        `Group ${groupLabel(group)} has ${group.size} teams; only 5..12 are supported.`,
+      );
+      continue;
+    }
+    if (
+      Number(group.size) === 6 &&
+      group.rasterMode !== "single" &&
+      group.rasterMode !== "double"
+    ) {
+      errors.push(
+        `Six-team group ${groupLabel(group)} needs normal 6er or 6er Doppelrunde confirmation.`,
+      );
+    }
+  }
+  return errors;
 }
 
 export async function syncInputSetSourceCaches(inputSetId: string) {
@@ -132,6 +207,9 @@ export async function syncInputSetSourceCaches(inputSetId: string) {
     (source) =>
       source.sourceType.toUpperCase() === "WISHES_PDF" && source.parsedJson,
   );
+  const parsedWishes = wishSources.map(
+    (source) => JSON.parse(source.parsedJson ?? "{}") as WishParseResult,
+  );
   const data: {
     seasonModelJson?: string;
     groupAssignmentJson?: string;
@@ -150,7 +228,7 @@ export async function syncInputSetSourceCaches(inputSetId: string) {
           (groupSizes.get(assignment.group) ?? 0) + 1,
         );
       }
-      const supportedSizes = new Set([5, 6, 7, 8, 9, 10, 11, 12, 13, 14]);
+      const supportedSizes = new Set([5, 6, 7, 8, 9, 10, 11, 12]);
       const supportedAssignments = parsed.assignments.filter((assignment) =>
         supportedSizes.has(groupSizes.get(assignment.group) ?? 0),
       );
@@ -158,12 +236,21 @@ export async function syncInputSetSourceCaches(inputSetId: string) {
         ([, size]) => !supportedSizes.has(size),
       );
       const model =
-        await rasterIngest.buildSeasonModelFromAssignments(supportedAssignments);
-      const existingModes = groupModesByKey(inputSet.seasonModelJson);
+        await rasterIngest.buildSeasonModelFromAssignments(
+          supportedAssignments,
+        );
+      alignParsedWishClubIds(model, parsedWishes);
+      applyParsedWishDetails(model, parsedWishes);
+      const existingReviews = groupReviewsByKey(inputSet.seasonModelJson);
       model.groups = model.groups.map((group) => ({
         ...group,
-        rasterMode: group.rasterMode ?? existingModes.get(groupKey(group)),
+        rasterMode:
+          group.rasterMode ?? existingReviews.get(groupKey(group))?.rasterMode,
+        planningStatus:
+          (group as SeasonGroup).planningStatus ??
+          existingReviews.get(groupKey(group))?.planningStatus,
       }));
+      applyPlanningStatusToTeamCapacity(model);
       model.warnings.push(
         ...skippedGroups.map(
           ([group, size]) =>
@@ -174,9 +261,6 @@ export async function syncInputSetSourceCaches(inputSetId: string) {
     }
   }
   if (wishSources.length) {
-    const parsedWishes = wishSources.map(
-      (source) => JSON.parse(source.parsedJson ?? "{}") as WishParseResult,
-    );
     data.wishesJson = JSON.stringify({
       sources: wishSources.map((source, index) => ({
         sourceId: source.id,
@@ -200,20 +284,177 @@ export async function syncInputSetSourceCaches(inputSetId: string) {
   });
 }
 
-function groupModesByKey(seasonModelJson?: string | null) {
-  const modes = new Map<string, "single" | "double">();
-  if (!seasonModelJson) return modes;
+function alignParsedWishClubIds(
+  model: SeasonModelWithClubs,
+  parsedWishes: WishParseResult[],
+) {
+  const modelClubIdByName = new Map<string, string>();
+  for (const club of model.clubs ?? []) {
+    modelClubIdByName.set(normalizeClubName(club.name), club.id);
+  }
+  const clubIdMap = new Map<string, string>();
+  for (const parsed of parsedWishes) {
+    parsed.clubs = (parsed.clubs ?? []).map((club) => {
+      const modelClubId =
+        modelClubIdByName.get(normalizeClubName(club.name)) ??
+        closestClubId(normalizeClubName(club.name), modelClubIdByName);
+      if (!modelClubId || modelClubId === club.id) return club;
+      clubIdMap.set(club.id, modelClubId);
+      return { ...club, id: modelClubId };
+    });
+  }
+  if (!clubIdMap.size) return;
+  for (const parsed of parsedWishes) {
+    parsed.teams = (parsed.teams ?? []).map((team) => ({
+      ...team,
+      clubId: clubIdMap.get(team.clubId) ?? team.clubId,
+    }));
+  }
+}
+
+function applyParsedWishDetails(
+  model: SeasonModelWithClubs,
+  parsedWishes: WishParseResult[],
+) {
+  const wishClubById = new Map(
+    parsedWishes
+      .flatMap((parsed) => parsed.clubs ?? [])
+      .map((club) => [club.id, club]),
+  );
+  model.clubs = (model.clubs ?? []).map((club) => {
+    const wishClub = wishClubById.get(club.id);
+    if (!wishClub) return club;
+    return {
+      ...club,
+      venues: wishClub.venues?.length ? wishClub.venues : club.venues,
+      notes: wishClub.notes ?? club.notes,
+    };
+  });
+
+  const wishTeamByClubAndLabel = new Map(
+    parsedWishes
+      .flatMap((parsed) => parsed.teams ?? [])
+      .map((team) => [teamIdentityKey(team.clubId, team.label), team]),
+  );
+  model.teams = (model.teams ?? []).map((team) => {
+    const wishTeam = wishTeamByClubAndLabel.get(
+      teamIdentityKey(team.clubId, team.label),
+    );
+    if (!wishTeam) return team;
+    return {
+      ...team,
+      homeWeekday: wishTeam.homeWeekday,
+      hall: wishTeam.hall,
+      ...(wishTeam.startTime ? { startTime: wishTeam.startTime } : {}),
+      ...(wishTeam.spielwochePref
+        ? { spielwochePref: wishTeam.spielwochePref }
+        : {}),
+      ...(wishTeam.requestedRasterzahl
+        ? { requestedRasterzahl: wishTeam.requestedRasterzahl }
+        : {}),
+      wishMatchSource: team.wishMatchSource ?? "auto",
+      confidence: wishTeam.confidence,
+      capacityRelevant: true,
+    };
+  });
+  model.wishes = (model.clubs ?? []).flatMap((club) =>
+    extractRelationalWishes(
+      club.id,
+      club.notes ?? "",
+      (model.teams ?? []) as Team[],
+    ),
+  );
+}
+
+function teamIdentityKey(
+  clubId: string | undefined,
+  label: string | undefined,
+) {
+  return `${clubId ?? ""}|${(label ?? "").trim().toLowerCase()}`;
+}
+
+function normalizeClubName(value: string | undefined) {
+  return (value ?? "")
+    .normalize("NFKD")
+    .replace(/\p{Diacritic}/gu, "")
+    .replace(/(?:^|\s)e\.?\s*v\.?$/i, "")
+    .replace(/ß/g, "ss")
+    .replace(/\brot[\s-]*weiss\b/gi, "rw")
+    .replace(/\btischtennisverein\b/gi, "ttv")
+    .replace(/[^a-z0-9]/gi, "")
+    .trim()
+    .toLowerCase();
+}
+
+function closestClubId(
+  normalizedName: string,
+  wishClubIdByName: Map<string, string>,
+) {
+  let best: { distance: number; id: string } | null = null;
+  for (const [candidate, id] of wishClubIdByName) {
+    const distance = editDistance(normalizedName, candidate);
+    if (distance <= 2 && (!best || distance < best.distance)) {
+      best = { distance, id };
+    }
+  }
+  return best?.id;
+}
+
+function editDistance(left: string, right: string) {
+  const previous = Array.from(
+    { length: right.length + 1 },
+    (_, index) => index,
+  );
+  for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
+    let diagonal = previous[0]!;
+    previous[0] = leftIndex;
+    for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
+      const cost = left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1;
+      const next = Math.min(
+        previous[rightIndex]! + 1,
+        previous[rightIndex - 1]! + 1,
+        diagonal + cost,
+      );
+      diagonal = previous[rightIndex]!;
+      previous[rightIndex] = next;
+    }
+  }
+  return previous[right.length]!;
+}
+
+function groupReviewsByKey(seasonModelJson?: string | null) {
+  const reviews = new Map<
+    string,
+    {
+      rasterMode?: "single" | "double";
+      planningStatus?: "include" | "exclude";
+    }
+  >();
+  if (!seasonModelJson) return reviews;
   try {
     const model = JSON.parse(seasonModelJson) as { groups?: SeasonGroup[] };
     for (const group of model.groups ?? []) {
+      const review: {
+        rasterMode?: "single" | "double";
+        planningStatus?: "include" | "exclude";
+      } = {};
       if (group.rasterMode === "single" || group.rasterMode === "double") {
-        modes.set(groupKey(group), group.rasterMode);
+        review.rasterMode = group.rasterMode;
+      }
+      if (
+        group.planningStatus === "include" ||
+        group.planningStatus === "exclude"
+      ) {
+        review.planningStatus = group.planningStatus;
+      }
+      if (review.rasterMode || review.planningStatus) {
+        reviews.set(groupKey(group), review);
       }
     }
   } catch {
-    return modes;
+    return reviews;
   }
-  return modes;
+  return reviews;
 }
 
 export async function updateSeasonModel(
@@ -249,6 +490,130 @@ export async function updateGroupRasterMode(
   if (!updated) return null;
 
   return updateSeasonModel(inputSetId, model);
+}
+
+export async function updateGroupPlanningStatus(
+  inputSetId: string,
+  groupId: string,
+  planningStatus: "include" | "exclude",
+) {
+  const inputSet = await getInputSet(inputSetId);
+  if (!inputSet?.seasonModelJson) return null;
+
+  const model = seasonModelSchema.parse(JSON.parse(inputSet.seasonModelJson));
+  let updated = false;
+  model.groups = (model.groups as SeasonGroup[]).map((group) => {
+    if (groupKey(group) !== groupId) return group;
+    updated = true;
+    return { ...group, planningStatus };
+  });
+  if (!updated) return null;
+  applyPlanningStatusToTeamCapacity(model);
+
+  return updateSeasonModel(inputSetId, model);
+}
+
+export async function updateTeamWishFields(
+  inputSetId: string,
+  teamId: string,
+  fields: { spielwochePref?: "A" | "B" | null; wishId?: string },
+) {
+  const inputSet = await getInputSet(inputSetId);
+  if (!inputSet?.seasonModelJson) return null;
+  const wish = fields.wishId
+    ? await prisma.rasterWish.findFirst({
+        where: { id: fields.wishId, inputSetId },
+      })
+    : null;
+
+  const model = seasonModelSchema.parse(JSON.parse(inputSet.seasonModelJson));
+  let updated = false;
+  model.teams = (
+    model.teams as Array<Record<string, unknown> & { id?: string }>
+  ).map((team) => {
+    if (team.id !== teamId) return team;
+    updated = true;
+    const next = { ...team };
+    if (wish) {
+      next.clubId = wish.clubId;
+      next.homeWeekday = wish.homeWeekday.toLowerCase();
+      next.hall = wish.hall;
+      next.startTime = wish.startTime;
+      next.spielwochePref = wish.spielwochePref;
+      next.requestedRasterzahl = wish.requestedRasterzahl
+        ? JSON.parse(wish.requestedRasterzahl)
+        : undefined;
+      next.wishMatchId = wish.id;
+      next.wishMatchSource = "manual";
+      next.capacityRelevant = true;
+      next.confidence = "review";
+    }
+    if (fields.spielwochePref === null) {
+      delete next.spielwochePref;
+    } else if (fields.spielwochePref) {
+      next.spielwochePref = fields.spielwochePref;
+    }
+    return next;
+  });
+  if (!updated) return null;
+  if (wish) {
+    const clubs = model.clubs as Array<
+      Record<string, unknown> & { id?: string }
+    >;
+    if (!clubs.some((club) => club.id === wish.clubId)) {
+      clubs.push({
+        id: wish.clubId,
+        name: wish.clubName,
+        venues: [{ hall: wish.hall ?? "1", name: `Gym ${wish.hall ?? "1"}` }],
+        notes: wish.notes ?? "",
+      });
+    }
+  }
+
+  return updateSeasonModel(inputSetId, model);
+}
+
+function groupsWithMissingWishData(model: SeasonModelInput) {
+  const teams = new Map(
+    (model.teams as Array<{ id?: string; capacityRelevant?: boolean }>).map(
+      (team) => [team.id, team],
+    ),
+  );
+  return (model.groups as SeasonGroup[]).filter((group) =>
+    group.teamIds?.some(
+      (teamId) => teams.get(teamId)?.capacityRelevant === false,
+    ),
+  );
+}
+
+function applyPlanningStatusToTeamCapacity(model: {
+  groups: SeasonGroup[];
+  teams: Array<{
+    id?: string;
+    wishMatchId?: unknown;
+    capacityRelevant?: boolean;
+  }>;
+}) {
+  const teamStatus = new Map<string, "include" | "exclude">();
+  for (const group of model.groups as SeasonGroup[]) {
+    if (
+      group.planningStatus !== "include" &&
+      group.planningStatus !== "exclude"
+    ) {
+      continue;
+    }
+    for (const teamId of group.teamIds ?? [])
+      teamStatus.set(teamId, group.planningStatus);
+  }
+  model.teams = (
+    model.teams as Array<Record<string, unknown> & { id?: string }>
+  ).map((team) => {
+    const status = team.id ? teamStatus.get(team.id) : undefined;
+    if (status === "exclude") return { ...team, capacityRelevant: false };
+    if (status === "include" && team.wishMatchId)
+      return { ...team, capacityRelevant: true };
+    return team;
+  });
 }
 
 function groupKey(group: SeasonGroup) {

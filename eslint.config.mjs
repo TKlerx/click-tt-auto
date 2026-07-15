@@ -5,7 +5,18 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   {
-    ignores: ["dist/**", "reports/**", "coverage/**", "node_modules/**", "webapp/**", "scripts/**", "*.min.js"]
+    ignores: [
+      ".agents/**",
+      ".claude/**",
+      ".next/**",
+      "dist/**",
+      "reports/**",
+      "coverage/**",
+      "node_modules/**",
+      "webapp/**",
+      "scripts/**",
+      "*.min.js"
+    ]
   },
   js.configs.recommended,
   {
@@ -24,7 +35,17 @@ export default tseslint.config(
     },
     rules: {
       "@typescript-eslint/consistent-type-imports": "error",
-      "@typescript-eslint/no-floating-promises": "error"
+      "@typescript-eslint/no-floating-promises": "error",
+      complexity: ["error", { max: 56 }],
+      "max-lines-per-function": [
+        "error",
+        {
+          max: 520,
+          skipBlankLines: true,
+          skipComments: true,
+          IIFEs: true
+        }
+      ]
     }
   },
   {

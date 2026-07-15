@@ -37,8 +37,9 @@ Raw inputs arrive today mostly as PDFs; the app must accept structured versions 
 - Q: Can the app run without any fixed Rasterzahlen? → A: Yes. Fixed schedule numbers are optional. A full WTTV or district run may proceed with zero fixed numbers; the optimizer assigns schedule numbers subject to the available group, wish, and capacity inputs.
 - Q: How should districts and seasons be selected? → A: District/scope selection must come from configured scope data, not free text, and should show or sort by hierarchy. The seeded WTTV hierarchy includes WTTV plus all listed WTTV districts. Season is part of the input-set/source identity and must be selectable in the UI.
 - Q: How are wrong uploads handled? → A: Admins must be able to delete wrongly registered sources. PDF uploads must at least be checked as real PDF files before storage, and explicit parser refresh must report when a document cannot be parsed as the expected source type.
+- Q: How should Spielwoche A/B from wish PDFs be handled? → A: A/B is a relative rhythm hint inside one club/hall/weekday, not an absolute per-team calendar target. Equal labels mean same rhythm, different labels mean alternating rhythm. Missing A/B remains editable but flexible and must not block validation by itself.
 
-## User Scenarios & Testing *(mandatory)*
+## User Scenarios & Testing _(mandatory)_
 
 ### User Story 1 - Generate a Rasterzahl Proposal From Inputs (Priority: P1)
 
@@ -156,6 +157,7 @@ An admin imports a snapshot produced by the legacy external optimizer into the s
 - Same-club teams in one group cannot all meet by Spieltag 3 without worsening hall usage; Spieltag 4 is allowed with a high optimizer penalty and must be visible in the run breakdown, while Spieltag 5+ remains invalid.
 - A six-team group is ambiguous after parsing because click-TT may expose the roster size but not whether the official normal 6er or 6er Doppelrunde table should be used; the app must require explicit review before solving.
 - A club name differs between wishes, capacity, and assignment inputs.
+- A club name differs only by spelling, abbreviation, suffix, or typo between click-TT group assignments and wish PDFs; the system should suggest fuzzy matches, let an admin confirm/correct them, and remember confirmed aliases for future uploads/seasons.
 - Hall capacity is only a guessed/inferred default when a run starts.
 - A capacity edit would reduce capacity below the actual number of teams in an already reviewed conflict.
 - Two users edit the same club/hall/weekday capacity at once → last-write-wins (no locking); the audit trail records each change. (Rare: few users, ~annual editing.)
@@ -164,7 +166,7 @@ An admin imports a snapshot produced by the legacy external optimizer into the s
 - (Import path) A snapshot has assignments but no conflict file, or a conflict references a team missing from the assignment table.
 - A user uploads a non-PDF or a PDF whose content does not match the selected source type; upload/refresh must fail with a clear message and must not silently mark the source as parsed.
 
-## Requirements *(mandatory)*
+## Requirements _(mandatory)_
 
 ### Functional Requirements
 
@@ -189,7 +191,10 @@ An admin imports a snapshot produced by the legacy external optimizer into the s
 - **FR-008e**: The system MUST only refresh group assignment and wishes caches when an authorized user explicitly requests a click-TT parse/refresh or uploads/replaces source PDFs or structured source data.
 - **FR-008f**: The system MUST let authorized admins delete wrongly registered raster sources. If the source references an app-stored upload, the stored file MUST be removed as part of deletion.
 - **FR-008g**: The system MUST validate source files enough to catch obvious mismatches: wish PDF uploads MUST be real PDF files, and explicit parser refresh MUST fail clearly when a source cannot be parsed as its selected source type.
+- **FR-008g.1**: When explicitly refreshing click-TT admin sources, the system MUST navigate through the live admin UI rather than replaying collected nuLiga admin `wo/...` URLs, and MUST verify each downloaded group-level `Terminmeldungen (pdf)` text matches the clicked group before storing the parsed cache.
 - **FR-008h**: District/scope selection in the UI MUST come from configured Scope records, show or sort by hierarchy, and include WTTV plus all configured WTTV districts rather than relying on free-text district entry.
+- **FR-008i**: When parsed source inputs contain club/team names that do not exactly match existing input-set identities, the system MUST provide a review step with fuzzy match suggestions, manual correction, and persisted aliases so future uploads reuse confirmed mappings.
+- **FR-008j**: The source review UI MUST present Spielwoche A/B as a relative same/opposite rhythm hint. Missing A/B MUST remain editable for correction but MUST NOT by itself make a team/group incomplete or block validation.
 
 #### Generation / Optimization
 
@@ -228,7 +233,7 @@ An admin imports a snapshot produced by the legacy external optimizer into the s
 - **FR-030**: The system MUST keep an audit trail of input uploads, run starts, capacity edits, and review-status changes, including who performed the action and when.
 - **FR-031**: The system MAY (later phase) import a pre-computed external optimizer snapshot into the same review model, warning users when imported files disagree on snapshot identity or row counts.
 
-### Key Entities *(include if feature involves data)*
+### Key Entities _(include if feature involves data)_
 
 - **User**: A person who signs into the app, with permissions via a role.
 - **Role**: A permission level (admin, scheduler, viewer) governing upload, run, capacity edit, review, and user management.
@@ -246,7 +251,7 @@ An admin imports a snapshot produced by the legacy external optimizer into the s
 - **Review Decision**: A user-entered status and optional note for a conflict or club summary.
 - **Audit Event**: A record of a significant user action during upload, run, review, or capacity editing.
 
-## Success Criteria *(mandatory)*
+## Success Criteria _(mandatory)_
 
 ### Measurable Outcomes
 
@@ -271,6 +276,11 @@ An admin imports a snapshot produced by the legacy external optimizer into the s
 - **SC-013**: Users can distinguish proven-optimal, feasible-only, and imported heuristic snapshots within 5 seconds of opening a snapshot.
 - **SC-014**: If a generated snapshot uses any Spieltag-4 same-club derby fallback, a scheduler can see the count and affected objective component within 5 seconds of opening the snapshot; no Spieltag-5-or-later same-club derby is stored as a valid generated snapshot.
 
+## Future UX Backlog
+
+- Rework the Raster page into a guided left-navigation flow once the data model settles: Import data, Review data, Run optimizer, Review optimization runs. The source-to-input-set projection/merge review belongs in Review data and should normally be completed once after import or source refresh, not repeated for every optimizer run.
+- Add a general source-to-model matching review for clubs and teams: normalize names, suggest fuzzy matches with confidence, show unmatched/low-confidence rows, and let admins confirm or override matches before projection. Do not rely on hard-coded club aliases as the long-term solution.
+
 ## Assumptions
 
 - The app owns the full pipeline: upload raw inputs → generate → review. Importing a pre-computed external snapshot is an optional later path that reuses the review layer.
@@ -289,4 +299,5 @@ An admin imports a snapshot produced by the legacy external optimizer into the s
 - Desktop/tablet review is the primary workflow for the first release; mobile is useful but secondary.
 - A new snapshot is required after capacity/input edits before conflict counts can be considered final.
 </content>
+
 </invoke>

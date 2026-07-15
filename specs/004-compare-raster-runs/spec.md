@@ -5,7 +5,7 @@
 **Status**: Draft  
 **Input**: User description: "Compare optimizer runs, CP-SAT runs, and manual schedule assignments with shared KPIs and visual entry. CP-SAT can run for several minutes; it either finishes with a solution/status or does not. Manual assignments from colleagues should be loadable, visually editable, and scored with the same KPIs as optimizer output."
 
-## User Scenarios & Testing *(mandatory)*
+## User Scenarios & Testing _(mandatory)_
 
 ### User Story 1 - Compare Scheduling Scenarios (Priority: P1)
 
@@ -80,8 +80,9 @@ As a district admin, I want to inspect why one scenario is better or worse than 
 - Manual assignments may intentionally omit youth or special groups; the system must treat omitted required teams as incomplete unless the admin explicitly excludes those groups from the scenario.
 - Scenarios from different districts, seasons, or input-set versions must not be compared as if they share the same baseline.
 - If scoring rules or input sources change after a scenario is created, the system must make stale comparisons visible rather than silently mixing old and new assumptions.
+- Live click-TT admin source refresh can affect scenario trust; downloaded group-level PDFs must be verified against the clicked group before refreshed inputs are used for comparison.
 
-## Requirements *(mandatory)*
+## Requirements _(mandatory)_
 
 ### Functional Requirements
 
@@ -105,8 +106,10 @@ As a district admin, I want to inspect why one scenario is better or worse than 
 - **FR-018**: System MUST mark scenarios as stale when the underlying input set or scoring assumptions change after the scenario was created.
 - **FR-019**: System MUST allow failed, cancelled, or no-solution runs to remain visible in history without treating them as valid assignment scenarios.
 - **FR-020**: Users MUST be able to identify which scenario was produced by a colleague/manual import versus an optimizer strategy.
+- **FR-021**: System SHOULD explain infeasible optimizer outcomes with actionable hard-constraint diagnostics, especially when a previous heuristic or manual assignment existed for the same input.
+- **FR-022**: System MUST treat scenario input sourced from live click-TT refresh as valid only after the refresh has verified that each downloaded group-level wishes PDF matches the clicked group.
 
-### Key Entities *(include if feature involves data)*
+### Key Entities _(include if feature involves data)_
 
 - **Scenario**: A comparable scheduling result or attempted result for one input set. Key attributes include origin/strategy, status, settings, created time, finished time, KPI summary, detail link, and staleness state.
 - **Optimizer Strategy**: A selectable automated scheduling approach such as Initial heuristic or CP-SAT, including user-visible settings such as time budget where relevant.
@@ -115,7 +118,7 @@ As a district admin, I want to inspect why one scenario is better or worse than 
 - **Scenario Comparison**: A selected set of compatible scenarios plus an optional baseline used to show side-by-side KPIs and differences.
 - **Validation Issue**: A problem preventing a manual assignment or run result from being scored or compared, such as duplicate numbers, missing teams, unknown rows, or illegal schedule numbers.
 
-## Success Criteria *(mandatory)*
+## Success Criteria _(mandatory)_
 
 ### Measurable Outcomes
 
@@ -133,6 +136,8 @@ As a district admin, I want to inspect why one scenario is better or worse than 
 - Existing validated input sets remain the prerequisite for optimizer runs and manual scenario scoring.
 - CP-SAT runs may take several minutes and are acceptable as background jobs; the feature should show honest status rather than a fake percentage.
 - CP-SAT with a time budget can produce optimal, feasible, infeasible, failed, or no-solution outcomes; feasible outcomes are still useful for comparison.
+- CP-SAT solvers may report only "infeasible"; diagnosing the blocking constraint may require a separate relaxation or diagnostic pass.
 - Manual assignment import v1 supports common table formats with group, team, and schedule-number columns; complex OCR or arbitrary PDF parsing is out of scope for this feature.
 - Visual manual entry is required for v1, but advanced spreadsheet-like editing can be incremental as long as users can complete and correct an assignment.
 - Scenario comparison is limited to compatible scenarios from the same district, season, and input set version unless explicitly marked otherwise.
+- click-TT admin source refresh details are owned by the ingest/source specs; this feature only requires that refreshed inputs used for comparison have passed source verification.

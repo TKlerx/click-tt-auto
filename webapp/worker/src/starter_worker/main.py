@@ -7,6 +7,7 @@ import json
 import subprocess
 import tempfile
 import time
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -33,6 +34,10 @@ BOUNCE_SUBJECT_PATTERN = re.compile(
     re.IGNORECASE,
 )
 BOUNCE_SENDER_PATTERN = re.compile(r"(mailer-daemon|postmaster)", re.IGNORECASE)
+
+
+class RasterSolverInfeasible(ValueError):
+    """Raised when the optimizer proves that no assignment satisfies hard constraints."""
 
 
 def process_job(job: BackgroundJob) -> dict[str, object]:
@@ -96,7 +101,9 @@ def process_raster_run(store: JobStore, job: BackgroundJob) -> dict[str, object]
             "processedAt": datetime.now(timezone.utc).isoformat(),
         }
     model = _model_with_capacity_overrides(
-        _parse_json_object(context["seasonModelJson"], "seasonModelJson"),
+        _exclude_unplanned_groups(
+            _parse_json_object(context["seasonModelJson"], "seasonModelJson")
+        ),
         store.list_raster_hall_capacities(str(context["district"])),
     )
     settings = _parse_json_object(context.get("settings") or "{}", "settings")
@@ -129,6 +136,36 @@ def _parse_json_object(value: object, name: str) -> dict[str, object]:
     if not isinstance(parsed, dict):
         raise ValueError(f"{name} must be a JSON object")
     return parsed
+
+
+def _exclude_unplanned_groups(model: dict[str, object]) -> dict[str, object]:
+    groups = model.get("groups")
+    teams = model.get("teams")
+    if not isinstance(groups, list) or not isinstance(teams, list):
+        return model
+    kept_groups = [
+        group
+        for group in groups
+        if not (
+            isinstance(group, dict)
+            and str(group.get("planningStatus") or "") == "exclude"
+        )
+    ]
+    kept_team_ids = {
+        str(team_id)
+        for group in kept_groups
+        if isinstance(group, dict)
+        for team_id in group.get("teamIds", [])
+    }
+    return {
+        **model,
+        "groups": kept_groups,
+        "teams": [
+            team
+            for team in teams
+            if isinstance(team, dict) and str(team.get("id") or "") in kept_team_ids
+        ],
+    }
 
 
 def _model_with_capacity_overrides(
@@ -181,9 +218,7 @@ def _repo_root() -> Path:
 
 def _solve_raster_model(model: dict[str, object], settings: dict[str, object]) -> dict[str, Any]:
     repo_root = _repo_root()
-    solver_script = Path(
-        os.environ.get("RASTER_SOLVER_SCRIPT") or repo_root / "scripts" / "solve-raster-cpsat.py"
-    )
+    strategy = str(settings.get("strategy") or "cp_sat")
     time_limit = _as_int(settings.get("timeLimitSeconds"), 60)
     weights = _solver_weights(settings.get("weights"))
     with tempfile.TemporaryDirectory(prefix="raster-run-") as tmp:
@@ -194,24 +229,15 @@ def _solve_raster_model(model: dict[str, object], settings: dict[str, object]) -
         metadata_path = tmp_path / "metadata.json"
         model_path.write_text(json.dumps({"model": model}), encoding="utf-8")
         weights_path.write_text(json.dumps(weights), encoding="utf-8")
-        command = [
-            "uv",
-            "run",
-            "--project",
-            str(Path(__file__).resolve().parents[2]),
-            "python",
-            str(solver_script),
-            "--model",
-            str(model_path),
-            "--weights",
-            str(weights_path),
-            "--out",
-            str(out_path),
-            "--metadata",
-            str(metadata_path),
-            "--time-limit",
-            str(time_limit),
-        ]
+        command = _raster_solver_command(
+            repo_root,
+            strategy,
+            model_path,
+            weights_path,
+            out_path,
+            metadata_path,
+            time_limit,
+        )
         completed = subprocess.run(
             command,
             cwd=repo_root,
@@ -221,12 +247,85 @@ def _solve_raster_model(model: dict[str, object], settings: dict[str, object]) -
             timeout=max(time_limit + 30, 60),
         )
         if completed.returncode != 0:
-            raise ValueError((completed.stderr or completed.stdout or "CP-SAT failed").strip())
+            metadata = _read_json_file(metadata_path)
+            status = str(metadata.get("status") or "").upper() if metadata else ""
+            message = (completed.stderr or completed.stdout or "CP-SAT failed").strip()
+            if status == "INFEASIBLE":
+                raise RasterSolverInfeasible(_infeasible_message())
+            raise ValueError(message)
         assignment = json.loads(out_path.read_text(encoding="utf-8"))
         metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     if not isinstance(assignment, dict) or not isinstance(metadata, dict):
-        raise ValueError("CP-SAT returned invalid JSON")
+        raise ValueError("Raster solver returned invalid JSON")
     return {"assignment": assignment, "metadata": metadata}
+
+
+def _read_json_file(path: Path) -> dict[str, Any] | None:
+    try:
+        parsed = json.loads(path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def _infeasible_message() -> str:
+    return (
+        "No feasible assignment exists with the current hard constraints. "
+        "The remaining hard constraints are fixed schedule numbers, valid schedule tables "
+        "for each group size, unused slot selection, and the same-club derby rule after "
+        "matchday 4. Hall-capacity excess is a penalty now, so capacity alone should not "
+        "make a run infeasible."
+    )
+
+
+def _raster_solver_command(
+    repo_root: Path,
+    strategy: str,
+    model_path: Path,
+    weights_path: Path,
+    out_path: Path,
+    metadata_path: Path,
+    time_limit: int,
+) -> list[str]:
+    common = [
+        "--model",
+        str(model_path),
+        "--weights",
+        str(weights_path),
+        "--out",
+        str(out_path),
+        "--metadata",
+        str(metadata_path),
+    ]
+    if strategy == "initial_heuristic":
+        solver_script = Path(
+            os.environ.get("RASTER_HEURISTIC_SOLVER_SCRIPT")
+            or repo_root / "scripts" / "solve-raster-heuristic.ts"
+        )
+        return [_executable("pnpm"), "exec", "tsx", str(solver_script), *common]
+    if strategy != "cp_sat":
+        raise ValueError(f"Unsupported raster optimizer strategy: {strategy}")
+    solver_script = Path(
+        os.environ.get("RASTER_SOLVER_SCRIPT") or repo_root / "scripts" / "solve-raster-cpsat.py"
+    )
+    return [
+        "uv",
+        "run",
+        "--project",
+        str(Path(__file__).resolve().parents[2]),
+        "python",
+        str(solver_script),
+        *common,
+        "--time-limit",
+        str(time_limit),
+    ]
+
+
+def _executable(name: str) -> str:
+    found = shutil.which(name) or (shutil.which(f"{name}.cmd") if os.name == "nt" else None)
+    if not found:
+        raise ValueError(f"Required executable not found: {name}")
+    return found
 
 
 def _solver_weights(value: object) -> dict[str, int]:
@@ -715,9 +814,13 @@ def _process_claimed_job(store: JobStore, config: WorkerConfig, job: BackgroundJ
                 will_retry=job.attempt_count < config.max_attempts,
             )
         raster_run_id = str(job.payload.get("runId") or "").strip()
+        is_infeasible = isinstance(error, RasterSolverInfeasible)
         if job.job_type == RASTER_RUN_JOB_TYPE and raster_run_id:
-            store.mark_raster_run_failed(raster_run_id, str(error))
-        store.fail_job(job.id, str(error))
+            if is_infeasible:
+                store.mark_raster_run_infeasible(raster_run_id, str(error))
+            else:
+                store.mark_raster_run_failed(raster_run_id, str(error))
+        store.fail_job(job.id, str(error), retry=not is_infeasible)
         _log_job_failed(job, error)
 
 

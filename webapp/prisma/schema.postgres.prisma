@@ -218,6 +218,7 @@ model User {
   rasterRuns                    RasterOptimizationRun[]   @relation("RasterRunStarter")
   rasterCapacityUpdates         RasterHallCapacity[]      @relation("RasterCapacityUpdater")
   rasterReviewDecisions         RasterReviewDecision[]    @relation("RasterReviewDecider")
+  rasterManualAssignmentDrafts  RasterManualAssignmentDraft[] @relation("RasterManualAssignmentDraftCreator")
 }
 
 model Session {
@@ -587,6 +588,7 @@ model RasterInputSet {
   wishes              RasterWish[]
   fixedRasterzahlen   RasterFixedRasterzahl[]
   runs                RasterOptimizationRun[]
+  manualAssignmentDrafts RasterManualAssignmentDraft[]
 
   @@index([district, season, createdAt])
   @@index([createdById])
@@ -655,6 +657,7 @@ model RasterOptimizationRun {
   settings           String                  @default("{}")
   createdAt          DateTime                @default(now())
   finishedAt         DateTime?
+  archivedAt         DateTime?
   inputSet           RasterInputSet          @relation(fields: [inputSetId], references: [id], onDelete: Restrict)
   startedBy          User                    @relation("RasterRunStarter", fields: [startedById], references: [id], onDelete: Restrict)
   snapshot           RasterSnapshot?
@@ -677,6 +680,7 @@ model RasterSnapshot {
   affectedClubs      Int                    @default(0)
   objectiveBreakdown String                 @default("{}")
   createdAt          DateTime               @default(now())
+  archivedAt         DateTime?
   run                RasterOptimizationRun? @relation(fields: [runId], references: [id], onDelete: SetNull)
   assignments        RasterAssignment[]
   conflicts          RasterConflict[]
@@ -738,4 +742,20 @@ model RasterReviewDecision {
 
   @@index([snapshotId, targetType, targetId])
   @@index([decidedById])
+}
+
+model RasterManualAssignmentDraft {
+  id                   String         @id @default(cuid())
+  inputSetId           String
+  name                 String
+  rowsJson             String
+  validationIssuesJson String         @default("[]")
+  createdById          String
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+  inputSet             RasterInputSet @relation(fields: [inputSetId], references: [id], onDelete: Cascade)
+  createdBy            User           @relation("RasterManualAssignmentDraftCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([inputSetId, updatedAt])
+  @@index([createdById])
 }

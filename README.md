@@ -46,7 +46,7 @@ SC GW Paderborn,,friday,2
 pnpm raster -- ingest --from-clicktt --capacity data/hall-capacity.csv --out reports/raster/model.json --current reports/raster/current.json
 ```
 
-The click-TT path clicks through `SpielbetriebOrganisation`, reads each group table, downloads the row-level `Terminwünsche (pdf)` files, then computes the remaining assignable Rasterzahlen. The older PDF-only flow still works:
+The click-TT path clicks through `SpielbetriebOrganisation`, reads each group table, downloads the group-level `Terminmeldungen (pdf)` file, verifies that the PDF text matches the clicked group page, then computes the remaining assignable Rasterzahlen. Do not replay collected `nuLigaAdminTTDE.woa/wo/...` URLs directly; they contain stateful click counters and can return the wrong group/PDF. The older PDF-only flow still works:
 
 ```powershell
 pnpm run raster -- ingest --wishes data/Terminmeldung_gesamt_bol.pdf --groups data/Gruppen-und-Raster-2026.pdf --out reports/raster/model.json

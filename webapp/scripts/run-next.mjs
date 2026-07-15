@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 
 const command = process.argv[2];
 
@@ -16,14 +17,20 @@ if (command === "dev") {
   console.log(`> Local: ${localUrl}`);
 }
 
-const child = spawn(
-  process.execPath,
-  ["./node_modules/next/dist/bin/next", command, "--port", port],
-  {
-    stdio: "inherit",
-    env: process.env,
-  },
-);
+const standaloneServer = [
+  ".next/standalone/server.js",
+  ".next/standalone/webapp/server.js",
+].find((path) => existsSync(path));
+
+const args =
+  command === "start" && standaloneServer && process.platform !== "win32"
+    ? [standaloneServer]
+    : ["./node_modules/next/dist/bin/next", command, "--port", port];
+
+const child = spawn(process.execPath, args, {
+  stdio: "inherit",
+  env: process.env,
+});
 
 child.on("exit", (code) => {
   process.exit(code ?? 0);

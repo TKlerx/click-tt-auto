@@ -143,9 +143,9 @@ describe("raster sources service", () => {
 
   it("scrapes public league URLs from click-TT source refs", async () => {
     const { rasterIngest } = await import("@/lib/raster/pipeline");
-    vi.mocked(rasterIngest.scrapeClickTtPublicLeagueAssignments).mockResolvedValue(
-      [],
-    );
+    vi.mocked(
+      rasterIngest.scrapeClickTtPublicLeagueAssignments,
+    ).mockResolvedValue([]);
     prismaMock.rasterSource.findUnique.mockResolvedValue({
       id: "source-public",
       sourceType: "GROUP_ASSIGNMENT",
@@ -168,9 +168,9 @@ describe("raster sources service", () => {
 
   it("scrapes raw click-TT league page URLs as group assignments", async () => {
     const { rasterIngest } = await import("@/lib/raster/pipeline");
-    vi.mocked(rasterIngest.scrapeClickTtPublicLeagueAssignments).mockResolvedValue(
-      [],
-    );
+    vi.mocked(
+      rasterIngest.scrapeClickTtPublicLeagueAssignments,
+    ).mockResolvedValue([]);
     prismaMock.rasterSource.findUnique.mockResolvedValue({
       id: "source-raw-public",
       sourceType: "GROUP_ASSIGNMENT",

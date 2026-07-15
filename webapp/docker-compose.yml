@@ -1,8 +1,8 @@
 x-app-image: &app-image
   image: ${APP_IMAGE_NAME:-business-app-starter}:latest
   build:
-    context: .
-    dockerfile: Dockerfile.app
+    context: ..
+    dockerfile: webapp/Dockerfile.app
     target: runner
     args:
       BASE_PATH: ${BASE_PATH}
@@ -14,8 +14,8 @@ x-app-image: &app-image
 x-migrate-image: &migrate-image
   image: ${MIGRATE_IMAGE_NAME:-business-app-starter-migrate}:latest
   build:
-    context: .
-    dockerfile: Dockerfile.app
+    context: ..
+    dockerfile: webapp/Dockerfile.app
     target: migrate-runner
     args:
       BASE_PATH: ${BASE_PATH}

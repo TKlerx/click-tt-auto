@@ -23,7 +23,17 @@ export function findOverUsages(
   model: SeasonModel,
   assignment: Assignment
 ): OverUsage[] {
-  const slots = new Map<string, { teams: string[]; capacity: number }>();
+  const slots = new Map<
+    string,
+    {
+      teams: Array<{
+        id: string;
+        startMinutes: number | null;
+        durationMinutes: number;
+      }>;
+      capacity: number;
+    }
+  >();
   const inferredCapacities = new Map<string, number>();
   for (const team of model.teams) {
     if (!team.spielwochePref) continue;
@@ -31,6 +41,7 @@ export function findOverUsages(
     inferredCapacities.set(key, (inferredCapacities.get(key) ?? 0) + 1);
   }
   for (const team of model.teams) {
+    if (team.capacityRelevant === false) continue;
     const group = model.groups.find((candidate) =>
       candidate.teamIds.includes(team.id)
     );
@@ -48,28 +59,69 @@ export function findOverUsages(
     for (const week of new Set(deriveHomeWeeks(group.size, rz, group.rasterMode, bye).weeks)) {
       const key = `${team.clubId}|${team.hall}|${team.homeWeekday}|${week}`;
       const bucket = slots.get(key) ?? { teams: [], capacity };
-      bucket.teams.push(team.id);
+      bucket.teams.push({
+        id: team.id,
+        startMinutes: parseStartMinutes(team.startTime),
+        durationMinutes: matchDurationMinutes(team.label)
+      });
       bucket.capacity = capacity;
       slots.set(key, bucket);
     }
   }
 
   return [...slots.entries()].flatMap(([key, bucket]) => {
-    if (bucket.teams.length <= bucket.capacity) return [];
+    const actualCount = requiredCapacity(bucket.teams);
+    if (actualCount <= bucket.capacity) return [];
     const [clubId, hall, weekday, week] = key.split("|");
-    const excess = bucket.teams.length - bucket.capacity;
+    const excess = actualCount - bucket.capacity;
     return [
       {
         clubId: clubId!,
         hall: hall!,
         weekday: weekday as OverUsage["weekday"],
         week: Number(week),
-        teams: bucket.teams,
+        teams: bucket.teams.map((team) => team.id),
         capacity: bucket.capacity,
         excess
       }
     ];
   });
+}
+
+function requiredCapacity(
+  teams: Array<{ startMinutes: number | null; durationMinutes: number }>
+): number {
+  const unknownTimes = teams.filter((team) => team.startMinutes === null).length;
+  const events = teams
+    .filter(
+      (team): team is { startMinutes: number; durationMinutes: number } =>
+      Number.isInteger(team.startMinutes)
+    )
+    .flatMap((team) => [
+      { minute: team.startMinutes, delta: 1 },
+      { minute: team.startMinutes + team.durationMinutes, delta: -1 }
+    ])
+    .sort((a, b) => a.minute - b.minute || a.delta - b.delta);
+  let concurrent = 0;
+  let maxConcurrent = 0;
+  for (const event of events) {
+    concurrent += event.delta;
+    maxConcurrent = Math.max(maxConcurrent, concurrent);
+  }
+  return maxConcurrent + unknownTimes;
+}
+
+function matchDurationMinutes(label: string): number {
+  return /\bjugend\b/i.test(label) ? 120 : 180;
+}
+
+function parseStartMinutes(value: string | undefined): number | null {
+  const match = value?.trim().match(/^(\d{1,2})[:.](\d{2})$/);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours > 23 || minutes > 59) return null;
+  return hours * 60 + minutes;
 }
 
 export function evaluateWishes(

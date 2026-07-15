@@ -1,6 +1,10 @@
 import { test, expect } from "@playwright/test";
 import { Role } from "../../../generated/prisma/enums";
-import { expectOnDashboard, loginWithPassword } from "../helpers/auth";
+import {
+  expectOnDashboard,
+  loginWithPassword,
+  openUserMenu,
+} from "../helpers/auth";
 import { seedLocalUser } from "../helpers/db";
 
 test("theme toggle persists across sessions", async ({ page }) => {
@@ -15,6 +19,7 @@ test("theme toggle persists across sessions", async ({ page }) => {
   await loginWithPassword(page, "e2e-theme-user@example.com", "ThemePass123");
   await expectOnDashboard(page);
 
+  await openUserMenu(page);
   await page.getByRole("button", { name: "Dark mode" }).click();
   await expect(page.getByRole("button", { name: "Light mode" })).toBeVisible();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
@@ -24,6 +29,7 @@ test("theme toggle persists across sessions", async ({ page }) => {
   await expectOnDashboard(page);
 
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await openUserMenu(page);
   await expect(page.getByRole("button", { name: "Light mode" })).toBeVisible();
   await expect(page.getByText("DARK", { exact: true })).toBeVisible();
 });

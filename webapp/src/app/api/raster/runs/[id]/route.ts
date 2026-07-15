@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { requireApiUser } from "@/lib/route-auth";
 import { assertRasterAccess } from "@/lib/raster/access";
-import { cancelOptimizationRun, getOptimizationRun } from "@/services/raster";
+import {
+  archiveOptimizationRun,
+  cancelOptimizationRun,
+  getOptimizationRun,
+} from "@/services/raster";
 
 export async function GET(
   request: Request,
@@ -44,5 +48,9 @@ export async function DELETE(
   );
   if (access !== true) return access.error;
 
-  return NextResponse.json({ run: await cancelOptimizationRun(run.id) });
+  if (run.status === "PENDING" || run.status === "RUNNING") {
+    return NextResponse.json({ run: await cancelOptimizationRun(run.id) });
+  }
+
+  return NextResponse.json({ run: await archiveOptimizationRun(run.id) });
 }

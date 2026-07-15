@@ -29,13 +29,28 @@ Expected: a feasible-but-not-proven CP-SAT result is still comparable; failed/no
 ## Scenario 3: Manual Assignment
 
 1. Open manual assignment entry for the same input set.
-2. Enter schedule numbers for teams by group, or paste/upload a simple group/team/schedule-number table.
+2. Enter schedule numbers for teams, or paste a simple team/schedule-number table.
 3. Validate the draft.
 4. Fix any duplicate, illegal, unknown, or missing assignment issues.
 5. Score the valid draft.
 6. Compare the resulting manual scenario against optimizer scenarios.
 
 Expected: manual KPIs are computed by the same scoring definitions as optimizer scenarios.
+
+## Live click-TT source sanity check
+
+When scenario inputs come from a refreshed click-TT admin source, confirm the source refresh completed with verified group-level `Terminmeldungen (pdf)` downloads. Do not treat collected `nuLigaAdminTTDE.woa/wo/...` links as stable direct-download URLs; those links contain click counters and can point at the wrong group/PDF outside the live navigation sequence.
+
+Implemented API routes use the `/api/raster` base path:
+
+- `GET /api/raster/scenarios?district=&season=&inputSetId=`
+- `GET /api/raster/scenarios/{scenarioId}`
+- `POST /api/raster/scenarios/compare`
+- `POST /api/raster/input-sets/{inputSetId}/manual-assignments`
+- `POST /api/raster/manual-assignments/{draftId}/validate`
+- `POST /api/raster/manual-assignments/{draftId}/score`
+
+Scenario details currently link to the existing `/raster/snapshots/{snapshotId}` result page.
 
 ## Minimal Validation Commands
 

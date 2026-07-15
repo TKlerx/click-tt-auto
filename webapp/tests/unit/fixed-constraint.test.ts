@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assertPersistableSnapshot } from "@/lib/raster/run-outcome";
+import { rasterIngest } from "@/lib/raster/pipeline";
 import type { SeasonModel } from "../../../src/raster/types";
 
 function fixedModel(): SeasonModel {
@@ -39,16 +39,21 @@ function fixedModel(): SeasonModel {
 }
 
 describe("snapshot hard constraints", () => {
-  it("preserves fixed Rasterzahlen before snapshot persistence", () => {
-    expect(
-      assertPersistableSnapshot(fixedModel(), { "elsen-1": 4, "elsen-2": 4 })
-        .assignment["elsen-1"],
-    ).toBe(3);
+  it("preserves fixed Rasterzahlen before snapshot persistence", async () => {
+    const result = await rasterIngest.scoreAssignment(fixedModel(), {
+      "elsen-1": 4,
+      "elsen-2": 4,
+    });
+    expect(result.assignment["elsen-1"]).toBe(3);
   });
 
-  it("rejects same-club derbies after Spieltag 4", () => {
-    expect(() =>
-      assertPersistableSnapshot(fixedModel(), { "elsen-1": 1, "elsen-2": 7 }),
-    ).toThrow(/Spieltag/);
+  it("rejects same-club derbies after Spieltag 4", async () => {
+    const result = await rasterIngest.scoreAssignment(fixedModel(), {
+      "elsen-1": 1,
+      "elsen-2": 7,
+    });
+    expect(
+      result.hardViolations.map((violation) => violation.detail).join("; "),
+    ).toMatch(/Spieltag/);
   });
 });

@@ -15,9 +15,9 @@
 
 **Purpose**: Reuse the existing raster webapp shape and create shared comparison vocabulary.
 
-- [ ] T001 Add scenario strategy/status TypeScript types in `webapp/src/lib/raster/scenarios.ts`
-- [ ] T002 [P] Add KPI summary TypeScript type and mapper skeleton in `webapp/src/lib/raster/kpis.ts`
-- [ ] T003 [P] Add scenario route test fixtures in `webapp/tests/unit/fixtures/raster-scenarios.ts`
+- [x] T001 Add scenario strategy/status TypeScript types in `webapp/src/lib/raster/scenarios.ts`
+- [x] T002 [P] Add KPI summary TypeScript type and mapper skeleton in `webapp/src/lib/raster/kpis.ts`
+- [x] T003 [P] Add scenario route test fixtures in `webapp/tests/unit/fixtures/raster-scenarios.ts`
 
 ---
 
@@ -25,13 +25,13 @@
 
 **Purpose**: Blocking scenario persistence/read model shared by all stories.
 
-- [ ] T004 Extend `webapp/prisma/schema.postgres.prisma` with the minimal fields/models needed for manual scenarios and scenario metadata
-- [ ] T005 Add matching Prisma migration under `webapp/prisma/migrations-postgres/`
-- [ ] T006 Add scenario service list/read helpers in `webapp/src/services/raster/scenarios.ts`
-- [ ] T007 Wire optimizer run/snapshot rows into the scenario read model in `webapp/src/services/raster/scenarios.ts`
-- [ ] T008 Implement shared KPI mapper from existing score/output fields in `webapp/src/lib/raster/kpis.ts`
-- [ ] T009 [P] Unit test KPI mapping in `webapp/tests/unit/raster-kpis.test.ts`
-- [ ] T010 [P] Unit test scenario compatibility filtering in `webapp/tests/unit/raster-scenarios-service.test.ts`
+- [x] T004 Extend `webapp/prisma/schema.postgres.prisma` with the minimal fields/models needed for manual scenarios and scenario metadata
+- [x] T005 Add matching Prisma migration under `webapp/prisma/migrations-postgres/`
+- [x] T006 Add scenario service list/read helpers in `webapp/src/services/raster/scenarios.ts`
+- [x] T007 Wire optimizer run/snapshot rows into the scenario read model in `webapp/src/services/raster/scenarios.ts`
+- [x] T008 Implement shared KPI mapper from existing score/output fields in `webapp/src/lib/raster/kpis.ts`
+- [x] T009 [P] Unit test KPI mapping in `webapp/tests/unit/raster-kpis.test.ts`
+- [x] T010 [P] Unit test scenario compatibility filtering in `webapp/tests/unit/raster-scenarios-service.test.ts`
 
 **Checkpoint**: Scenario list can represent existing optimizer runs with shared KPI fields.
 
@@ -43,13 +43,13 @@
 
 **Independent Test**: Open an input set with at least two completed scenarios and verify KPI summaries, baseline deltas, statuses, and detail links.
 
-- [ ] T011 [P] Add route tests for `GET /api/raster/scenarios` and `POST /api/raster/scenarios/compare` in `webapp/tests/unit/raster-scenarios-route.test.ts`
-- [ ] T012 Implement `GET /api/raster/scenarios` in `webapp/src/app/api/raster/scenarios/route.ts`
-- [ ] T013 Implement `POST /api/raster/scenarios/compare` compatibility checks and deltas in `webapp/src/app/api/raster/scenarios/compare/route.ts`
-- [ ] T014 Add scenario comparison service function in `webapp/src/services/raster/scenarioComparison.ts`
-- [ ] T015 Add scenario list/comparison UI in `webapp/src/components/raster/scenario-comparison.tsx`
-- [ ] T016 Wire comparison UI into `webapp/src/app/(dashboard)/raster/page.tsx`
-- [ ] T017 [P] Add UI/unit test for baseline delta rendering in `webapp/tests/unit/scenario-comparison.test.tsx`
+- [x] T011 [P] Add route tests for `GET /api/raster/scenarios` and `POST /api/raster/scenarios/compare` in `webapp/tests/unit/raster-scenarios-route.test.ts`
+- [x] T012 Implement `GET /api/raster/scenarios` in `webapp/src/app/api/raster/scenarios/route.ts`
+- [x] T013 Implement `POST /api/raster/scenarios/compare` compatibility checks and deltas in `webapp/src/app/api/raster/scenarios/compare/route.ts`
+- [x] T014 Add scenario comparison service function in `webapp/src/services/raster/scenarioComparison.ts`
+- [x] T015 Add scenario list/comparison UI in `webapp/src/components/raster/scenario-comparison.tsx`
+- [x] T016 Wire comparison UI into `webapp/src/app/(dashboard)/raster/page.tsx`
+- [x] T017 [P] Add UI/unit test for baseline delta rendering in `webapp/tests/unit/scenario-comparison.test.tsx`
 
 **Checkpoint**: P1 comparison works without manual assignment creation.
 
@@ -61,13 +61,13 @@
 
 **Independent Test**: Queue both strategies for the same input set and confirm each creates a scenario with strategy, status, settings, KPIs/details after completion.
 
-- [ ] T018 Extend run-start request validation with `strategy` and optional `timeLimitSeconds` in `webapp/src/app/api/raster/input-sets/[id]/runs/route.ts`
-- [ ] T019 Pass selected strategy/settings through run creation in `webapp/src/services/raster/runs.ts`
-- [ ] T020 Add heuristic strategy execution path using existing `src/raster/optimize` code in `webapp/worker/src/starter_worker/raster_run.py`
-- [ ] T021 Preserve CP-SAT feasible/failed/no-solution status in scenario metadata in `webapp/src/services/raster/scenarios.ts`
-- [ ] T022 Add strategy selector and visible time-budget control in `webapp/src/components/raster/run-controls.tsx`
-- [ ] T023 [P] Unit test run-start strategy validation in `webapp/tests/unit/raster-runs-route.test.ts`
-- [ ] T024 [P] Unit test worker outcome-to-scenario status mapping in `webapp/tests/unit/raster-run-status.test.ts`
+- [x] T018 Extend run-start request validation with `strategy` and optional `timeLimitSeconds` in `webapp/src/app/api/raster/input-sets/[id]/runs/route.ts`
+- [x] T019 Pass selected strategy/settings through run creation in `webapp/src/services/raster/runs.ts`
+- [x] T020 Add heuristic strategy execution path using existing `src/raster/optimize` code in `webapp/worker/src/starter_worker/raster_run.py`
+- [x] T021 Preserve CP-SAT feasible/failed/no-solution status in scenario metadata in `webapp/src/services/raster/scenarios.ts`
+- [x] T022 Add strategy selector and visible time-budget control in `webapp/src/components/raster/run-controls.tsx`
+- [x] T023 [P] Unit test run-start strategy validation in `webapp/tests/unit/raster-runs-route.test.ts`
+- [x] T024 [P] Unit test worker outcome-to-scenario status mapping in `webapp/tests/unit/raster-run-status.test.ts`
 
 **Checkpoint**: Both automated strategies create comparable scenarios.
 
@@ -79,16 +79,16 @@
 
 **Independent Test**: Enter a complete manual assignment for one input set and verify it becomes a comparable scenario with shared KPIs and details.
 
-- [ ] T025 Add manual assignment validation helpers in `webapp/src/lib/raster/manualAssignments.ts`
-- [ ] T026 [P] Unit test duplicate/illegal/missing/unknown manual assignment validation in `webapp/tests/unit/manual-assignments.test.ts`
-- [ ] T027 Implement manual draft persistence service in `webapp/src/services/raster/manualAssignments.ts`
-- [ ] T028 Implement `POST /api/raster/input-sets/[id]/manual-assignments` in `webapp/src/app/api/raster/input-sets/[id]/manual-assignments/route.ts`
-- [ ] T029 Implement `POST /api/raster/manual-assignments/[id]/validate` in `webapp/src/app/api/raster/manual-assignments/[id]/validate/route.ts`
-- [ ] T030 Implement `POST /api/raster/manual-assignments/[id]/score` using shared scoring in `webapp/src/app/api/raster/manual-assignments/[id]/score/route.ts`
-- [ ] T031 Add simple paste/table parser in `webapp/src/lib/raster/manualAssignmentImport.ts`
-- [ ] T032 [P] Unit test paste/table import matching in `webapp/tests/unit/manual-assignment-import.test.ts`
-- [ ] T033 Add visual manual assignment form in `webapp/src/components/raster/manual-assignment-form.tsx`
-- [ ] T034 Wire manual assignment entry into `webapp/src/app/(dashboard)/raster/page.tsx`
+- [x] T025 Add manual assignment validation helpers in `webapp/src/lib/raster/manualAssignments.ts`
+- [x] T026 [P] Unit test duplicate/illegal/missing/unknown manual assignment validation in `webapp/tests/unit/manual-assignments.test.ts`
+- [x] T027 Implement manual draft persistence service in `webapp/src/services/raster/manualAssignments.ts`
+- [x] T028 Implement `POST /api/raster/input-sets/[id]/manual-assignments` in `webapp/src/app/api/raster/input-sets/[id]/manual-assignments/route.ts`
+- [x] T029 Implement `POST /api/raster/manual-assignments/[id]/validate` in `webapp/src/app/api/raster/manual-assignments/[id]/validate/route.ts`
+- [x] T030 Implement `POST /api/raster/manual-assignments/[id]/score` using shared scoring in `webapp/src/app/api/raster/manual-assignments/[id]/score/route.ts`
+- [x] T031 Add simple paste/table parser in `webapp/src/lib/raster/manualAssignmentImport.ts`
+- [x] T032 [P] Unit test paste/table import matching in `webapp/tests/unit/manual-assignment-import.test.ts`
+- [x] T033 Add visual manual assignment form in `webapp/src/components/raster/manual-assignment-form.tsx`
+- [x] T034 Wire manual assignment entry into `webapp/src/app/(dashboard)/raster/page.tsx`
 
 **Checkpoint**: Manual plans can be scored and compared with optimizer scenarios.
 
@@ -100,21 +100,24 @@
 
 **Independent Test**: Open scenario details from comparison in no more than two interactions.
 
-- [ ] T035 Add scenario details service in `webapp/src/services/raster/scenarioDetails.ts`
-- [ ] T036 Implement `GET /api/raster/scenarios/[id]` in `webapp/src/app/api/raster/scenarios/[id]/route.ts`
-- [ ] T037 Add scenario detail view component in `webapp/src/components/raster/scenario-details.tsx`
-- [ ] T038 Wire scenario detail route or panel in `webapp/src/app/(dashboard)/raster/page.tsx`
-- [ ] T039 [P] Unit test scenario detail route in `webapp/tests/unit/raster-scenario-details-route.test.ts`
+- [x] T035 Add scenario details service in `webapp/src/services/raster/scenarioDetails.ts`
+- [x] T036 Implement `GET /api/raster/scenarios/[id]` in `webapp/src/app/api/raster/scenarios/[id]/route.ts`
+- [x] T037 Add scenario detail view component in `webapp/src/components/raster/scenario-details.tsx`
+- [x] T038 Wire scenario detail route or panel in `webapp/src/app/(dashboard)/raster/page.tsx`
+- [x] T039 [P] Unit test scenario detail route in `webapp/tests/unit/raster-scenario-details-route.test.ts`
 
 ---
 
 ## Phase 7: Polish & Cross-Cutting
 
-- [ ] T040 Add stale marker propagation when input set/scoring assumptions change in `webapp/src/services/raster/scenarios.ts`
-- [ ] T041 [P] Add Playwright smoke test for compare + manual score flow in `webapp/tests/e2e/raster-scenarios.spec.ts`
-- [ ] T042 Update `specs/004-compare-raster-runs/quickstart.md` with any implementation-specific route names
-- [ ] T043 Run `pnpm --dir webapp run typecheck` and fix 004 regressions
-- [ ] T044 Run focused unit tests for 004 and root scoring tests
+- [x] T040 Add stale marker propagation when input set/scoring assumptions change in `webapp/src/services/raster/scenarios.ts`
+- [x] T041 [P] Add Playwright smoke test for compare + manual score flow in `webapp/tests/e2e/raster-generate.spec.ts`
+- [x] T042 Update `specs/004-compare-raster-runs/quickstart.md` with any implementation-specific route names
+- [x] T043 Run `pnpm --dir webapp run typecheck` and fix 004 regressions
+- [x] T044 Run focused unit tests for 004 and root scoring tests
+- [ ] T045 [Backlog] Add infeasibility diagnostics that identify which hard constraint family blocks a CP-SAT run in `scripts/solve-raster-cpsat.py` and `webapp/worker/src/starter_worker/main.py`
+- [ ] T046 [Backlog] Show infeasibility diagnostics next to the no-solution run state in `webapp/src/components/raster/input-set-actions.tsx`
+- [x] T047 Require verified refreshed inputs for comparisons: update root click-TT ingest to click live admin group links, download group-level `Terminmeldungen (pdf)` files, verify PDF text against the clicked group title, and keep same-named groups separate by source URL before those inputs can feed scenarios.
 
 ---
 

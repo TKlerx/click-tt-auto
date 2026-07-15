@@ -409,9 +409,9 @@ function Get-ImageReference([string]$ArtifactName) {
 
 function Build-Image([string]$ArtifactName, [string]$ImageReference) {
     $command = switch ($ArtifactName) {
-        "app" { "docker build --pull --no-cache --target runner -t `"$ImageReference`" -f Dockerfile.app ." }
-        "migrate" { "docker build --pull --no-cache --target migrate-runner -t `"$ImageReference`" -f Dockerfile.app ." }
-        "worker" { "docker build --pull --no-cache -t `"$ImageReference`" -f webapp/Dockerfile.worker .." }
+        "app" { "docker build --pull --no-cache --target runner -t `"$ImageReference`" -f webapp/Dockerfile.app ." }
+        "migrate" { "docker build --pull --no-cache --target migrate-runner -t `"$ImageReference`" -f webapp/Dockerfile.app ." }
+        "worker" { "docker build --pull --no-cache -t `"$ImageReference`" -f webapp/Dockerfile.worker ." }
         default { throw "Unknown artifact: $ArtifactName" }
     }
 
@@ -428,8 +428,8 @@ function Build-Image([string]$ArtifactName, [string]$ImageReference) {
 
 function Build-AuditImage([string]$ArtifactName, [string]$ImageReference) {
     $command = switch ($ArtifactName) {
-        "app" { "docker build --target dependency-audit -t `"$ImageReference`" -f Dockerfile.app ." }
-        "worker" { "docker build --target dependency-audit -t `"$ImageReference`" -f webapp/Dockerfile.worker .." }
+        "app" { "docker build --target dependency-audit -t `"$ImageReference`" -f webapp/Dockerfile.app ." }
+        "worker" { "docker build --target dependency-audit -t `"$ImageReference`" -f webapp/Dockerfile.worker ." }
         default { throw "Dependency audit image is not defined for artifact: $ArtifactName" }
     }
 
@@ -500,12 +500,12 @@ function ConvertFrom-PnpmAudit([object]$Audit, [string]$ArtifactName, [string]$S
 }
 
 function Invoke-HostAppAudit {
-    if (-not (Test-RequiredFile "package.json" "app" "app-host-dependency-audit")) { return }
-    if (-not (Test-RequiredFile "pnpm-lock.yaml" "app" "app-host-dependency-audit")) { return }
+    if (-not (Test-RequiredFile "webapp/package.json" "app" "app-host-dependency-audit")) { return }
+    if (-not (Test-RequiredFile "webapp/pnpm-lock.yaml" "app" "app-host-dependency-audit")) { return }
 
     Write-Step "App host production dependency audit"
     $command = "pnpm audit --prod --no-optional --json"
-    $result = Invoke-CapturedCommand $command $RepoRoot
+    $result = Invoke-CapturedCommand $command (Join-Path $RepoRoot "webapp")
     $audit = $null
     if ($result.Text) {
         $audit = ConvertFrom-TrivyJsonOutput $result.Text
@@ -522,8 +522,8 @@ function Invoke-HostAppAudit {
 }
 
 function Invoke-AppImageDependencyAudit {
-    if (-not (Test-RequiredFile "package.json" "app" "app-image-dependency-audit")) { return }
-    if (-not (Test-RequiredFile "pnpm-lock.yaml" "app" "app-image-dependency-audit")) { return }
+    if (-not (Test-RequiredFile "webapp/package.json" "app" "app-image-dependency-audit")) { return }
+    if (-not (Test-RequiredFile "webapp/pnpm-lock.yaml" "app" "app-image-dependency-audit")) { return }
 
     Write-Step "App image-context production dependency audit"
     $auditImage = "business-app-starter-dependency-audit:latest"
@@ -586,8 +586,8 @@ function ConvertFrom-UvAuditText([string]$Text, [string]$ArtifactName, [string]$
 }
 
 function Invoke-WorkerImageDependencyAudit {
-    if (-not (Test-RequiredFile "worker/pyproject.toml" "worker" "worker-image-dependency-audit")) { return }
-    if (-not (Test-RequiredFile "worker/uv.lock" "worker" "worker-image-dependency-audit")) { return }
+    if (-not (Test-RequiredFile "webapp/worker/pyproject.toml" "worker" "worker-image-dependency-audit")) { return }
+    if (-not (Test-RequiredFile "webapp/worker/uv.lock" "worker" "worker-image-dependency-audit")) { return }
 
     Write-Step "Worker image-context production dependency audit"
     $auditImage = "business-app-starter-worker-dependency-audit:latest"
@@ -665,7 +665,7 @@ function Get-TrivyConfigCommand([string]$ScanPath) {
     $relativePath = ConvertTo-RepoRelativePath $ScanPath
     $containerPath = "/repo/$relativePath".Replace("\", "/")
     $scannerImage = Resolve-TrivyImage
-    $skipDirs = "--skip-dirs /repo/infra/azure/.terraform --skip-dirs /repo/infra/azure/bootstrap/.terraform"
+    $skipDirs = "--skip-dirs /repo/webapp/infra/azure/.terraform --skip-dirs /repo/webapp/infra/azure/bootstrap/.terraform"
     return "docker run --rm -v `"$RepoRoot`":/repo:ro -v trivy_cache:/root/.cache `"$scannerImage`" config --quiet $skipDirs --format json --severity HIGH,CRITICAL `"$containerPath`""
 }
 
@@ -736,16 +736,16 @@ function Invoke-TrivyConfigScan([string]$ArtifactName, [string]$ScanPath) {
 
 function Invoke-SelectedConfigScans {
     if ($Artifact -in @("all", "infra")) {
-        Invoke-TrivyConfigScan "infra" "infra/azure"
+        Invoke-TrivyConfigScan "infra" "webapp/infra/azure"
     }
     if ($Artifact -in @("all", "app", "migrate")) {
-        Invoke-TrivyConfigScan "app" "Dockerfile.app"
+        Invoke-TrivyConfigScan "app" "webapp/Dockerfile.app"
     }
     if ($Artifact -in @("all", "worker")) {
-        Invoke-TrivyConfigScan "worker" "Dockerfile.worker"
+        Invoke-TrivyConfigScan "worker" "webapp/Dockerfile.worker"
     }
     if ($Artifact -in @("all", "infra")) {
-        Invoke-TrivyConfigScan "compose" "docker-compose.yml"
+        Invoke-TrivyConfigScan "compose" "webapp/docker-compose.yml"
     }
 }
 

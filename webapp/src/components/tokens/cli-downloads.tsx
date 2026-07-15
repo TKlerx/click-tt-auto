@@ -48,7 +48,7 @@ export function CliDownloads() {
       </div>
 
       <pre className="mt-4 overflow-x-auto rounded-lg border border-[var(--border)] bg-black/5 p-3 font-mono text-xs dark:bg-white/5">
-{`starterctl configure --server ${serverUrl} --token <TOKEN>
+        {`starterctl configure --server ${serverUrl} --token <TOKEN>
 starterctl health`}
       </pre>
 

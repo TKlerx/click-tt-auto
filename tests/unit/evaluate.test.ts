@@ -34,13 +34,28 @@ describe("raster evaluation", () => {
     expect(evaluate(model, { a: 5, b: 6 }).hardViolations).toHaveLength(0);
   });
 
-  it("reports Spielwoche misses without default penalty", () => {
-    const model = fixture.model as unknown as SeasonModel;
-    model.teams[0]!.spielwochePref = "B";
+  it("reports Spielwoche rhythm misses without default penalty", () => {
+    const model = structuredClone(fixture.model) as unknown as SeasonModel;
+    model.teams[0]!.spielwochePref = "A";
+    model.teams[1]!.spielwochePref = "A";
     const result = evaluate(model, fixture.assignment);
 
     expect(result.spielwocheMisses).toHaveLength(1);
+    expect(result.spielwocheMisses[0]).toMatchObject({
+      teamA: "a",
+      teamB: "b",
+      want: "zeitgleich",
+      got: "wechsel"
+    });
     expect(result.objective).toBe(fixture.expected.objective);
+  });
+
+  it("treats opposite Spielwoche labels as alternating rhythm, not absolute slots", () => {
+    const model = structuredClone(fixture.model) as unknown as SeasonModel;
+    model.teams[0]!.spielwochePref = "A";
+    model.teams[1]!.spielwochePref = "B";
+
+    expect(evaluate(model, fixture.assignment).spielwocheMisses).toHaveLength(0);
   });
 
   it("penalizes concentrated hall excess more than spread excess", () => {

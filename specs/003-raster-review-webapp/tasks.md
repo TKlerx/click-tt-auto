@@ -164,6 +164,7 @@
 - [x] T062 [US1] Add `GET/POST /api/raster/sources` in `webapp/src/app/api/raster/sources/route.ts` with route tests in `webapp/tests/unit/raster-sources-route.test.ts`.
 - [x] T063 [US1] Add Raster page source list/manual source-cache form in `webapp/src/components/raster/sources/raster-sources-panel.tsx` and wire it into `webapp/src/app/(dashboard)/raster/page.tsx`.
 - [x] T064 [US1] Add explicit parser refresh action for a stored `RasterSource` in `webapp/src/app/api/raster/sources/[id]/refresh/route.ts`, supporting group assignment and wishes PDF source types without refreshing on ordinary page load.
+- [x] T064a [US1] Harden click-TT admin refresh so it clicks through live nuLiga admin group links, downloads group-level `Terminmeldungen (pdf)` files, verifies PDF text against the clicked group title, and fails clearly on mismatches instead of storing a wrong parsed cache.
 - [x] T065 [US1] Add source upload/link UI controls in `webapp/src/components/raster/sources/raster-sources-panel.tsx` so admins can upload replacement PDFs or trigger click-TT parsing for a selected hierarchy scope.
 - [x] T066 [US1] Wire refreshed `RasterSource.parsedJson` into input-set preparation in `webapp/src/services/raster/inputSets.ts`, allowing OWL input sets to consume inherited WTTV group assignment cache plus OWL wishes cache.
 - [x] T067 [P] [US1] Add Playwright coverage in `webapp/tests/e2e/raster-generate.spec.ts` proving an inherited WTTV source appears in the OWL flow and is not reparsed on reload.
@@ -189,6 +190,20 @@
 - [x] T078 [US1] Add Playwright coverage for the real guided admin workflow: season + hierarchy district selection, click-TT URL source, multi-wish upload, delete wrong source, validate/start, and open results.
 
 **Checkpoint**: The admin can complete the intended workflow from the UI without knowing internal source types, API routes, or worker mechanics.
+
+---
+
+## Phase 12: Parsed Source Identity Review Backlog
+
+**Goal**: Prevent duplicate club/team identities when click-TT group assignments and wish PDFs spell the same club differently.
+
+**Independent Test**: Upload/refresh a group assignment and wish PDF where the same club uses an abbreviation or suffix difference; verify the UI proposes the match, an admin can confirm/correct it, and a later upload reuses the confirmed alias.
+
+- [ ] T079 [US1] Add a persisted source-identity alias model for scope/season-aware club and team name mappings.
+- [ ] T080 [US1] Add fuzzy club/team matching in input-set cache sync, using exact normalized matches automatically and marking uncertain matches for review.
+- [ ] T081 [US1] Add parsed source identity review UI so admins can accept a suggestion, pick another club/team, or create a new identity before validation/run.
+- [ ] T082 [US1] Reuse confirmed aliases on future uploads and add tests for abbreviation/suffix cases such as `SC GW Paderborn` vs `SC Grün-Weiß Paderborn`.
+- [ ] T083 [US1] Add a focused club-alias review table: parsed PDF club identity → canonical click-TT club identity, match confidence/source, admin override, and persisted alias reuse so capacity inference cannot create duplicate club rows after future imports.
 
 ---
 

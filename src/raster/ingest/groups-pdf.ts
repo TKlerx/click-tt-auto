@@ -61,9 +61,9 @@ export async function parseGroupsPdf(
 }
 
 export function splitIntoSupportedGroupSizes(total: number): number[] {
-  if (total <= 14) return [total];
+  if (total <= 12) return [total];
 
-  const minGroups = Math.ceil(total / 14);
+  const minGroups = Math.ceil(total / 12);
   const maxGroups = Math.floor(total / 6);
   const preferred = Math.round(total / 10);
   const candidates = Array.from(
@@ -74,7 +74,7 @@ export function splitIntoSupportedGroupSizes(total: number): number[] {
   for (const count of candidates) {
     const base = Math.floor(total / count);
     const extra = total % count;
-    if (base >= 6 && base + (extra > 0 ? 1 : 0) <= 14) {
+    if (base >= 6 && base + (extra > 0 ? 1 : 0) <= 12) {
       return Array.from({ length: count }, (_, index) =>
         index < extra ? base + 1 : base
       );

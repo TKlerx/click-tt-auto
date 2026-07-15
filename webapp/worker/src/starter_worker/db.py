@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import uuid
 from contextlib import closing
@@ -105,12 +106,12 @@ class JobStore:
                 )
             connection.commit()
 
-    def fail_job(self, job_id: str, error: str) -> None:
+    def fail_job(self, job_id: str, error: str, *, retry: bool = True) -> None:
         if self._is_sqlite:
-            self._fail_sqlite_job(job_id, error)
+            self._fail_sqlite_job(job_id, error, retry=retry)
             return
 
-        self._fail_postgres_job(job_id, error)
+        self._fail_postgres_job(job_id, error, retry=retry)
 
     def mark_notification_processing(self, notification_id: str, attempt_count: int) -> None:
         retry_count = max(attempt_count - 1, 0)
@@ -226,6 +227,9 @@ class JobStore:
                     """
                     UPDATE RasterOptimizationRun
                     SET status = 'RUNNING',
+                        outcome = NULL,
+                        solverStatus = NULL,
+                        finishedAt = NULL,
                         jobId = ?
                     WHERE id = ?
                       AND status != 'CANCELLED'
@@ -241,6 +245,9 @@ class JobStore:
                     """
                     UPDATE "RasterOptimizationRun"
                     SET status = 'RUNNING',
+                        outcome = NULL,
+                        "solverStatus" = NULL,
+                        "finishedAt" = NULL,
                         "jobId" = %s
                     WHERE id = %s
                       AND status != 'CANCELLED'
@@ -306,6 +313,38 @@ class JobStore:
                     WHERE id = %s
                     """,
                     (error, run_id),
+                )
+            connection.commit()
+
+    def mark_raster_run_infeasible(self, run_id: str, reason: str) -> None:
+        if self._is_sqlite:
+            with closing(self._sqlite_conn()) as connection:
+                connection.execute(
+                    """
+                    UPDATE RasterOptimizationRun
+                    SET status = 'FAILED',
+                        outcome = 'INFEASIBLE',
+                        solverStatus = ?,
+                        finishedAt = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                    """,
+                    (reason, run_id),
+                )
+                connection.commit()
+            return
+
+        with psycopg.connect(self._postgres_database_url) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    UPDATE "RasterOptimizationRun"
+                    SET status = 'FAILED',
+                        outcome = 'INFEASIBLE',
+                        "solverStatus" = %s,
+                        "finishedAt" = NOW()
+                    WHERE id = %s
+                    """,
+                    (reason, run_id),
                 )
             connection.commit()
 
@@ -409,8 +448,8 @@ class JobStore:
         total_excess = sum(int(row["excess"]) for row in overages)
         affected_clubs = len({str(row["clubId"]) for row in overages})
         max_excess = max([int(row["excess"]) for row in overages], default=0)
-        optimality = "PROVEN_OPTIMAL" if metadata.get("status") == "OPTIMAL" else "FEASIBLE"
-        outcome = "PROVEN_OPTIMAL" if metadata.get("status") == "OPTIMAL" else "FEASIBLE"
+        optimality = _raster_success_outcome(str(metadata.get("status") or ""))
+        outcome = optimality
         assignments = _assignment_rows(snapshot_id, model, assignment)
         objective_breakdown = json.dumps(
             metadata.get("objectiveBreakdown")
@@ -1217,7 +1256,7 @@ class JobStore:
             connection.commit()
             return row_count
 
-    def _fail_sqlite_job(self, job_id: str, error: str) -> None:
+    def _fail_sqlite_job(self, job_id: str, error: str, *, retry: bool) -> None:
         with closing(self._sqlite_conn()) as connection:
             connection.row_factory = sqlite3.Row
             row = connection.execute(
@@ -1228,7 +1267,7 @@ class JobStore:
                 return
 
             attempt_count = int(row["attemptCount"])
-            should_retry = attempt_count < self._config.max_attempts
+            should_retry = retry and attempt_count < self._config.max_attempts
             if should_retry:
                 connection.execute(
                     """
@@ -1262,7 +1301,7 @@ class JobStore:
                 )
             connection.commit()
 
-    def _fail_postgres_job(self, job_id: str, error: str) -> None:
+    def _fail_postgres_job(self, job_id: str, error: str, *, retry: bool) -> None:
         with psycopg.connect(self._postgres_database_url) as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
@@ -1275,7 +1314,7 @@ class JobStore:
                     return
 
                 attempt_count = int(row[0])
-                should_retry = attempt_count < self._config.max_attempts
+                should_retry = retry and attempt_count < self._config.max_attempts
                 if should_retry:
                     cursor.execute(
                         """
@@ -1355,6 +1394,13 @@ def _objective_breakdown(overages: list[dict[str, Any]], weights: object) -> dic
     }
 
 
+def _raster_success_outcome(status: str) -> str:
+    normalized = status.strip().upper()
+    if normalized == "OPTIMAL":
+        return "PROVEN_OPTIMAL"
+    return "FEASIBLE"
+
+
 def _assignment_rows(
     snapshot_id: str, model: dict[str, Any], assignment: dict[str, Any]
 ) -> list[tuple[Any, ...]]:
@@ -1408,7 +1454,7 @@ def _conflict_rows(
             _weekday_to_db(str(row["weekday"])),
             str(row["hall"]),
             int(row["capacity"]),
-            len(row["teams"]),
+            int(row["actualCount"]),
             int(row["excess"]),
             json.dumps(row["teams"]),
         )
@@ -1422,17 +1468,22 @@ def _find_overage_rows(model: dict[str, Any], assignment: dict[str, Any]) -> lis
     clubs = _dicts(model.get("clubs"))
     team_group = {str(team_id): group for group in groups for team_id in group.get("teamIds", [])}
     group_byes = {_group_key(group): _unused_rasterzahl(group, assignment) for group in groups}
+    inferred_capacities = _inferred_capacities(teams)
     slots: dict[tuple[str, str, str, int], dict[str, Any]] = {}
     for team in teams:
+        if team.get("capacityRelevant") is False:
+            continue
         team_id = str(team.get("id") or "")
         group = team_group.get(team_id)
         rasterzahl = int(assignment.get(team_id) or 0)
-        if not group or not rasterzahl:
+        if not isinstance(group, dict) or not rasterzahl:
             continue
-        capacity = _capacity_for(clubs, team)
+        capacity = _capacity_for(clubs, team, inferred_capacities)
         if capacity is None:
             continue
-        for week in _home_weeks(group, rasterzahl, group_byes.get(_group_key(group))):
+        raw_raster = team.get("rasterzahl")
+        raster: dict[str, Any] = raw_raster if isinstance(raw_raster, dict) else {}
+        for week in _unique_home_weeks(group, rasterzahl, group_byes.get(_group_key(group))):
             key = (
                 str(team.get("clubId") or ""),
                 str(team.get("hall") or "1"),
@@ -1440,11 +1491,26 @@ def _find_overage_rows(model: dict[str, Any], assignment: dict[str, Any]) -> lis
                 week,
             )
             slot = slots.setdefault(key, {"teams": [], "capacity": capacity})
-            slot["teams"].append(team_id)
+            slot["teams"].append(
+                {
+                    "id": team_id,
+                    "league": str((group.get("ref") or {}).get("league") or ""),
+                    "group": str((group.get("ref") or {}).get("name") or ""),
+                    "label": team.get("label"),
+                    "assignedRasterzahl": rasterzahl,
+                    "requestedRasterzahl": team.get("requestedRasterzahl"),
+                    "assignmentStatus": _assignment_status(str(raster.get("kind") or "")),
+                    "weekSlot": team.get("spielwochePref"),
+                    "startTime": team.get("startTime"),
+                    "start_minutes": _parse_start_minutes(team.get("startTime")),
+                    "duration_minutes": _match_duration_minutes(team.get("label")),
+                }
+            )
             slot["capacity"] = capacity
     rows: list[dict[str, Any]] = []
     for (club_id, hall, weekday, week), slot in slots.items():
-        excess = len(slot["teams"]) - int(slot["capacity"])
+        actual_count = _required_capacity(slot["teams"])
+        excess = actual_count - int(slot["capacity"])
         if excess > 0:
             rows.append(
                 {
@@ -1452,40 +1518,127 @@ def _find_overage_rows(model: dict[str, Any], assignment: dict[str, Any]) -> lis
                     "hall": hall,
                     "weekday": weekday,
                     "week": week,
-                    "teams": slot["teams"],
+                    "teams": _unique_team_refs(slot["teams"]),
                     "capacity": slot["capacity"],
+                    "actualCount": actual_count,
                     "excess": excess,
                 }
             )
     return rows
 
 
-def _capacity_for(clubs: list[dict[str, Any]], team: dict[str, Any]) -> int | None:
+def _required_capacity(teams: list[dict[str, Any]]) -> int:
+    unknown_times = sum(1 for team in teams if team.get("start_minutes") is None)
+    events: list[tuple[int, int]] = []
+    for team in teams:
+        start = team.get("start_minutes")
+        if isinstance(start, int):
+            events.append((start, 1))
+            events.append((start + int(team.get("duration_minutes") or 180), -1))
+    events.sort(key=lambda event: (event[0], event[1]))
+    concurrent = 0
+    max_concurrent = 0
+    for _, delta in events:
+        concurrent += delta
+        max_concurrent = max(max_concurrent, concurrent)
+    return max_concurrent + unknown_times
+
+
+def _unique_team_refs(teams: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    refs: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for team in teams:
+        team_id = str(team.get("id") or "")
+        if team_id and team_id not in seen:
+            seen.add(team_id)
+            refs.append(
+                {
+                    "id": team_id,
+                    "league": team.get("league"),
+                    "group": team.get("group"),
+                    "label": team.get("label"),
+                    "assignedRasterzahl": team.get("assignedRasterzahl"),
+                    "requestedRasterzahl": team.get("requestedRasterzahl"),
+                    "assignmentStatus": team.get("assignmentStatus"),
+                    "weekSlot": team.get("weekSlot"),
+                    "startTime": team.get("startTime"),
+                    "durationMinutes": team.get("duration_minutes"),
+                }
+            )
+    return refs
+
+
+def _parse_start_minutes(value: Any) -> int | None:
+    match = re.match(r"^(\d{1,2})[:.](\d{2})$", str(value or "").strip())
+    if not match:
+        return None
+    hours = int(match.group(1))
+    minutes = int(match.group(2))
+    if hours > 23 or minutes > 59:
+        return None
+    return hours * 60 + minutes
+
+
+def _match_duration_minutes(label: Any) -> int:
+    return 120 if re.search(r"\bjugend\b", str(label or ""), re.IGNORECASE) else 180
+
+
+def _capacity_for(
+    clubs: list[dict[str, Any]],
+    team: dict[str, Any],
+    inferred_capacities: dict[tuple[str, str, str, str], int] | None = None,
+) -> int | None:
     club = next((row for row in clubs if row.get("id") == team.get("clubId")), None)
     venues = club.get("venues") if club else None
-    if not isinstance(venues, list):
-        return None
-    venue = next(
-        (
-            row
-            for row in venues
-            if isinstance(row, dict) and str(row.get("hall") or "") == str(team.get("hall") or "")
-        ),
-        None,
+    venue = (
+        next(
+            (
+                row
+                for row in venues
+                if isinstance(row, dict)
+                and str(row.get("hall") or "") == str(team.get("hall") or "")
+            ),
+            None,
+        )
+        if isinstance(venues, list)
+        else None
+    )
+    weekday = str(team.get("homeWeekday") or "")
+    hall = str(team.get("hall") or "1")
+    club_id = str(team.get("clubId") or "")
+    inferred_capacity = max(
+        (inferred_capacities or {}).get((club_id, hall, weekday, "A"), 0),
+        (inferred_capacities or {}).get((club_id, hall, weekday, "B"), 0),
     )
     if not venue:
-        return None
+        return inferred_capacity or None
     by_day = venue.get("capacityByWeekday")
-    weekday = str(team.get("homeWeekday") or "")
     if isinstance(by_day, dict) and weekday in by_day:
         return int(by_day[weekday])
     if venue.get("capacity") is not None:
         return int(venue["capacity"])
-    return None
+    return inferred_capacity or None
+
+
+def _inferred_capacities(teams: list[dict[str, Any]]) -> dict[tuple[str, str, str, str], int]:
+    inferred: dict[tuple[str, str, str, str], int] = {}
+    for team in teams:
+        pref = team.get("spielwochePref")
+        if not pref:
+            continue
+        key = (
+            str(team.get("clubId") or ""),
+            str(team.get("hall") or "1"),
+            str(team.get("homeWeekday") or ""),
+            str(pref),
+        )
+        inferred[key] = inferred.get(key, 0) + 1
+    return inferred
 
 
 def _group_key(group: dict[str, Any]) -> str:
-    ref = group.get("ref") if isinstance(group.get("ref"), dict) else {}
+    raw_ref = group.get("ref")
+    ref: dict[str, Any] = raw_ref if isinstance(raw_ref, dict) else {}
     return f"{ref.get('league') or ''}::{ref.get('name') or ''}"
 
 
@@ -1538,6 +1691,12 @@ def _home_weeks(group: dict[str, Any], rasterzahl: int, bye: int | None = None) 
             if pairing and pairing["away"] == rasterzahl and pairing["home"] != bye:
                 weeks.append(week_map[len(template) + round_index])
     return weeks
+
+
+def _unique_home_weeks(
+    group: dict[str, Any], rasterzahl: int, bye: int | None = None
+) -> list[int]:
+    return list(dict.fromkeys(_home_weeks(group, rasterzahl, bye)))
 
 
 def _raster_size_for_group(group: dict[str, Any]) -> int | str:

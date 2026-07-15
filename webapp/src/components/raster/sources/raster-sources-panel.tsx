@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { withBasePath } from "@/lib/base-path";
+import { buildProjectionReviewRows } from "./source-projection";
 
 type RasterSourceRow = {
   id: string;
@@ -21,22 +22,30 @@ type RasterScopeOption = {
   name: string;
 };
 
+type RasterInputSetRow = {
+  name: string;
+  seasonModelJson: string | null;
+};
+
 export function RasterSourcesPanel({
   district,
   season,
   scopes,
   sources,
+  inputSet,
   canEdit,
 }: {
   district: string;
   season: string;
   scopes: RasterScopeOption[];
   sources: RasterSourceRow[];
+  inputSet?: RasterInputSetRow | null;
   canEdit: boolean;
 }) {
   const router = useRouter();
   const [message, setMessage] = useState<string | null>(null);
   const [refreshingId, setRefreshingId] = useState<string | null>(null);
+  const [savingParsedId, setSavingParsedId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [sourceMessages, setSourceMessages] = useState<Record<string, string>>(
     {},
@@ -146,6 +155,34 @@ export function RasterSourcesPanel({
     }
   }
 
+  async function saveParsedJson(sourceId: string, formData: FormData) {
+    setSavingParsedId(sourceId);
+    setMessage(null);
+    try {
+      const response = await fetch(
+        withBasePath(`/api/raster/sources/${sourceId}`),
+        {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            parsedJson: String(formData.get("parsedJson") ?? ""),
+          }),
+        },
+      );
+      if (!response.ok) {
+        const body = (await response.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        setMessage(body.error ?? `Save failed (${response.status})`);
+        return;
+      }
+      setMessage("Parsed data saved");
+      router.refresh();
+    } finally {
+      setSavingParsedId(null);
+    }
+  }
+
   return (
     <section className="overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--panel)]">
       <div className="border-b border-[var(--border)] px-4 py-3">
@@ -212,6 +249,46 @@ export function RasterSourcesPanel({
                 <p className="text-sm text-[var(--muted-foreground)] md:col-span-6">
                   {sourceMessages[source.id]}
                 </p>
+              ) : null}
+              {source.parsedJson ? (
+                <details className="md:col-span-6">
+                  <summary className="cursor-pointer text-sm font-medium">
+                    Parsed data: {parsedSourceSummary(source.parsedJson)}
+                  </summary>
+                  {source.sourceType.toUpperCase() === "WISHES_PDF" ? (
+                    <ProjectionReview
+                      inputSet={inputSet}
+                      sourceJson={source.parsedJson}
+                    />
+                  ) : null}
+                  {canEdit ? (
+                    <form
+                      action={(formData) =>
+                        void saveParsedJson(source.id, formData)
+                      }
+                      className="mt-2 grid gap-2"
+                    >
+                      <textarea
+                        className="min-h-80 rounded-md border border-[var(--border)] bg-[var(--background)] p-3 font-mono text-xs"
+                        name="parsedJson"
+                        defaultValue={formatParsedJson(source.parsedJson)}
+                      />
+                      <button
+                        className="h-9 w-fit rounded-md border border-[var(--border)] px-3 text-sm font-medium"
+                        disabled={savingParsedId === source.id}
+                        type="submit"
+                      >
+                        {savingParsedId === source.id
+                          ? "..."
+                          : "Save parsed data"}
+                      </button>
+                    </form>
+                  ) : (
+                    <pre className="mt-2 max-h-96 overflow-auto rounded-md border border-[var(--border)] bg-[var(--background)] p-3 text-xs">
+                      {formatParsedJson(source.parsedJson)}
+                    </pre>
+                  )}
+                </details>
               ) : null}
             </div>
           ))
@@ -326,7 +403,10 @@ export function RasterSourcesPanel({
             <summary className="cursor-pointer text-sm font-semibold">
               Advanced: register external source
             </summary>
-            <form action={submitLink} className="mt-4 grid gap-3 md:grid-cols-2">
+            <form
+              action={submitLink}
+              className="mt-4 grid gap-3 md:grid-cols-2"
+            >
               <input name="season" type="hidden" value={season} />
               <p className="text-sm text-[var(--muted-foreground)] md:col-span-2">
                 Paste a normal click-TT league page URL instead of uploading a
@@ -401,4 +481,98 @@ export function RasterSourcesPanel({
       ) : null}
     </section>
   );
+}
+
+function ProjectionReview({
+  inputSet,
+  sourceJson,
+}: {
+  inputSet?: RasterInputSetRow | null;
+  sourceJson: string;
+}) {
+  const rows = buildProjectionReviewRows(
+    sourceJson,
+    inputSet?.seasonModelJson ?? null,
+  );
+  if (!inputSet?.seasonModelJson) {
+    return (
+      <p className="mt-3 text-sm text-[var(--muted-foreground)]">
+        No input set model to compare against yet.
+      </p>
+    );
+  }
+  if (!rows.length) return null;
+
+  return (
+    <details className="mt-3 rounded-md border border-[var(--border)] p-3">
+      <summary className="cursor-pointer text-sm font-medium">
+        Projection review against {inputSet.name}:{" "}
+        {rows.filter((row) => row.status === "missing").length} unmatched
+      </summary>
+      <div className="mt-3 overflow-auto">
+        <table className="w-full min-w-[52rem] text-left text-xs">
+          <thead className="text-[var(--muted-foreground)]">
+            <tr>
+              <th className="py-2 pr-3 font-medium">Status</th>
+              <th className="py-2 pr-3 font-medium">PDF club</th>
+              <th className="py-2 pr-3 font-medium">PDF team</th>
+              <th className="py-2 pr-3 font-medium">Parsed</th>
+              <th className="py-2 pr-3 font-medium">Matched id</th>
+              <th className="py-2 pr-3 font-medium">Applied</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, index) => (
+              <tr className="border-t border-[var(--border)]" key={index}>
+                <td className="py-2 pr-3">
+                  {row.status === "matched" ? "matched" : "missing"}
+                </td>
+                <td className="py-2 pr-3">{row.sourceClub}</td>
+                <td className="py-2 pr-3">{row.sourceTeam}</td>
+                <td className="py-2 pr-3">{row.parsed}</td>
+                <td className="py-2 pr-3">{row.matchedTeam || "-"}</td>
+                <td className="py-2 pr-3">{row.applied || "-"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </details>
+  );
+}
+
+function parsedSourceSummary(parsedJson: string) {
+  try {
+    const parsed = JSON.parse(parsedJson) as {
+      assignments?: unknown[];
+      clubs?: unknown[];
+      teams?: unknown[];
+      wishes?: unknown[];
+    };
+    return (
+      [
+        countLabel(parsed.assignments, "assignment"),
+        countLabel(parsed.clubs, "club"),
+        countLabel(parsed.teams, "team"),
+        countLabel(parsed.wishes, "wish"),
+      ]
+        .filter(Boolean)
+        .join(", ") || "saved"
+    );
+  } catch {
+    return "saved";
+  }
+}
+
+function formatParsedJson(parsedJson: string) {
+  try {
+    return JSON.stringify(JSON.parse(parsedJson), null, 2);
+  } catch {
+    return parsedJson;
+  }
+}
+
+function countLabel(rows: unknown[] | undefined, label: string) {
+  if (!rows?.length) return null;
+  return `${rows.length} ${label}${rows.length === 1 ? "" : "s"}`;
 }

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -194,6 +195,8 @@ def relation(
 
 
 def capacity_for(model: dict[str, Any], team: dict[str, Any]) -> int | None:
+    if team.get("capacityRelevant") is False:
+        return None
     inferred: dict[tuple[str, str, str, str], int] = {}
     for candidate in model["teams"]:
         pref = candidate.get("spielwochePref")
@@ -216,6 +219,56 @@ def capacity_for(model: dict[str, Any], team: dict[str, Any]) -> int | None:
         inferred.get((team["clubId"], team["hall"], team["homeWeekday"], "B"), 0),
     )
     return inferred_capacity or None
+
+
+def parse_start_minutes(value: object) -> int | None:
+    if not isinstance(value, str):
+        return None
+    parts = value.strip().replace(".", ":").split(":")
+    if len(parts) != 2:
+        return None
+    try:
+        hours = int(parts[0])
+        minutes = int(parts[1])
+    except ValueError:
+        return None
+    if hours > 23 or minutes > 59:
+        return None
+    return hours * 60 + minutes
+
+
+def match_duration_minutes(team: dict[str, Any]) -> int:
+    # Keep in step with requiredCapacity's matchDurationMinutes in
+    # src/raster/score/penalties.ts and _match_duration_minutes in
+    # webapp/worker/src/starter_worker/db.py. All three must agree: the solver
+    # optimizes against this duration and the other two score the result, so a
+    # divergence makes the objective disagree with the reported score.
+    return 120 if re.search(r"\bjugend\b", str(team.get("label") or ""), re.IGNORECASE) else 180
+
+
+def capacity_buckets(slot_teams: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
+    unknown = [team for team in slot_teams if parse_start_minutes(team.get("startTime")) is None]
+    known = [team for team in slot_teams if parse_start_minutes(team.get("startTime")) is not None]
+    if not known:
+        return [unknown] if unknown else []
+
+    buckets: list[list[dict[str, Any]]] = []
+    seen: set[tuple[str, ...]] = set()
+    for minute in sorted({parse_start_minutes(team.get("startTime")) for team in known}):
+        if minute is None:
+            continue
+        active = [
+            team
+            for team in known
+            if (start := parse_start_minutes(team.get("startTime"))) is not None
+            and start <= minute < start + match_duration_minutes(team)
+        ]
+        bucket = [*active, *unknown]
+        key = tuple(sorted(str(team["id"]) for team in bucket))
+        if bucket and key not in seen:
+            seen.add(key)
+            buckets.append(bucket)
+    return buckets
 
 
 def main() -> None:
@@ -309,7 +362,7 @@ def main() -> None:
                 model.add_allowed_assignments([rz[team_id], var], table)
             home_bool[(team_id, week)] = var
 
-    excess_by_club: dict[str, list[cp_model.IntVar]] = {}
+    excess_by_club: dict[str, list[tuple[cp_model.IntVar, int]]] = {}
     slot_keys = sorted(
         {
             (team["clubId"], team["hall"], team["homeWeekday"], week)
@@ -341,19 +394,28 @@ def main() -> None:
         capacity = capacity_for(season, slot_teams[0])
         if capacity is None:
             continue
-        count = sum(home_bool[(team["id"], week)] for team in slot_teams)
-        excess = model.new_bool_var(f"excess_{club_id}_{hall}_{weekday}_{week}")
-        model.add(count <= capacity + 1)
-        model.add(count >= capacity + 1).only_enforce_if(excess)
-        model.add(count <= capacity).only_enforce_if(excess.Not())
-        objective_terms.append(excess * int(weights["overUsage"]))
-        excess_by_club.setdefault(club_id, []).append(excess)
+        buckets = capacity_buckets(slot_teams)
+        if not buckets:
+            continue
+        actual = model.new_int_var(0, len(slot_teams), f"actual_{club_id}_{hall}_{weekday}_{week}")
+        for bucket in buckets:
+            count = sum(home_bool[(team["id"], week)] for team in bucket)
+            model.add(actual >= count)
+        excess = model.new_int_var(0, len(slot_teams), f"excess_{club_id}_{hall}_{weekday}_{week}")
+        excess_square = model.new_int_var(0, len(slot_teams) ** 2, f"excess_square_{club_id}_{hall}_{weekday}_{week}")
+        model.add(excess >= actual - capacity)
+        model.add(excess >= 0)
+        model.add_element(excess, [value * value for value in range(len(slot_teams) + 1)], excess_square)
+        objective_terms.append(excess_square * int(weights["overUsage"]))
+        excess_by_club.setdefault(club_id, []).append((excess, len(slot_teams)))
 
-    for club_id, excesses in excess_by_club.items():
-        total = model.new_int_var(0, len(excesses), f"club_excess_{club_id}")
-        square = model.new_int_var(0, len(excesses) ** 2, f"club_excess_square_{club_id}")
+    for club_id, excess_entries in excess_by_club.items():
+        excesses = [excess for excess, _ in excess_entries]
+        max_total_excess = sum(max_excess for _, max_excess in excess_entries)
+        total = model.new_int_var(0, max_total_excess, f"club_excess_{club_id}")
+        square = model.new_int_var(0, max_total_excess**2, f"club_excess_square_{club_id}")
         model.add(total == sum(excesses))
-        model.add_element(total, [value * value for value in range(len(excesses) + 1)], square)
+        model.add_element(total, [value * value for value in range(max_total_excess + 1)], square)
         objective_terms.append(square * int(weights["overUsageFairness"]))
 
     for wish in season["wishes"]:
@@ -398,26 +460,55 @@ def main() -> None:
         objective_terms.append(broken * int(weights[wish["relation"]]))
 
     if int(weights["spielwoche"]):
-        for team_id, team in teams.items():
-            pref = team.get("spielwochePref")
-            group = team_group.get(team_id)
-            if not pref or not group:
-                continue
-            miss = model.new_bool_var(f"spielwoche_{team_id}")
-            key = str(group["ref"]["league"]) + "::" + str(group["ref"]["name"])
-            bye_var = bye.get(key)
-            if bye_var is not None:
-                table = [
-                    (value, bye_value, int(week_slot_for_group(group, value, bye_value) != pref))
-                    for value in raster_values_for_group(group)
-                    for bye_value in raster_values_for_group(group)
-                    if value != bye_value
-                ]
-                model.add_allowed_assignments([rz[team_id], bye_var, miss], table)
-            else:
-                table = [(value, int(week_slot_for_group(group, value) != pref)) for value in raster_values_for_group(group)]
-                model.add_allowed_assignments([rz[team_id], miss], table)
-            objective_terms.append(miss * int(weights["spielwoche"]))
+        rhythm_teams = [
+            (team_id, team)
+            for team_id, team in teams.items()
+            if team.get("spielwochePref") and team.get("capacityRelevant") is not False and team_id in team_group
+        ]
+        for left_index, (left_id, left) in enumerate(rhythm_teams):
+            for right_id, right in rhythm_teams[left_index + 1 :]:
+                if (
+                    left["clubId"] != right["clubId"]
+                    or left["hall"] != right["hall"]
+                    or left["homeWeekday"] != right["homeWeekday"]
+                ):
+                    continue
+                group_a = team_group[left_id]
+                group_b = team_group[right_id]
+                expected = "zeitgleich" if left["spielwochePref"] == right["spielwochePref"] else "wechsel"
+                key_a = str(group_a["ref"]["league"]) + "::" + str(group_a["ref"]["name"])
+                key_b = str(group_b["ref"]["league"]) + "::" + str(group_b["ref"]["name"])
+                bye_a = bye.get(key_a)
+                bye_b = bye.get(key_b)
+                same_bye = bye_a is not None and bye_a is bye_b
+                rows = []
+                for a in raster_values_for_group(group_a):
+                    for b in raster_values_for_group(group_b):
+                        for ba in (raster_values_for_group(group_a) if bye_a is not None else [None]):
+                            for bb in (raster_values_for_group(group_b) if bye_b is not None else [None]):
+                                if same_bye and ba != bb:
+                                    continue
+                                if a == ba or b == bb:
+                                    continue
+                                broken_value = int(relation(group_a, a, group_b, b, ba, bb) != expected)
+                                row = [a]
+                                if bye_a is not None:
+                                    row.append(int(ba))
+                                row.append(b)
+                                if bye_b is not None and not same_bye:
+                                    row.append(int(bb))
+                                row.append(broken_value)
+                                rows.append(tuple(row))
+                broken = model.new_bool_var(f"spielwoche_{left_id}_{right_id}")
+                variables = [rz[left_id]]
+                if bye_a is not None:
+                    variables.append(bye_a)
+                variables.append(rz[right_id])
+                if bye_b is not None and not same_bye:
+                    variables.append(bye_b)
+                variables.append(broken)
+                model.add_allowed_assignments(variables, rows)
+                objective_terms.append(broken * int(weights["spielwoche"]))
 
     model.minimize(sum(objective_terms) if objective_terms else 0)
     solver = cp_model.CpSolver()

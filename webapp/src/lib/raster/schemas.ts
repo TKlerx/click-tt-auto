@@ -54,6 +54,8 @@ export const seasonModelSchema = z
   .passthrough();
 
 export const runSettingsSchema = z.object({
+  strategy: z.enum(["cp_sat", "initial_heuristic"]).default("cp_sat"),
+  name: optionalText,
   timeLimitSeconds: z.coerce.number().int().positive().default(60),
   randomSeed: z.coerce.number().int().optional(),
   weights: z

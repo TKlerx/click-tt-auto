@@ -4,7 +4,10 @@ import { requireApiUser } from "@/lib/route-auth";
 import { assertRasterAccess } from "@/lib/raster/access";
 import { normalizeRasterSeason } from "@/lib/raster/season";
 import { prisma } from "@/lib/db";
-import { listRasterSourcesForDistrict, upsertRasterSource } from "@/services/raster";
+import {
+  listRasterSourcesForDistrict,
+  upsertRasterSource,
+} from "@/services/raster";
 
 const sourceBodySchema = z.object({
   scopeCode: z.string().trim().min(1),
@@ -50,10 +53,17 @@ export async function POST(request: Request) {
     await request.json().catch(() => null),
   );
   if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid source payload" }, { status: 422 });
+    return NextResponse.json(
+      { error: "Invalid source payload" },
+      { status: 422 },
+    );
   }
 
-  const access = await assertRasterAccess(auth.user, parsed.data.scopeCode, "admin");
+  const access = await assertRasterAccess(
+    auth.user,
+    parsed.data.scopeCode,
+    "admin",
+  );
   if (access !== true) return access.error;
 
   const scope = await prisma.scope.findFirst({

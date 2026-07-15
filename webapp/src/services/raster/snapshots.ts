@@ -50,13 +50,13 @@ export type SnapshotPenaltyEvent = {
 
 export async function listSnapshots(district: string) {
   return prisma.rasterSnapshot.findMany({
-    where: rasterDistrictWhere(district),
+    where: { ...rasterDistrictWhere(district), archivedAt: null },
     orderBy: { createdAt: "desc" },
   });
 }
 
 export async function getSnapshot(id: string) {
-  return prisma.rasterSnapshot.findUnique({ where: { id } });
+  return prisma.rasterSnapshot.findFirst({ where: { id, archivedAt: null } });
 }
 
 export async function listSnapshotConflicts(

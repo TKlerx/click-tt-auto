@@ -3,9 +3,8 @@ import { describe, expect, it } from "vitest";
 describe("raster penalty events", () => {
   it("reports same-club matches after Spieltag 3", async () => {
     process.env.DATABASE_URL = "postgresql://user:pass@localhost:5432/test";
-    const { findSameClubMatchPenalties } = await import(
-      "@/services/raster/snapshots"
-    );
+    const { findSameClubMatchPenalties } =
+      await import("@/services/raster/snapshots");
     const rows = Array.from({ length: 8 }, (_, index) => ({
       id: `a-${index + 1}`,
       league: "L",

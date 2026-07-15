@@ -1,6 +1,10 @@
 import { expect, test } from "@playwright/test";
 import { Role } from "../../generated/prisma/enums";
-import { expectOnDashboard, loginWithPassword } from "./helpers/auth";
+import {
+  expectOnDashboard,
+  loginWithPassword,
+  openUserMenu,
+} from "./helpers/auth";
 import { seedLocalUser } from "./helpers/db";
 
 test("locale switcher reloads the app with the selected language", async ({
@@ -26,8 +30,10 @@ test("locale switcher reloads the app with the selected language", async ({
   await loginWithPassword(page, "e2e-locale-user@example.com", "LocalePass123");
   await expectOnDashboard(page);
 
-  await page.getByRole("combobox", { name: "Locale" }).click();
-  await page.getByRole("option", { name: "Deutsch" }).click();
+  await openUserMenu(page);
+  await page.getByRole("menuitem", { name: "English" }).hover();
+  await page.getByRole("menuitem", { name: "Deutsch" }).focus();
+  await page.keyboard.press("Enter");
 
   await expect(
     page.getByRole("heading", { name: /Willkommen zuruck/i }),
@@ -35,7 +41,6 @@ test("locale switcher reloads the app with the selected language", async ({
     timeout: 15000,
   });
   await expect(page.locator("html")).toHaveAttribute("lang", "de");
-  await expect(page.getByRole("combobox", { name: "Locale" })).toContainText(
-    "Deutsch",
-  );
+  await openUserMenu(page);
+  await expect(page.getByRole("menuitem", { name: "Deutsch" })).toBeVisible();
 });

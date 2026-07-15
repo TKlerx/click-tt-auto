@@ -106,7 +106,7 @@ Guidelines:
 ```
 
 Playwright E2E defaults to a local PostgreSQL container named
-`webapp-template-e2e-postgres` on host port `55432`. The E2E setup script
+`click-tt-e2e-postgres` on host port `55432`. The E2E setup script
 creates or starts that container, ensures the `business_app_starter_e2e_test`
 database exists, resets that database, seeds the initial admin, and runs the app
 with the Postgres Prisma schema. Use a separate database such as
@@ -151,7 +151,7 @@ regressions by default:
 - Python Radon cyclomatic complexity: 44
 - Python complexipy cognitive complexity: 46
 - CLI Go cyclomatic complexity: 15
-- jscpd duplication: 3.1%
+- jscpd duplication: 3.7%
 
 To bypass only the numeric threshold blockers during an intentional transition,
 set `QUALITY_THRESHOLDS_BYPASS=1`. Formatting, lint correctness, tests, security

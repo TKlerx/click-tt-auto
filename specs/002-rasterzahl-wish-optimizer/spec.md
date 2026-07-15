@@ -26,7 +26,7 @@ Inputs can come from PDFs on disk (available today) or, preferably, be scraped f
 - **Rasterzahl (Schlüsselzahl)**: A team's grid position `1..N` within its group. Determines its full home/away and home-week pattern via the rulebook. The decision variable — except where already fixed.
 - **Fixed Rasterzahl**: A Rasterzahl already assigned outside the district (higher leagues) that this tool must take as given and honor.
 - **Raster size**: The template size used. Odd groups ride the next-even raster with the top number as a bye (7→8er, 9→10er, 11→12er, 13→14er). Six-team groups can use either the normal 6er raster or the official 6er Doppelrunde raster, selected explicitly as group mode.
-- **Home week / Spielwoche A vs B**: The two alternating home-week slots. A team's Rasterzahl (plus size and calendar) fixes which weeks it is home.
+- **Home week / Spielwoche A vs B**: The two alternating home-week rhythm labels from club wish PDFs. Within the same club, hall, and weekday, equal labels mean teams should be home in the same rhythm; different labels mean teams should alternate. The absolute label may flip, so A/B is relational, not a fixed calendar-week target per team.
 - **im Wechsel (gegenläufig)**: A wish that two of a club's teams alternate home weeks (never home the same week) — the mechanism to avoid a hall clash.
 - **zeitgleich / parallel / gemeinsam**: A wish that two of a club's teams are home the same slot on purpose.
 - **Spiellokal / Halle**: A club has up to three playing venues (Halle 1/2/3). Each is a separate capacity bucket; teams state which hall they use.
@@ -99,7 +99,7 @@ As a district game organizer, I want the tool to pull the wishes and group assig
 
 **Acceptance Scenarios**:
 
-1. **Given** valid click-TT credentials, **When** the tool runs in scrape mode, **Then** it collects the same team/wish/group data the PDFs provide, reusing the existing login flow.
+1. **Given** valid click-TT credentials, **When** the tool runs in scrape mode, **Then** it collects the same team/wish/group data the PDFs provide, reusing the existing login flow and verifying each downloaded group-level wishes PDF belongs to the clicked group.
 2. **Given** click-TT is unreachable or its structure is unexpected, **When** scraping fails, **Then** the tool reports the failure clearly and the PDF path remains available as a fallback.
 
 ---
@@ -112,11 +112,12 @@ As a district game organizer, I want the tool to pull the wishes and group assig
 - **Fixed sibling in a different-size group**: The _im Wechsel_/_zeitgleich_ relationship must be evaluated across raster sizes via the cross-size parity table, not by comparing raw Rasterzahlen. Likewise, hall over-usage between two same-club teams in different-size groups must compare their home matchdays on the shared district calendar week (Spielwochen alignment), not each group's local matchday index.
 - **Conflicting wishes**: Two teams both wired _zeitgleich_ to a third, or an _im Wechsel_ pair that a group permutation cannot satisfy given other fixed numbers — the tool must count the unavoidable break, not hide it.
 - **Explicit Rasterzahl request**: Recorded but non-binding; the tool must not fail a wish just because a club's requested number was not used.
-- **Calendar-week restriction**: The operative calendar concept in v1 is the Spielwoche A/B (alternating-week) preference, scored as a soft penalty. More absolute constraints (even/odd Kalenderwoche, specific Punktspieltage) are captured and reported but not optimized against in v1.
+- **Calendar-week restriction**: The operative calendar concept in v1 is the Spielwoche A/B rhythm relation within one club/hall/weekday, scored as a soft penalty when configured. More absolute constraints (even/odd Kalenderwoche, specific Punktspieltage) are captured and reported but not optimized against in v1.
 - **Same-club derby in one group**: Two teams of one club in the same group must meet head-to-head by Spieltag 3 (fallback 4). The chosen Rasterzahl pair fixes that matchday, so this couples with their _im Wechsel_/_zeitgleich_ wish and can over-constrain the pair; the tool must report when both cannot be honored.
 - **Second half (Rückrunde)**: Home/away swap in the second half; home-week derivation must cover the full season.
 - **Missing hall capacity**: Default to 1 home match per hall per slot and note that the default was applied.
 - **Group size outside supported rulebook sizes**: If a district group is not one of the supported sizes/modes (6er, 6er Doppelrunde, 7/8er, 9/10er, 11/12er, 13/14er), the tool refuses to score it rather than guessing a template.
+- **Stateful click-TT admin URLs**: nuLiga admin `wo/...` URLs contain click counters and may return the wrong group/PDF when replayed. Scrape mode must navigate by clicking through the live admin UI and must verify downloaded group-level `Terminmeldungen (pdf)` text against the clicked group before trusting it.
 
 ## Requirements _(mandatory)_
 
@@ -138,9 +139,9 @@ As a district game organizer, I want the tool to pull the wishes and group assig
 - **FR-014**: System MUST allow the organizer to pin additional teams to specific Rasterzahlen and permute only the rest.
 - **FR-015**: System MUST record explicit club Rasterzahl requests in the model but MUST NOT treat them as binding wishes for scoring or optimization.
 - **FR-016**: System MUST support PDF-file ingestion for all inputs (wishes, group assignment, fixed Rasterzahlen) as the guaranteed input path, independent of any live system.
-- **FR-017**: System SHOULD support ingesting wishes and group assignment directly from click-TT, reusing the existing authenticated navigation, with PDF ingestion remaining available as a fallback. (Priority P3.)
+- **FR-017**: System SHOULD support ingesting wishes and group assignment directly from click-TT, reusing the existing authenticated navigation, with PDF ingestion remaining available as a fallback. Scrape mode MUST NOT replay collected nuLiga admin `wo/...` URLs as stable links; it MUST click through the live admin UI and verify each downloaded group-level wishes PDF matches the clicked group. (Priority P3.)
 - **FR-018**: System MUST compute the objective as a weighted sum over penalty types (hall over-usage, broken _im Wechsel_ wish, broken _zeitgleich_ wish, Spieltag-4 same-club derby fallback, broken Spielwoche A/B preference), with the weight per type supplied by the organizer via configuration so the trade-off can be tuned per season.
-- **FR-022**: System MUST support a per-team Spielwoche A/B (alternating-week) preference and score a team home in the non-preferred week slot as a soft penalty (weight per FR-018).
+- **FR-022**: System MUST support per-team Spielwoche A/B rhythm hints and score them relationally within the same club/hall/weekday: equal hints prefer _zeitgleich_, different hints prefer _im Wechsel_. Missing A/B MUST be treated as flexible reviewable data, not as a validation blocker and not as an automatic soft penalty.
 - **FR-023**: System MUST capture absolute calendar constraints beyond A/B parity (e.g. even/odd Kalenderwoche, specific-Punktspieltag availability) into the model and surface them in the report, but is NOT required to optimize against them in v1.
 - **FR-019**: System MUST refuse to score a district group whose size is not a supported raster size, rather than assuming a template.
 - **FR-020**: When two teams of the same club are in the same group, System MUST assign their Rasterzahlen so their head-to-head match falls on Spieltag 3 or earlier (derived from the template). Spieltag 4 is permitted with a high configurable penalty; a head-to-head later than Spieltag 4 is a hard-constraint violation the tool MUST report.
@@ -177,7 +178,7 @@ As a district game organizer, I want the tool to pull the wishes and group assig
 ### Session 2026-07-07
 
 - Q: How should the objective weigh a broken relational wish vs. a hall over-usage? → A: User-supplied weights per penalty type (over-usage, im Wechsel, zeitgleich, Spielwoche A/B), configurable per season. (FR-018)
-- Q: How are absolute calendar constraints handled in v1? → A: The operative concept is the Spielwoche A/B alternating-week preference, scored as a soft penalty. More absolute constraints (even/odd Kalenderwoche, specific Punktspieltage) are captured and reported but not optimized in v1. (FR-022, FR-023)
+- Q: How are absolute calendar constraints handled in v1? → A: The operative concept is the Spielwoche A/B rhythm relation inside the same club/hall/weekday, scored as a soft penalty when configured. The absolute A/B label may flip; missing A/B is flexible. More absolute constraints (even/odd Kalenderwoche, specific Punktspieltage) are captured and reported but not optimized in v1. (FR-022, FR-023)
 - Q: What is the acceptable runtime for a full district run? → A: No hard limit; correctness/optimality is preferred over speed, so exact/exhaustive search is acceptable. (SC-007)
 - Q: Does the rulebook change? → A: No — `Rasterzahlen_OWL_komplett.pdf` is permanent and encoded once as a constant; only the yearly PDFs (wishes, group assignment, fixed Rasterzahlen) are re-ingested. (FR-021)
 - Q: Extra hard constraint? → A: Two same-club teams in one group must meet head-to-head by Spieltag 3 (fallback 4). (FR-020)

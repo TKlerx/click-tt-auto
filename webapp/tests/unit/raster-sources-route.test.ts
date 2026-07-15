@@ -57,7 +57,9 @@ describe("raster sources route", () => {
       },
     });
     prismaMock.scope.findFirst.mockResolvedValue({ id: "wttv" } as never);
-    prismaMock.rasterSource.upsert.mockResolvedValue({ id: "source-1" } as never);
+    prismaMock.rasterSource.upsert.mockResolvedValue({
+      id: "source-1",
+    } as never);
 
     const response = await POST(
       new Request("http://localhost/api/raster/sources", {

@@ -1,16 +1,12 @@
 import { expect, test } from "@playwright/test";
-import { Role, UserStatus } from "../../../generated/prisma/enums";
+import { Role } from "../../../generated/prisma/enums";
 import {
   appBasePath,
   appOrigin,
   expectOnDashboard,
   loginWithPassword,
 } from "../helpers/auth";
-import {
-  findUserByEmail,
-  seedLocalUser,
-  updateUserStatus,
-} from "../helpers/db";
+import { deactivatePlatformAdminsExcept, seedLocalUser } from "../helpers/db";
 
 test.setTimeout(60000);
 
@@ -155,18 +151,7 @@ test("last active admin cannot be deactivated", async ({ browser }) => {
       ).toBeVisible();
     }
 
-    for (const email of [
-      "e2e-admin-manage@example.com",
-      "e2e-admin@example.com",
-      "e2e-event-admin@example.com",
-      "e2e-notifications-admin@example.com",
-      "e2e-secondary-admin@example.com",
-      "e2e-tokens-mobile@example.com",
-    ]) {
-      if (findUserByEmail(email)) {
-        updateUserStatus(email, UserStatus.INACTIVE);
-      }
-    }
+    deactivatePlatformAdminsExcept("admin@example.com");
     await adminPage.reload();
 
     const selfRow = adminPage.getByRole("row", {

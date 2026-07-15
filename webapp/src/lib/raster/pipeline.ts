@@ -1,25 +1,45 @@
 import { execFile } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
-import type {
-  TeamRasterAssignmentRow,
-  WishParseResult,
-} from "../../../../src/raster/ingest/index.js";
-import type { SeasonModel } from "../../../../src/raster/types.js";
+import type { TeamRasterAssignmentRow } from "../../../../src/raster/ingest/clicktt-assignments.js";
+import type { WishParseResult } from "../../../../src/raster/ingest/wishes-pdf.js";
+import type { Assignment, SeasonModel } from "../../../../src/raster/types.js";
 
 const execFileAsync = promisify(execFile);
-const repoRoot = path.resolve(process.cwd(), "..");
+const repoRoot = process.env.RASTER_REPO_ROOT ?? `${process.cwd()}/..`;
 const ingestIndexUrl = pathToFileURL(
-  path.join(repoRoot, "src/raster/ingest/index.ts"),
+  `${repoRoot}/src/raster/ingest/index.ts`,
 ).href;
 const ingestScrapeUrl = pathToFileURL(
-  path.join(repoRoot, "src/raster/ingest/scrape.ts"),
+  `${repoRoot}/src/raster/ingest/scrape.ts`,
 ).href;
 const ingestWishesPdfUrl = pathToFileURL(
-  path.join(repoRoot, "src/raster/ingest/wishes-pdf.ts"),
+  `${repoRoot}/src/raster/ingest/wishes-pdf.ts`,
 ).href;
+const scoreEvaluateUrl = pathToFileURL(
+  `${repoRoot}/src/raster/score/evaluate.ts`,
+).href;
+const rulebookUrl = pathToFileURL(
+  `${repoRoot}/src/raster/rulebook/rulebook.ts`,
+).href;
+const typesUrl = pathToFileURL(`${repoRoot}/src/raster/types.ts`).href;
+
+type RasterAssignmentScore = {
+  assignment: Assignment;
+  objective: number;
+  hardViolations: Array<{ detail: string }>;
+  overUsages: Array<{
+    clubId: string;
+    hall: string;
+    weekday: string;
+    week: number;
+    teams: string[];
+    capacity: number;
+    excess: number;
+  }>;
+  objectiveBreakdown: Record<string, number>;
+};
 
 function parseCsvLine(line: string): string[] {
   const result: string[] = [];
@@ -86,22 +106,71 @@ async function scrapeClickTtPublicLeagueAssignments(
   `);
 }
 
+async function scoreAssignment(
+  model: SeasonModel,
+  assignment: Assignment,
+): Promise<RasterAssignmentScore> {
+  return runRasterTs<RasterAssignmentScore>(`
+    const { evaluate, overUsageFairnessCost } = await import(${JSON.stringify(scoreEvaluateUrl)});
+    const { derbySpieltag, rasterSizeForGroupSize } = await import(${JSON.stringify(rulebookUrl)});
+    const { defaultWeights } = await import(${JSON.stringify(typesUrl)});
+    const model = ${JSON.stringify(model)};
+    const assignment = ${JSON.stringify(assignment)};
+    const result = evaluate(model, assignment, defaultWeights);
+    let sameClubDerbySt4 = 0;
+    for (const group of model.groups) {
+      const rasterSize = rasterSizeForGroupSize(group.size, group.rasterMode);
+      for (const [leftIndex, leftId] of group.teamIds.entries()) {
+        const left = model.teams.find((team) => team.id === leftId);
+        const leftRz = result.assignment[leftId];
+        if (!left || leftRz === undefined) continue;
+        for (const rightId of group.teamIds.slice(leftIndex + 1)) {
+          const right = model.teams.find((team) => team.id === rightId);
+          const rightRz = result.assignment[rightId];
+          if (!right || rightRz === undefined || left.clubId !== right.clubId) continue;
+          if (derbySpieltag(rasterSize, leftRz, rightRz) === 4) sameClubDerbySt4 += 1;
+        }
+      }
+    }
+    const brokenWechsel = result.wishResults.filter(
+      (entry) => entry.status === "unfulfilled" && entry.wish.relation === "wechsel"
+    ).length;
+    const brokenZeitgleich = result.wishResults.filter(
+      (entry) => entry.status === "unfulfilled" && entry.wish.relation === "zeitgleich"
+    ).length;
+    emit({
+      assignment: result.assignment,
+      objective: result.objective,
+      hardViolations: result.hardViolations,
+      overUsages: result.overUsages,
+      objectiveBreakdown: {
+        overUsage: result.overUsages.reduce((sum, usage) => sum + usage.excess ** 2, 0) * defaultWeights.overUsage,
+        overUsageFairness: overUsageFairnessCost(result.overUsages) * defaultWeights.overUsageFairness,
+        wechsel: brokenWechsel * defaultWeights.wechsel,
+        zeitgleich: brokenZeitgleich * defaultWeights.zeitgleich,
+        sameClubDerbySt4: sameClubDerbySt4 * defaultWeights.sameClubDerbySt4,
+        spielwoche: result.spielwocheMisses.length * defaultWeights.spielwoche,
+      },
+    });
+  `);
+}
+
 async function runRasterTs<T>(code: string): Promise<T> {
   const command =
-    process.platform === "win32" ? process.env.ComSpec ?? "cmd.exe" : "pnpm";
-  const dir = await mkdtemp(path.join(repoRoot, ".tmp-raster-ts-"));
-  const scriptPath = path.join(dir, "run.ts");
+    process.platform === "win32" ? (process.env.ComSpec ?? "cmd.exe") : "pnpm";
+  const dir = await mkdtemp(`${repoRoot}/.tmp-raster-ts-`);
+  const scriptPath = `${dir}/run.ts`;
   await writeFile(
     scriptPath,
     `
     function emit(value) {
-      console.log("__RASTER_JSON__" + JSON.stringify(value));
+      process.stdout.write("__RASTER_JSON__" + JSON.stringify(value) + "\\n");
     }
     async function main() {
       ${code}
     }
     main().catch((error) => {
-      console.error(error);
+      process.stderr.write(String(error) + "\\n");
       process.exit(1);
     });
   `,
@@ -142,4 +211,5 @@ export const rasterIngest = {
   buildSeasonModelFromAssignments,
   scrapeClickTtAssignments,
   scrapeClickTtPublicLeagueAssignments,
+  scoreAssignment,
 };
