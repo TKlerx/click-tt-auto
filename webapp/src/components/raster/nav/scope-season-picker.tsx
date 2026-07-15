@@ -12,11 +12,7 @@ const levelLabel = {
   unknown: "",
 };
 
-export function ScopeSeasonPicker({
-  scopes,
-}: {
-  scopes: RasterScopeOption[];
-}) {
+export function ScopeSeasonPicker({ scopes }: { scopes: RasterScopeOption[] }) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();

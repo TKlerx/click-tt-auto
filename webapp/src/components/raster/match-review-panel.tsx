@@ -18,7 +18,9 @@ export function MatchReviewPanel({
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const outstanding = records.filter((record) => record.status === "outstanding");
+  const outstanding = records.filter(
+    (record) => record.status === "outstanding",
+  );
 
   async function mark(recordIds: string[]) {
     setBusy(true);
@@ -63,7 +65,9 @@ export function MatchReviewPanel({
             <button
               className="h-9 w-fit rounded-md border border-[var(--border)] px-3 text-sm font-medium"
               disabled={busy}
-              onClick={() => void mark(outstanding.map((record) => record.recordId))}
+              onClick={() =>
+                void mark(outstanding.map((record) => record.recordId))
+              }
               type="button"
             >
               {busy ? <BusyLabel label="Saving" /> : "Mark all reviewed"}

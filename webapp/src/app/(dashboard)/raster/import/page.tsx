@@ -39,7 +39,10 @@ export default async function RasterImportPage({
           </h1>
         </div>
         {canEdit ? (
-          <CreateInputSetForm scope={context.scope.code} season={context.season} />
+          <CreateInputSetForm
+            scope={context.scope.code}
+            season={context.season}
+          />
         ) : null}
         {inputSets.length ? (
           <div className="grid grid-cols-[minmax(12rem,1fr)_8rem_8rem_8rem] gap-3 px-4 py-3 text-sm">

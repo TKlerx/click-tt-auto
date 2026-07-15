@@ -81,7 +81,9 @@ export function deriveRasterReadiness(input: RasterReadinessInput) {
     }),
     run: step(runBlocking.length ? "blocked" : "ready", {
       outstanding: runBlocking,
-      resolvedBy: runBlocking.some((reason) => importOutstanding.includes(reason))
+      resolvedBy: runBlocking.some((reason) =>
+        importOutstanding.includes(reason),
+      )
         ? "import"
         : runBlocking.length
           ? "review"

@@ -7,4 +7,5 @@ export * from "./scenarios";
 export * from "./scenarioDetails";
 export * from "./snapshots";
 export * from "./sources";
+export * from "./roster";
 export * from "./wishes";

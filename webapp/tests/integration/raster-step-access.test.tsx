@@ -33,7 +33,11 @@ import RunPage from "@/app/(dashboard)/raster/run/page";
 import RunsPage from "@/app/(dashboard)/raster/runs/page";
 
 const steps = [
-  { name: "import", page: ImportPage, load: services.listRasterSourcesForScope },
+  {
+    name: "import",
+    page: ImportPage,
+    load: services.listRasterSourcesForScope,
+  },
   { name: "review", page: ReviewPage, load: services.listHallCapacities },
   { name: "run", page: RunPage, load: services.listInputSets },
   { name: "runs", page: RunsPage, load: services.listScenarios },
@@ -66,23 +70,26 @@ describe("raster step access", () => {
     },
   );
 
-  it.each(steps)("$name loads content for accessible scopes", async ({ page, load }) => {
-    requireSession.mockResolvedValue({
-      id: "admin-1",
-      role: Role.PLATFORM_ADMIN,
-    });
-    prisma.scope.findMany.mockResolvedValue([scope("OWL")]);
-    services.listInputSets.mockResolvedValue([]);
-    services.listHallCapacities.mockResolvedValue([]);
-    services.listRasterSourcesForScope.mockResolvedValue([]);
-    services.listScenarios.mockResolvedValue([]);
+  it.each(steps)(
+    "$name loads content for accessible scopes",
+    async ({ page, load }) => {
+      requireSession.mockResolvedValue({
+        id: "admin-1",
+        role: Role.PLATFORM_ADMIN,
+      });
+      prisma.scope.findMany.mockResolvedValue([scope("OWL")]);
+      services.listInputSets.mockResolvedValue([]);
+      services.listHallCapacities.mockResolvedValue([]);
+      services.listRasterSourcesForScope.mockResolvedValue([]);
+      services.listScenarios.mockResolvedValue([]);
 
-    await page({
-      searchParams: Promise.resolve({ scope: "OWL", season: "2026/27" }),
-    });
+      await page({
+        searchParams: Promise.resolve({ scope: "OWL", season: "2026/27" }),
+      });
 
-    expect(load).toHaveBeenCalled();
-  });
+      expect(load).toHaveBeenCalled();
+    },
+  );
 });
 
 function scope(code: string) {
@@ -99,8 +106,10 @@ function scope(code: string) {
 }
 
 function collectText(node: ReactNode): string[] {
-  if (node === null || node === undefined || typeof node === "boolean") return [];
-  if (typeof node === "string" || typeof node === "number") return [String(node)];
+  if (node === null || node === undefined || typeof node === "boolean")
+    return [];
+  if (typeof node === "string" || typeof node === "number")
+    return [String(node)];
   if (Array.isArray(node)) return node.flatMap((child) => collectText(child));
   if (isValidElement(node)) {
     const element = node as ReactElement<{ children?: ReactNode }>;

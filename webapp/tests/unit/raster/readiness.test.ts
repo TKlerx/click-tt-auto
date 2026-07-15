@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { defaultRasterStep, deriveRasterReadiness } from "@/lib/raster/readiness";
+import {
+  defaultRasterStep,
+  deriveRasterReadiness,
+} from "@/lib/raster/readiness";
 
 describe("raster readiness", () => {
   it("maps blocking reasons to the step that resolves them", () => {

@@ -1,6 +1,9 @@
 import { redirect } from "next/navigation";
 import { listMatchReviewState } from "@/lib/raster/match-review";
-import { defaultRasterStep, deriveRasterReadiness } from "@/lib/raster/readiness";
+import {
+  defaultRasterStep,
+  deriveRasterReadiness,
+} from "@/lib/raster/readiness";
 import {
   listInputSets,
   listRasterSourcesForScope,
