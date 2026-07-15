@@ -81,6 +81,14 @@ Umlauts are common in German club names, so this is the normal case. FR-012 ther
 
 **One structural mitigation worth keeping in view**: `VereinNr` is ASCII digits. A charset mistake corrupts display names but never identity — the system stays *correct* even when it looks wrong. Another argument for anchoring on the number (FR-020).
 
+### What `/speckit.analyze` caught (2026-07-15)
+
+**The plan contradicted the spec, and the originating intent.** FR-017 and US3-AS4 require the CLI to emit a bundle; the stated intent was "the final step would just be a zip bundling". Research R-303 had decided the opposite — CLI emits a directory, admin zips it by hand — to avoid a CLI dependency. That inverted Principle I, which asks that dependencies be *narrowly scoped and justified*, not avoided at the cost of the requirement. Designing around a dependency the feature was asked for is the plan overruling the spec. Reversed: the CLI writes the zip (T019a), justified alongside the webapp's reader.
+
+**plan.md never declared the feature 005 dependency**, while data-model.md and tasks.md both did. Same failure `/speckit.analyze` caught on feature 007 — a plan disagreeing with its own tasks about what the feature depends on — here by silence rather than a wrong claim. Now stated.
+
+**T001 had no second branch.** It said tests "need a synthetic file instead" if the real export cannot be committed, and no task built one — so declining T001 quietly stranded SC-001/SC-002/SC-003. T001a now covers it, and notes that 404/85/43 describe the *real* export and must be restated if a synthetic fixture is used.
+
 ### Live risks
 
 - **FR-014 assumes one login reaches both click-TT and nuLiga admin.** Plausible — click-TT runs on nuLiga (`nuLigaTTDE.woa`) — but unverified. If the admin area needs a separate account, this needs revisiting. Worth checking before planning the CLI half.

@@ -226,7 +226,7 @@ An admin can see which teams the roster expects but no parsed source mentions, a
 #### Identity
 
 - **FR-020**: Canonical identity MUST follow `VereinNr`, not the club name. A club renamed between exports keeps its identity.
-- **FR-021**: `Altersklasse` MUST be taken from the export rather than inferred from a team label.
+- **FR-021**: A roster team's `Altersklasse` MUST be taken from the export's own column rather than inferred from a team label. This governs roster rows only. Whether the roster should also *replace* `splitTeamName`'s label parsing elsewhere is Q2, deliberately deferred — the label path survives for unrostered scopes regardless.
 - **FR-022**: The roster MUST be available to other features as the authoritative answer to "which teams exist in this scope and season, and in which group".
 
 #### Matching
