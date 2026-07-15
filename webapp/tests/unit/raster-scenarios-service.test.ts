@@ -32,7 +32,7 @@ describe("raster scenario service", () => {
       {
         id: "run-1",
         inputSetId: "input-1",
-        district: "OWL",
+        scope: "OWL",
         season: "2026/27",
         name: "CP-SAT",
         origin: "optimizer",
@@ -51,7 +51,7 @@ describe("raster scenario service", () => {
     );
   });
 
-  it("uses district, season, and input set as the compatibility boundary", () => {
+  it("uses scope, season, and input set as the compatibility boundary", () => {
     const base = scenarioFromRun(runFixture());
     expect(isComparableScenario(base, { ...base })).toBe(true);
     expect(

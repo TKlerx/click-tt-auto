@@ -49,7 +49,7 @@ describe("raster scenario details route", () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
-      scenario: { id: "run-1", district: "OWL" },
+      scenario: { id: "run-1", scope: "OWL" },
       assignments: [{ id: "assignment-1" }],
       conflicts: [{ id: "conflict-1" }],
     });
@@ -68,7 +68,7 @@ function runFixture() {
     settings: JSON.stringify({ strategy: "cp_sat", name: "CP-SAT" }),
     createdAt: new Date("2026-07-12T10:00:00.000Z"),
     finishedAt: new Date("2026-07-12T10:06:00.000Z"),
-    inputSet: { district: "OWL", season: "2026/27" },
+    inputSet: { scope: { code: "OWL" }, season: "2026/27" },
     snapshot: {
       id: "snapshot-1",
       stale: false,

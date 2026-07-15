@@ -32,7 +32,7 @@ describe("raster runs route", () => {
     prismaMock.rasterInputSet.findUnique.mockResolvedValue({
       id: "input-1",
       name: "OWL 2026",
-      district: "OWL",
+      scope: { code: "OWL" },
       createdById: "admin-1",
       createdAt: new Date("2026-07-10T00:00:00Z"),
       status: InputSetStatus.READY,
@@ -66,7 +66,7 @@ describe("raster runs route", () => {
     prismaMock.rasterInputSet.findUnique.mockResolvedValue({
       id: "input-wttv",
       name: "WTTV 2026",
-      district: "WTTV",
+      scope: { code: "WTTV" },
       createdById: "admin-1",
       createdAt: new Date("2026-07-10T00:00:00Z"),
       status: InputSetStatus.READY,
@@ -127,7 +127,7 @@ describe("raster runs route", () => {
     prismaMock.rasterInputSet.findUnique.mockResolvedValue({
       id: "input-wttv",
       name: "WTTV 2026",
-      district: "WTTV",
+      scope: { code: "WTTV" },
       createdById: "admin-1",
       createdAt: new Date("2026-07-10T00:00:00Z"),
       status: InputSetStatus.READY,

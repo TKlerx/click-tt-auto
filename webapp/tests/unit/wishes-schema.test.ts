@@ -33,7 +33,7 @@ describe("raster input schemas", () => {
   it("coerces capacity, fixed Rasterzahl, and run settings", () => {
     expect(
       capacityCsvRowSchema.parse({
-        district: "OWL",
+        scope: "OWL",
         clubId: "elsen",
         hall: "1",
         weekday: "FRIDAY",

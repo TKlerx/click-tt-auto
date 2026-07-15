@@ -14,7 +14,7 @@ describe("raster runs service", () => {
   it("refreshes input-set source projection before queueing a run", async () => {
     prismaMock.rasterInputSet.findUnique.mockResolvedValue({
       id: "input-1",
-      district: "OWL",
+      scopeId: "scope-owl",
       season: "2026/27",
       seasonModelJson: "{}",
     } as never);
@@ -40,7 +40,7 @@ describe("raster runs service", () => {
 
     expect(prismaMock.rasterInputSet.findUnique).toHaveBeenCalledWith({
       where: { id: "input-1" },
-      select: { id: true, district: true, season: true, seasonModelJson: true },
+      select: { id: true, scopeId: true, season: true, seasonModelJson: true },
     });
     expect(
       prismaMock.rasterInputSet.findUnique.mock.invocationCallOrder[0],
