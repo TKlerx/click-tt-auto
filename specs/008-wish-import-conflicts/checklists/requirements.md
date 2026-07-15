@@ -34,6 +34,29 @@
 
 ## Notes
 
+### Re-verified against `main` after feature 005 landed (2026-07-15)
+
+005 shipped between this spec being written and it being planned. Its rekey touched the schema but left the wish logic alone, so the premise below is **current, not historical** — `replaceParsedWishes` still deletes, `updateWish` still writes corrections into what it deletes.
+
+Re-checking also found something the spec had missed: **there are two delete-and-recreate paths, not one.** `replaceJsonWishes` (`wishes.ts:79`) runs the same `deleteMany({ inputSetId })` behind the structured-JSON fallback route. FR-001b named only `replaceParsedWishes`, so retiring that alone would have left the fallback quietly eating corrections — and a fallback is reached exactly when something has already gone wrong, which is the worst moment to lose work. FR-001b now covers both explicitly.
+
+### What `/speckit.analyze` caught at planning (2026-07-15) — the spec asserted something untrue about the code
+
+**`RasterWish` is not "the active wish used by validation and optimization".** The spec's Assumption said it was, and FR-001a rested on that. It is false.
+
+`applyParsedWishDetails` (`webapp/src/services/raster/inputSets.ts:340-360`) writes the season model's `homeWeekday`, `hall`, `startTime`, `spielwochePref` and `requestedRasterzahl` onto `model.teams` **straight from the parsed sources**, keyed by `teamIdentityKey(clubId, label)`. It never reads `RasterWish`. Validation and the optimizer consume the season model.
+
+So the data loss has **two halves**, and the spec only saw one:
+
+1. A correction is **deleted** by the next sync. (What the spec describes.)
+2. A correction **never reached planning anyway**, because the model is built from the parse. (Silent, symptomless, and unnoticed.)
+
+Fixing only the first yields a feature that protects a table nothing plans from — imports stop overwriting `RasterWish`, conflicts are reviewed over `RasterWish`, and the optimizer carries on reading the parse. **Cosmetic.**
+
+FR-001c and T013a make the season model derive its wish fields from active wishes; T013b tests that a correction reaches the solver input. The Assumption is corrected in place rather than deleted, because the wrong version explains why the requirement was missing.
+
+This is the class of error a spec cannot catch by reading itself: it was a confident claim about code, made without checking the code.
+
 ### The data loss this feature prevents is live, not hypothetical
 
 `updateWish` (`webapp/src/services/raster/wishes.ts:115`) writes admin corrections straight to `RasterWish`. `replaceParsedWishes` (same file, line 21) then runs `deleteMany({ inputSetId })` on the next sync and rebuilds from parsed PDFs. Every correction is destroyed silently, today. FR-002 is a bug report as much as a requirement.

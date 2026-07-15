@@ -18,11 +18,15 @@
 
 ## Context: what happens today
 
-Wishes are **derived** state. `replaceParsedWishes` (`webapp/src/services/raster/wishes.ts:21`) runs `deleteMany({ inputSetId })` and re-inserts from parsed PDFs. The normal path (`syncInputSetFromSources`, `webapp/src/services/raster/inputSets.ts:263-275`) re-derives every wish from the union of all registered wish sources on each sync; a second path (`POST /api/raster/input-sets/[id]/wishes/pdf`) does the same from a single uploaded file.
+Wishes are **derived** state. `replaceParsedWishes` (`webapp/src/services/raster/wishes.ts:22`) runs `deleteMany({ inputSetId })` and re-inserts from parsed PDFs. The normal path (`syncInputSetFromSources`) re-derives every wish from the union of all registered wish sources on each sync; a second path (`POST /api/raster/input-sets/[id]/wishes/pdf`) does the same from a single uploaded file.
+
+**And a third**: `replaceJsonWishes` (`wishes.ts:79`) does the identical `deleteMany({ inputSetId })` behind `POST /api/raster/input-sets/[id]/wishes/json` — the structured-JSON fallback `003` established for when a PDF will not parse. Same destruction, different door.
+
+*(Line numbers verified against `main` after feature 005 landed. 005 rekeyed the schema but left this logic untouched, so the premise below is current, not historical.)*
 
 Two consequences shape this feature:
 
-- **The data loss is live, not hypothetical.** `updateWish` (`wishes.ts:115`) writes admin corrections straight to `RasterWish`. The next sync deletes them. FR-002 exists because of this.
+- **The data loss is live, not hypothetical.** `updateWish` (`wishes.ts:116`) writes admin corrections straight to `RasterWish`. The next sync deletes them. FR-002 exists because of this.
 - **This feature inverts the model.** Wishes stop being rebuilt and become owned records that imports propose changes to. `replaceParsedWishes` is retired rather than adjusted — sparing "the right rows" from a `deleteMany` is the failure mode this feature is meant to end, not a way to implement it.
 
 ## Context: team identity, and why it is a dependency
@@ -91,6 +95,7 @@ As a district admin, I want wishes already in the system but missing from the la
 - Same PDF uploaded more than once: the import review should not create duplicate active wishes or duplicate conflict rows for identical parsed content.
 - Same team appears in multiple uploaded PDFs with different wishes: the import review must show the imported contradiction before comparing it to active system data.
 - A parsed row cannot be matched confidently to a team: it must appear as an unmatched import row for manual matching, not overwrite a guessed team.
+- Wishes arrive through the structured-JSON fallback rather than a PDF: the same conflict rules apply. A fallback is used when something has already gone wrong, which is the worst moment to lose corrections.
 - A PDF parse produces no teams: the import must fail with a clear message and leave existing wishes unchanged.
 - An admin leaves conflicts unresolved: validation and optimizer runs must not use unresolved imported changes.
 
@@ -100,7 +105,10 @@ As a district admin, I want wishes already in the system but missing from the la
 
 - **FR-001**: The system MUST treat every wish PDF import as a proposed change set before applying changes to active wishes.
 - **FR-001a**: Active wishes MUST be owned rather than derived. No automated process — import, source refresh, or sync — may rewrite an active wish. A source's first parse seeds wishes; every later parse proposes.
-- **FR-001b**: `replaceParsedWishes`, which deletes all wishes for an input set and re-inserts from parsed sources, MUST be retired rather than adapted. Sparing selected rows from a bulk delete is the failure this feature exists to end, not a way to implement it.
+- **FR-001c**: The season model's wish fields — `homeWeekday`, `hall`, `startTime`, `spielwochePref`, `requestedRasterzahl` — MUST derive from **active wishes**, not from parsed sources. Today `applyParsedWishDetails` (`webapp/src/services/raster/inputSets.ts:340-360`) writes them onto `model.teams` straight from the parse, keyed by club and label, and never reads `RasterWish`. Since validation and the optimizer consume the season model, this means a corrected wish **does not reach planning even before the next sync deletes it**. Without this requirement the rest of the feature is cosmetic: imports would stop overwriting a table that nothing plans from, and conflicts would be reviewed over data the optimizer ignores.
+- **FR-001b**: **Every** delete-and-recreate path over wishes MUST be retired rather than adapted. Sparing selected rows from a bulk delete is the failure this feature exists to end, not a way to implement it. There are **two** such paths, and both destroy corrections identically:
+  - **FR-001b-i**: `replaceParsedWishes` (`webapp/src/services/raster/wishes.ts:22`) — `deleteMany({ inputSetId })` then re-insert from parsed sources. The normal path, reached by every source sync.
+  - **FR-001b-ii**: `replaceJsonWishes` (`wishes.ts:79`) — the same `deleteMany({ inputSetId })` then re-insert, behind `POST /api/raster/input-sets/[id]/wishes/json`. This is the LLM-pasted / structured-JSON fallback that `003` established as the escape hatch when a PDF cannot be parsed. Retiring only the first would leave the fallback quietly eating corrections — and a fallback is used precisely when things have already gone wrong, which is the worst moment to lose work.
 - **FR-002**: The system MUST NOT overwrite an existing wish when the imported wish differs in day, time, hall, week preference, requested schedule number, team identity, or notes.
 - **FR-002a**: This MUST hold regardless of whether the existing wish was ever manually edited or reviewed. An untouched wish is protected exactly as a corrected one is.
 - **FR-003**: The system MUST create a conflict review item for every differing existing/imported wish pair.
@@ -138,13 +146,15 @@ As a district admin, I want wishes already in the system but missing from the la
 - **SC-004**: A run started with unresolved conflicts completes, and its result states how many were outstanding when it ran.
 - **SC-005**: For a 50-team import with 10 conflicts, an admin can resolve all conflicts without leaving the import review screen.
 - **SC-006**: An admin who has corrected a wish never loses that correction to any later import or sync.
+- **SC-009**: A corrected wish reaches the optimizer. Correct a wish, start a run, and the run plans against the corrected value — not the parsed one. Today it does not, because the season model is built from the parse (FR-001c).
 - **SC-007**: Re-importing an unchanged PDF raises conflicts only for wishes the admin has manually changed, and raises each of those at most once.
 - **SC-008**: Re-uploading one club's wish PDF marks no other club's wishes as missing from latest import.
 
 ## Assumptions
 
 - Existing source upload and PDF parsing remain the normal way to bring wish PDFs into the app.
-- "Existing wish" means the active wish currently used by validation and optimization, regardless of whether it was previously reviewed. This is what makes wishes owned rather than derived (FR-001a), and it is why an untouched wish is protected exactly as a corrected one is.
+- "Existing wish" means the wish that *should be* used by validation and optimization, regardless of whether it was previously reviewed. This is what makes wishes owned rather than derived (FR-001a), and why an untouched wish is protected exactly as a corrected one is.
+  - **Correction (2026-07-15, from planning)**: this originally read "the active wish **currently** used by validation and optimization", which was false about the code. `RasterWish` is *not* currently used by either — `applyParsedWishDetails` builds the season model's wish fields straight from the parsed sources and never reads `RasterWish`, so a correction never reaches planning at all. Making `RasterWish` authoritative is therefore part of this feature, not an existing property it can rely on. FR-001c states it.
 - Exact-match imports should be treated as no-op matches, not conflicts.
 - Missing-from-latest-import warnings are informational unless combined with another validation problem.
 - Canonical team identity is expected from a nuLiga admin export, imported by a separate feature (009). This feature is buildable before that lands, but until it does, conflict pairing rests on parsed names and unmatched rows will be more common. It never silently duplicates: unpaired rows surface for manual matching (FR-003a).
