@@ -22,6 +22,9 @@ jobs:
           corepack enable
           corepack prepare pnpm@11.7.0 --activate
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -69,7 +72,10 @@ jobs:
       - name: Install OpenTofu
         uses: opentofu/setup-opentofu@847eaa4afeb791b06daa46e8eafa8b1b68d7cfb4 # v2.0.1
 
-      - name: Install dependencies
+      - name: Install root dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install webapp dependencies
         working-directory: webapp
         run: pnpm install --frozen-lockfile
 
