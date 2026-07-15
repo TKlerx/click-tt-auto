@@ -57,6 +57,7 @@ enum AuditAction {
   PAT_DELETED
   CLI_LOGIN_COMPLETED
   RASTER_INPUT_UPLOADED
+  RASTER_PLANNING_CHANGED
   RASTER_RUN_STARTED
   RASTER_CAPACITY_CHANGED
   RASTER_REVIEW_DECISION_CHANGED
@@ -189,35 +190,40 @@ enum ReviewDecisionStatus {
   ACCEPTED_UNAVOIDABLE
 }
 
+enum RasterMatchRecordType {
+  TEAM
+}
+
 model User {
-  id                            String                    @id @default(cuid())
-  email                         String                    @unique
-  emailVerified                 Boolean                   @default(false)
+  id                            String                        @id @default(cuid())
+  email                         String                        @unique
+  emailVerified                 Boolean                       @default(false)
   name                          String
   image                         String?
-  role                          Role                      @default(SCOPE_USER)
-  status                        UserStatus                @default(PENDING_APPROVAL)
+  role                          Role                          @default(SCOPE_USER)
+  status                        UserStatus                    @default(PENDING_APPROVAL)
   authMethod                    AuthMethod
-  mustChangePassword            Boolean                   @default(true)
-  themePreference               ThemePreference           @default(LIGHT)
-  locale                        String                    @default("en")
-  createdAt                     DateTime                  @default(now())
-  updatedAt                     DateTime                  @updatedAt
+  mustChangePassword            Boolean                       @default(true)
+  themePreference               ThemePreference               @default(LIGHT)
+  locale                        String                        @default("en")
+  createdAt                     DateTime                      @default(now())
+  updatedAt                     DateTime                      @updatedAt
   accounts                      Account[]
   sessions                      Session[]
   scopeAssignments              UserScopeAssignment[]
-  auditEntries                  AuditEntry[]              @relation("AuditActor")
-  backgroundJobs                BackgroundJob[]           @relation("BackgroundJobCreator")
+  auditEntries                  AuditEntry[]                  @relation("AuditActor")
+  backgroundJobs                BackgroundJob[]               @relation("BackgroundJobCreator")
   personalAccessTokens          PersonalAccessToken[]
   cliAuthCodes                  CliAuthCode[]
-  teamsIntegrationConfigUpdates TeamsIntegrationConfig[]  @relation("TeamsIntegrationUpdatedBy")
-  teamsDeliveryTargets          TeamsDeliveryTarget[]     @relation("TeamsDeliveryTargetCreator")
-  teamsIntakeSubscriptions      TeamsIntakeSubscription[] @relation("TeamsIntakeSubscriptionCreator")
+  teamsIntegrationConfigUpdates TeamsIntegrationConfig[]      @relation("TeamsIntegrationUpdatedBy")
+  teamsDeliveryTargets          TeamsDeliveryTarget[]         @relation("TeamsDeliveryTargetCreator")
+  teamsIntakeSubscriptions      TeamsIntakeSubscription[]     @relation("TeamsIntakeSubscriptionCreator")
   teamsDelegatedGrant           TeamsDelegatedGrant?
-  rasterInputSets               RasterInputSet[]          @relation("RasterInputSetCreator")
-  rasterRuns                    RasterOptimizationRun[]   @relation("RasterRunStarter")
-  rasterCapacityUpdates         RasterHallCapacity[]      @relation("RasterCapacityUpdater")
-  rasterReviewDecisions         RasterReviewDecision[]    @relation("RasterReviewDecider")
+  rasterInputSets               RasterInputSet[]              @relation("RasterInputSetCreator")
+  rasterRuns                    RasterOptimizationRun[]       @relation("RasterRunStarter")
+  rasterCapacityUpdates         RasterHallCapacity[]          @relation("RasterCapacityUpdater")
+  rasterReviewDecisions         RasterReviewDecision[]        @relation("RasterReviewDecider")
+  rasterMatchReviews            RasterMatchReview[]           @relation("RasterMatchReviewer")
   rasterManualAssignmentDrafts  RasterManualAssignmentDraft[] @relation("RasterManualAssignmentDraftCreator")
 }
 
@@ -267,17 +273,20 @@ model Verification {
 }
 
 model Scope {
-  id              String                @id @default(cuid())
-  name            String                @unique
-  code            String                @unique
-  parentId        String?
-  createdAt       DateTime              @default(now())
-  updatedAt       DateTime              @updatedAt
-  parent          Scope?                @relation("ScopeHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
-  children        Scope[]               @relation("ScopeHierarchy")
-  userAssignments UserScopeAssignment[]
-  auditEntries    AuditEntry[]
-  rasterSources   RasterSource[]
+  id                   String                @id @default(cuid())
+  name                 String                @unique
+  code                 String                @unique
+  parentId             String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  parent               Scope?                @relation("ScopeHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children             Scope[]               @relation("ScopeHierarchy")
+  userAssignments      UserScopeAssignment[]
+  auditEntries         AuditEntry[]
+  rasterSources        RasterSource[]
+  rasterInputSets      RasterInputSet[]
+  rasterHallCapacities RasterHallCapacity[]
+  rasterSnapshots      RasterSnapshot[]
 
   @@index([parentId])
 }
@@ -574,23 +583,25 @@ model TeamsDelegatedGrant {
 }
 
 model RasterInputSet {
-  id                  String                  @id @default(cuid())
-  name                String
-  district            String
-  season              String                  @default("2026/27")
-  createdById         String
-  createdAt           DateTime                @default(now())
-  status              InputSetStatus          @default(DRAFT)
-  seasonModelJson     String?
-  groupAssignmentJson String?
-  wishesJson          String?
-  createdBy           User                    @relation("RasterInputSetCreator", fields: [createdById], references: [id], onDelete: Restrict)
-  wishes              RasterWish[]
-  fixedRasterzahlen   RasterFixedRasterzahl[]
-  runs                RasterOptimizationRun[]
+  id                     String                        @id @default(cuid())
+  name                   String
+  scopeId                String
+  season                 String                        @default("2026/27")
+  createdById            String
+  createdAt              DateTime                      @default(now())
+  status                 InputSetStatus                @default(DRAFT)
+  seasonModelJson        String?
+  groupAssignmentJson    String?
+  wishesJson             String?
+  scope                  Scope                         @relation(fields: [scopeId], references: [id], onDelete: Restrict)
+  createdBy              User                          @relation("RasterInputSetCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  wishes                 RasterWish[]
+  fixedRasterzahlen      RasterFixedRasterzahl[]
+  runs                   RasterOptimizationRun[]
+  matchReviews           RasterMatchReview[]
   manualAssignmentDrafts RasterManualAssignmentDraft[]
 
-  @@index([district, season, createdAt])
+  @@index([scopeId, season, createdAt])
   @@index([createdById])
 }
 
@@ -616,7 +627,7 @@ model RasterWish {
 
 model RasterHallCapacity {
   id          String            @id @default(cuid())
-  district    String
+  scopeId     String
   clubId      String
   hall        String
   weekday     RasterWeekday
@@ -624,10 +635,11 @@ model RasterHallCapacity {
   basis       HallCapacityBasis @default(MISSING)
   updatedById String?
   updatedAt   DateTime          @updatedAt
+  scope       Scope             @relation(fields: [scopeId], references: [id], onDelete: Restrict)
   updatedBy   User?             @relation("RasterCapacityUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
 
-  @@unique([district, clubId, hall, weekday])
-  @@index([district, clubId])
+  @@unique([scopeId, clubId, hall, weekday])
+  @@index([scopeId, clubId])
   @@index([updatedById])
 }
 
@@ -665,12 +677,13 @@ model RasterOptimizationRun {
   @@index([inputSetId, createdAt])
   @@index([startedById])
   @@index([status, createdAt])
+  @@index([archivedAt])
 }
 
 model RasterSnapshot {
   id                 String                 @id @default(cuid())
   runId              String?                @unique
-  district           String
+  scopeId            String
   origin             SnapshotOrigin
   optimality         SnapshotOptimality
   stale              Boolean                @default(false)
@@ -681,13 +694,31 @@ model RasterSnapshot {
   objectiveBreakdown String                 @default("{}")
   createdAt          DateTime               @default(now())
   archivedAt         DateTime?
+  scope              Scope                  @relation(fields: [scopeId], references: [id], onDelete: Restrict)
   run                RasterOptimizationRun? @relation(fields: [runId], references: [id], onDelete: SetNull)
   assignments        RasterAssignment[]
   conflicts          RasterConflict[]
   reviewDecisions    RasterReviewDecision[]
 
-  @@index([district, createdAt])
+  @@index([scopeId, createdAt])
   @@index([stale])
+  @@index([archivedAt])
+}
+
+model RasterMatchReview {
+  id           String                @id @default(cuid())
+  inputSetId   String
+  recordType   RasterMatchRecordType
+  recordId     String
+  fingerprint  String
+  reviewedById String
+  reviewedAt   DateTime              @default(now())
+  inputSet     RasterInputSet        @relation(fields: [inputSetId], references: [id], onDelete: Cascade)
+  reviewedBy   User                  @relation("RasterMatchReviewer", fields: [reviewedById], references: [id], onDelete: Restrict)
+
+  @@unique([inputSetId, recordType, recordId])
+  @@index([inputSetId])
+  @@index([reviewedById])
 }
 
 model RasterAssignment {

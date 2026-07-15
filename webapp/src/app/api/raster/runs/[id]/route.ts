@@ -21,7 +21,7 @@ export async function GET(
 
   const access = await assertRasterAccess(
     auth.user,
-    run.inputSet.district,
+    run.inputSet.scope.code,
     "viewer",
   );
   if (access !== true) return access.error;
@@ -43,7 +43,7 @@ export async function DELETE(
 
   const access = await assertRasterAccess(
     auth.user,
-    run.inputSet.district,
+    run.inputSet.scope.code,
     "admin",
   );
   if (access !== true) return access.error;

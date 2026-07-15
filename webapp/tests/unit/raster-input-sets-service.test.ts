@@ -35,9 +35,9 @@ describe("raster input set service", () => {
   it("blocks unconfirmed six-team groups", async () => {
     prismaMock.rasterInputSet.findUnique.mockResolvedValueOnce({
       id: "input-1",
-      district: "OWL",
+      scopeId: "owl",
     } as never);
-    prismaMock.scope.findFirst.mockResolvedValue(null);
+    prismaMock.scope.findUnique.mockResolvedValue(null);
     prismaMock.rasterInputSet.findUnique.mockResolvedValueOnce({
       id: "input-1",
       status: InputSetStatus.DRAFT,
@@ -54,9 +54,9 @@ describe("raster input set service", () => {
     for (const rasterMode of ["single", "double"] as const) {
       prismaMock.rasterInputSet.findUnique.mockResolvedValueOnce({
         id: `input-${rasterMode}`,
-        district: "OWL",
+        scopeId: "owl",
       } as never);
-      prismaMock.scope.findFirst.mockResolvedValueOnce(null);
+      prismaMock.scope.findUnique.mockResolvedValueOnce(null);
       prismaMock.rasterInputSet.findUnique.mockResolvedValueOnce({
         id: `input-${rasterMode}`,
         status: InputSetStatus.DRAFT,
@@ -79,9 +79,9 @@ describe("raster input set service", () => {
   it("blocks groups with missing wish PDFs until reviewed", async () => {
     prismaMock.rasterInputSet.findUnique.mockResolvedValueOnce({
       id: "input-1",
-      district: "OWL",
+      scopeId: "owl",
     } as never);
-    prismaMock.scope.findFirst.mockResolvedValueOnce(null);
+    prismaMock.scope.findUnique.mockResolvedValueOnce(null);
     prismaMock.rasterInputSet.findUnique.mockResolvedValueOnce({
       id: "input-1",
       status: InputSetStatus.DRAFT,
@@ -101,9 +101,9 @@ describe("raster input set service", () => {
   it("accepts excluded groups with missing wish PDFs", async () => {
     prismaMock.rasterInputSet.findUnique.mockResolvedValueOnce({
       id: "input-1",
-      district: "OWL",
+      scopeId: "owl",
     } as never);
-    prismaMock.scope.findFirst.mockResolvedValueOnce(null);
+    prismaMock.scope.findUnique.mockResolvedValueOnce(null);
     prismaMock.rasterInputSet.findUnique.mockResolvedValueOnce({
       id: "input-1",
       status: InputSetStatus.DRAFT,
@@ -212,9 +212,9 @@ describe("raster input set service", () => {
   it("syncs inherited source caches into input sets", async () => {
     prismaMock.rasterInputSet.findUnique.mockResolvedValue({
       id: "input-1",
-      district: "OWL",
+      scopeId: "owl",
     } as never);
-    prismaMock.scope.findFirst.mockResolvedValue({
+    prismaMock.scope.findUnique.mockResolvedValue({
       id: "owl",
       parent: { id: "wttv", parent: { id: "de" } },
     } as never);
@@ -248,11 +248,11 @@ describe("raster input set service", () => {
   it("matches wish clubs with e.V. suffixes to click-TT club names", async () => {
     prismaMock.rasterInputSet.findUnique.mockResolvedValue({
       id: "input-1",
-      district: "OWL",
+      scopeId: "owl",
       season: "2026/27",
       seasonModelJson: null,
     } as never);
-    prismaMock.scope.findFirst.mockResolvedValue({
+    prismaMock.scope.findUnique.mockResolvedValue({
       id: "owl",
       parent: { id: "wttv", parent: { id: "de" } },
     } as never);

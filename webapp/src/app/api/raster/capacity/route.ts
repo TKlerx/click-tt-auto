@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireApiUser } from "@/lib/route-auth";
-import { assertRasterAccess } from "@/lib/raster/access";
+import { assertRasterAccess, resolveRasterScope } from "@/lib/raster/access";
 import { logRasterAudit } from "@/lib/raster/audit";
 import { capacityCsvRowSchema } from "@/lib/raster/schemas";
 import { searchHallCapacities, upsertHallCapacities } from "@/services/raster";
@@ -11,19 +11,20 @@ export async function GET(request: Request) {
   if ("error" in auth) return auth.error;
 
   const search = new URL(request.url).searchParams;
-  const district = search.get("district")?.trim();
-  if (!district) {
-    return NextResponse.json(
-      { error: "district is required" },
-      { status: 400 },
-    );
+  const scopeCode = search.get("scope")?.trim();
+  if (!scopeCode) {
+    return NextResponse.json({ error: "scope is required" }, { status: 400 });
   }
 
-  const access = await assertRasterAccess(auth.user, district, "viewer");
+  const access = await assertRasterAccess(auth.user, scopeCode, "viewer");
   if (access !== true) return access.error;
+  const scope = await resolveRasterScope(scopeCode);
+  if (!scope) {
+    return NextResponse.json({ error: "Scope not found" }, { status: 404 });
+  }
 
   return NextResponse.json({
-    capacities: await searchHallCapacities(district, search.get("q")),
+    capacities: await searchHallCapacities(scope.id, search.get("q")),
   });
 }
 
@@ -43,16 +44,23 @@ export async function POST(request: Request) {
 
   const access = await assertRasterAccess(
     auth.user,
-    parsed.data.district,
+    parsed.data.scope,
     "scheduler",
   );
   if (access !== true) return access.error;
+  const scope = await resolveRasterScope(parsed.data.scope);
+  if (!scope) {
+    return NextResponse.json({ error: "Scope not found" }, { status: 404 });
+  }
 
-  const result = await upsertHallCapacities([parsed.data], auth.user.id);
+  const result = await upsertHallCapacities(
+    [{ ...parsed.data, scopeId: scope.id }],
+    auth.user.id,
+  );
   await logRasterAudit({
     action: AuditAction.RASTER_CAPACITY_CHANGED,
     actorId: auth.user.id,
-    district: parsed.data.district,
+    scope: parsed.data.scope,
     entityType: "RasterHallCapacity",
     entityId: `${parsed.data.clubId}:${parsed.data.hall}:${parsed.data.weekday}`,
     details: {

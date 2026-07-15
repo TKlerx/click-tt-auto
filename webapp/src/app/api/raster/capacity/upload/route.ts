@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireApiUser } from "@/lib/route-auth";
-import { assertRasterAccess } from "@/lib/raster/access";
+import { assertRasterAccess, resolveRasterScope } from "@/lib/raster/access";
 import { logRasterAudit } from "@/lib/raster/audit";
 import { rasterIngest } from "@/lib/raster/pipeline";
 import { capacityCsvRowSchema } from "@/lib/raster/schemas";
@@ -37,24 +37,33 @@ export async function POST(request: Request) {
     );
   }
 
-  const districts = [...new Set(parsed.data.map((row) => row.district))];
-  for (const district of districts) {
-    const access = await assertRasterAccess(auth.user, district, "scheduler");
+  const scopeCodes = [...new Set(parsed.data.map((row) => row.scope))];
+  const scopes = new Map<string, string>();
+  for (const scopeCode of scopeCodes) {
+    const access = await assertRasterAccess(auth.user, scopeCode, "scheduler");
     if (access !== true) return access.error;
+    const scope = await resolveRasterScope(scopeCode);
+    if (!scope) {
+      return NextResponse.json({ error: "Scope not found" }, { status: 404 });
+    }
+    scopes.set(scopeCode, scope.id);
   }
 
-  const result = await upsertHallCapacities(parsed.data, auth.user.id);
+  const result = await upsertHallCapacities(
+    parsed.data.map((row) => ({ ...row, scopeId: scopes.get(row.scope)! })),
+    auth.user.id,
+  );
   await Promise.all(
-    districts.map((district) =>
+    scopeCodes.map((scope) =>
       logRasterAudit({
         action: AuditAction.RASTER_CAPACITY_CHANGED,
         actorId: auth.user.id,
-        district,
+        scope: scope,
         entityType: "RasterHallCapacity",
         entityId: "bulk",
         details: {
           inputType: "capacity_csv",
-          count: parsed.data.filter((row) => row.district === district).length,
+          count: parsed.data.filter((row) => row.scope === scope).length,
         },
       }),
     ),

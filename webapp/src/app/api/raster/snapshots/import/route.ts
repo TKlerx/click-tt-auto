@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireApiUser } from "@/lib/route-auth";
-import { assertRasterAccess } from "@/lib/raster/access";
+import { assertRasterAccess, resolveRasterScope } from "@/lib/raster/access";
 import { logRasterAudit } from "@/lib/raster/audit";
 import { importSnapshot } from "@/services/raster";
 import {
@@ -50,7 +50,7 @@ const conflictSchema = z.object({
 });
 
 const bodySchema = z.object({
-  district: z.string().trim().min(1),
+  scope: z.string().trim().min(1),
   objectiveBreakdown: z.record(z.string(), z.unknown()).optional(),
   assignments: z.array(assignmentSchema),
   conflicts: z.array(conflictSchema).default([]),
@@ -70,13 +70,17 @@ export async function POST(request: Request) {
 
   const access = await assertRasterAccess(
     auth.user,
-    parsed.data.district,
+    parsed.data.scope,
     "admin",
   );
   if (access !== true) return access.error;
+  const scope = await resolveRasterScope(parsed.data.scope);
+  if (!scope) {
+    return NextResponse.json({ error: "Scope not found" }, { status: 404 });
+  }
 
   const snapshot = await importSnapshot({
-    district: parsed.data.district,
+    scopeId: scope.id,
     objectiveBreakdown: JSON.stringify(parsed.data.objectiveBreakdown ?? {}),
     assignments: parsed.data.assignments,
     conflicts: parsed.data.conflicts.map((conflict) => ({
@@ -89,7 +93,7 @@ export async function POST(request: Request) {
   await logRasterAudit({
     action: AuditAction.RASTER_INPUT_UPLOADED,
     actorId: auth.user.id,
-    district: parsed.data.district,
+    scope: parsed.data.scope,
     entityType: "RasterSnapshot",
     entityId: snapshot.id,
     details: {

@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { requireApiUser } from "@/lib/route-auth";
-import { assertRasterAccess } from "@/lib/raster/access";
+import { assertRasterAccess, resolveRasterScope } from "@/lib/raster/access";
 import { normalizeRasterSeason } from "@/lib/raster/season";
 import { createInputSet, listInputSets } from "@/services/raster";
 import { z } from "zod";
 
 const createInputSetBodySchema = z.object({
-  district: z.string().trim().min(1),
+  scope: z.string().trim().min(1),
   season: z.string().trim().optional(),
   name: z.string().trim().min(1),
 });
@@ -15,22 +15,23 @@ export async function GET(request: Request) {
   const auth = await requireApiUser(request);
   if ("error" in auth) return auth.error;
 
-  const district = new URL(request.url).searchParams.get("district")?.trim();
+  const scopeCode = new URL(request.url).searchParams.get("scope")?.trim();
   const season = normalizeRasterSeason(
     new URL(request.url).searchParams.get("season"),
   );
-  if (!district) {
-    return NextResponse.json(
-      { error: "district is required" },
-      { status: 400 },
-    );
+  if (!scopeCode) {
+    return NextResponse.json({ error: "scope is required" }, { status: 400 });
   }
 
-  const access = await assertRasterAccess(auth.user, district, "viewer");
+  const access = await assertRasterAccess(auth.user, scopeCode, "viewer");
   if (access !== true) return access.error;
+  const scope = await resolveRasterScope(scopeCode);
+  if (!scope) {
+    return NextResponse.json({ error: "Scope not found" }, { status: 404 });
+  }
 
   return NextResponse.json({
-    inputSets: await listInputSets(district, season),
+    inputSets: await listInputSets(scope.id, season),
   });
 }
 
@@ -50,13 +51,18 @@ export async function POST(request: Request) {
 
   const access = await assertRasterAccess(
     auth.user,
-    parsed.data.district,
+    parsed.data.scope,
     "admin",
   );
   if (access !== true) return access.error;
+  const scope = await resolveRasterScope(parsed.data.scope);
+  if (!scope) {
+    return NextResponse.json({ error: "Scope not found" }, { status: 404 });
+  }
 
   const inputSet = await createInputSet({
-    ...parsed.data,
+    scopeId: scope.id,
+    name: parsed.data.name,
     season: normalizeRasterSeason(parsed.data.season),
     createdById: auth.user.id,
   });

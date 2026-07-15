@@ -376,7 +376,7 @@ async function main() {
       const inputSet = await prisma.rasterInputSet.create({
         data: {
           name: `E2E projection ${input.suffix}`,
-          district: "OWL",
+          scopeId: scope.id,
           season: "2026/27",
           createdById: user.id,
         },

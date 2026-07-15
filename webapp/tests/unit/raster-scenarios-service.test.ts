@@ -24,7 +24,7 @@ describe("raster scenario service", () => {
 
     await expect(
       listScenarios({
-        district: "OWL",
+        scopeId: "scope-owl",
         season: "2026/27",
         inputSetId: "input-1",
       }),
@@ -45,7 +45,7 @@ describe("raster scenario service", () => {
       expect.objectContaining({
         where: {
           inputSetId: "input-1",
-          inputSet: { district: "OWL", season: "2026/27" },
+          inputSet: { scopeId: "scope-owl", season: "2026/27" },
         },
       }),
     );
@@ -72,7 +72,7 @@ function runFixture(overrides = {}) {
     settings: "{}",
     createdAt: new Date("2026-07-12T10:00:00.000Z"),
     finishedAt: new Date("2026-07-12T10:06:00.000Z"),
-    inputSet: { district: "OWL", season: "2026/27" },
+    inputSet: { scope: { code: "OWL" }, season: "2026/27" },
     snapshot: {
       id: "snapshot-1",
       stale: false,

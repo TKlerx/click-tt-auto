@@ -24,7 +24,11 @@ export async function requireRasterInputSet(
     };
   }
 
-  const access = await assertRasterAccess(auth.user, inputSet.district, level);
+  const access = await assertRasterAccess(
+    auth.user,
+    inputSet.scope.code,
+    level,
+  );
   if (access !== true) return access;
 
   return { user: auth.user, inputSet };
@@ -48,7 +52,11 @@ export async function requireRasterSnapshot(
     };
   }
 
-  const access = await assertRasterAccess(auth.user, snapshot.district, level);
+  const access = await assertRasterAccess(
+    auth.user,
+    snapshot.scope.code,
+    level,
+  );
   if (access !== true) return access;
 
   return { user: auth.user, snapshot };

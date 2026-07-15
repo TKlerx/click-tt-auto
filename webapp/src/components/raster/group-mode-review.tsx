@@ -361,7 +361,8 @@ export function GroupPlanningReview({
         <p className="mt-1 text-sm text-[var(--muted-foreground)]">
           Exclude groups you do not want to plan. Missing A/B stays flexible;
           set it only when the club explicitly requested a rhythm. You can also
-          change a PDF match after a mistaken selection.
+          change a PDF match after a mistaken selection. Excluded groups stay
+          visible here and can be included again once their wishes arrive.
         </p>
         {groups.map((group) => (
           <details
@@ -375,7 +376,7 @@ export function GroupPlanningReview({
                 <span>
                   {savingId === group.groupId
                     ? "saving"
-                    : statuses[group.groupId] || "undecided"}
+                    : statusLabel(statuses[group.groupId], group.missingTeams)}
                 </span>
                 <button
                   className="h-9 rounded-md border border-[var(--border)] px-3 text-sm font-medium"
@@ -523,6 +524,15 @@ function candidateText(
   return candidate
     ? `${candidate.label} - ${candidate.fields} (${candidate.score}%)`
     : "";
+}
+
+function statusLabel(
+  status: "include" | "exclude" | "",
+  missingTeams: number,
+) {
+  if (status === "exclude") return "excluded, deferred";
+  if (status === "include") return "included";
+  return missingTeams > 0 ? "add wishes or exclude" : "undecided";
 }
 
 function initialStatuses(groups: GroupPlanningReviewRow[]) {

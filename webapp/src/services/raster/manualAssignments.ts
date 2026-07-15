@@ -42,7 +42,7 @@ export async function createManualAssignmentDraft(params: {
 export async function getManualAssignmentDraft(id: string) {
   return prisma.rasterManualAssignmentDraft.findUnique({
     where: { id },
-    include: { inputSet: true },
+    include: { inputSet: { include: { scope: true } } },
   });
 }
 
@@ -113,7 +113,7 @@ export async function scoreManualAssignmentDraft(id: string, userId: string) {
     const snapshot = await tx.rasterSnapshot.create({
       data: {
         runId: createdRun.id,
-        district: draft.inputSet.district,
+        scopeId: draft.inputSet.scopeId,
         origin: SnapshotOrigin.IMPORTED,
         optimality: SnapshotOptimality.IMPORTED_HEURISTIC,
         totalConflicts: conflicts.length,

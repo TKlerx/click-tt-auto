@@ -43,7 +43,7 @@ export async function POST(
   await logRasterAudit({
     action: AuditAction.RASTER_RUN_STARTED,
     actorId: context.user.id,
-    district: context.inputSet.district,
+    scope: context.inputSet.scope.code,
     entityType: "RasterOptimizationRun",
     entityId: run.id,
     details: {

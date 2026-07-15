@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireApiUser } from "@/lib/route-auth";
-import { assertRasterAccess } from "@/lib/raster/access";
+import { assertRasterAccess, resolveRasterScope } from "@/lib/raster/access";
 import { normalizeRasterSeason } from "@/lib/raster/season";
-import { prisma } from "@/lib/db";
 import {
-  listRasterSourcesForDistrict,
+  listRasterSourcesForScope,
   upsertRasterSource,
 } from "@/services/raster";
 
@@ -24,21 +23,22 @@ export async function GET(request: Request) {
   if ("error" in auth) return auth.error;
 
   const search = new URL(request.url).searchParams;
-  const district = search.get("district")?.trim();
+  const scopeCode = search.get("scope")?.trim();
   const season = normalizeRasterSeason(search.get("season"));
-  if (!district) {
-    return NextResponse.json(
-      { error: "district is required" },
-      { status: 400 },
-    );
+  if (!scopeCode) {
+    return NextResponse.json({ error: "scope is required" }, { status: 400 });
   }
 
-  const access = await assertRasterAccess(auth.user, district, "viewer");
+  const access = await assertRasterAccess(auth.user, scopeCode, "viewer");
   if (access !== true) return access.error;
+  const scope = await resolveRasterScope(scopeCode);
+  if (!scope) {
+    return NextResponse.json({ error: "Scope not found" }, { status: 404 });
+  }
 
   return NextResponse.json({
-    sources: await listRasterSourcesForDistrict(
-      district,
+    sources: await listRasterSourcesForScope(
+      scope.id,
       season,
       search.get("sourceType")?.trim() || undefined,
     ),
@@ -66,12 +66,7 @@ export async function POST(request: Request) {
   );
   if (access !== true) return access.error;
 
-  const scope = await prisma.scope.findFirst({
-    where: {
-      OR: [{ code: parsed.data.scopeCode }, { name: parsed.data.scopeCode }],
-    },
-    select: { id: true },
-  });
+  const scope = await resolveRasterScope(parsed.data.scopeCode);
   if (!scope) {
     return NextResponse.json({ error: "Scope not found" }, { status: 404 });
   }

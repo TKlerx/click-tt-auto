@@ -24,16 +24,18 @@ export async function POST(request: Request) {
     );
   }
 
-  const scenarios = await getScenariosByIds([...new Set(parsed.data.scenarioIds)]);
+  const scenarios = await getScenariosByIds([
+    ...new Set(parsed.data.scenarioIds),
+  ]);
 
-  // Authorize every scenario's district before comparing, rather than checking
-  // the first one afterwards. Comparable scenarios do share a district today,
+  // Authorize every scenario's scope before comparing, rather than checking
+  // the first one afterwards. Comparable scenarios do share a scope today,
   // so one check happened to cover them all -- but that is isComparableScenario
   // enforcing a compatibility rule, not an access rule. Relaxing compatibility
   // later (say, to compare across seasons) would silently widen access with no
-  // test failing. Checking each district keeps this correct on its own terms.
-  for (const district of new Set(scenarios.map((scenario) => scenario.district))) {
-    const access = await assertRasterAccess(auth.user, district, "viewer");
+  // test failing. Checking each scope keeps this correct on its own terms.
+  for (const scope of new Set(scenarios.map((scenario) => scenario.scope))) {
+    const access = await assertRasterAccess(auth.user, scope, "viewer");
     if (access !== true) return access.error;
   }
 

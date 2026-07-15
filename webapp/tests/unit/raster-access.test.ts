@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { prismaMock } from "@/lib/__mocks__/db";
 import {
-  canAccessRasterDistrict,
+  canAccessRasterScope,
   listAccessibleRasterScopes,
 } from "@/lib/raster/access";
 import { Role } from "../../generated/prisma/enums";
@@ -19,13 +19,13 @@ describe("raster access", () => {
     prismaMock.scope.findFirst.mockResolvedValue({ id: "owl" } as never);
 
     await expect(
-      canAccessRasterDistrict({ id: "user-1", role: Role.SCOPE_USER }, "OWL"),
+      canAccessRasterScope({ id: "user-1", role: Role.SCOPE_USER }, "OWL"),
     ).resolves.toBe(true);
 
     expect(prismaMock.scope.findFirst).toHaveBeenCalledWith({
       where: {
         AND: [
-          { OR: [{ code: "OWL" }, { name: "OWL" }] },
+          { code: "OWL" },
           {
             OR: [
               { userAssignments: { some: { userId: "user-1" } } },
@@ -88,6 +88,7 @@ describe("raster access", () => {
       },
       select: {
         code: true,
+        id: true,
         name: true,
         parent: {
           select: {
@@ -125,5 +126,20 @@ describe("raster access", () => {
     await expect(
       listAccessibleRasterScopes({ id: "admin-1", role: Role.PLATFORM_ADMIN }),
     ).resolves.toMatchObject([{ code: "AACHEN_EUREGIO" }, { code: "OWL" }]);
+  });
+
+  it("excludes the Germany root from accessible raster scopes", async () => {
+    prismaMock.scope.findMany.mockResolvedValue([
+      { code: "DE", name: "Germany", parent: null },
+      {
+        code: "WTTV",
+        name: "Westdeutscher Tischtennis-Verband",
+        parent: { code: "DE", name: "Germany", parent: null },
+      },
+    ] as never);
+
+    await expect(
+      listAccessibleRasterScopes({ id: "admin-1", role: Role.PLATFORM_ADMIN }),
+    ).resolves.toMatchObject([{ code: "WTTV" }]);
   });
 });

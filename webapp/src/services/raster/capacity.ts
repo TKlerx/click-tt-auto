@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { rasterDistrictWhere } from "@/lib/raster/access";
+import { rasterScopeWhere } from "@/lib/raster/access";
 import type { CapacityCsvRowInput } from "@/lib/raster/schemas";
 import {
   HallCapacityBasis,
@@ -7,7 +7,8 @@ import {
 } from "../../../generated/prisma/enums";
 
 type InferredHallCapacity = {
-  district: string;
+  scopeId: string;
+  scope: string;
   clubId: string;
   hall: string;
   weekday: RasterWeekday;
@@ -22,7 +23,7 @@ type CapacitySlot = {
   durationMinutes: number;
 };
 
-export type HallCapacityReviewRow = InferredHallCapacity & {
+export type HallCapacityReviewRow = Omit<InferredHallCapacity, "scopeId"> & {
   id: string | null;
   storedCapacity: number | null;
   basis: HallCapacityBasis | null;
@@ -38,39 +39,42 @@ export type HallCapacityReview = {
   rows: HallCapacityReviewRow[];
 };
 
-export async function listHallCapacities(district: string) {
-  return prisma.rasterHallCapacity.findMany({
-    where: rasterDistrictWhere(district),
-    orderBy: [{ clubId: "asc" }, { hall: "asc" }, { weekday: "asc" }],
-  });
+export async function listHallCapacities(scopeId: string) {
+  return prisma.rasterHallCapacity
+    .findMany({
+      where: rasterScopeWhere(scopeId),
+      orderBy: [{ clubId: "asc" }, { hall: "asc" }, { weekday: "asc" }],
+      include: { scope: { select: { code: true } } },
+    })
+    .then((rows) => rows.map((row) => ({ ...row, scope: row.scope.code })));
 }
 
-export async function searchHallCapacities(
-  district: string,
-  q?: string | null,
-) {
-  return prisma.rasterHallCapacity.findMany({
-    where: {
-      district,
-      ...(q
-        ? {
-            OR: [{ clubId: { contains: q } }, { hall: { contains: q } }],
-          }
-        : {}),
-    },
-    orderBy: [{ clubId: "asc" }, { hall: "asc" }, { weekday: "asc" }],
-  });
+export async function searchHallCapacities(scopeId: string, q?: string | null) {
+  return prisma.rasterHallCapacity
+    .findMany({
+      where: {
+        scopeId,
+        ...(q
+          ? {
+              OR: [{ clubId: { contains: q } }, { hall: { contains: q } }],
+            }
+          : {}),
+      },
+      orderBy: [{ clubId: "asc" }, { hall: "asc" }, { weekday: "asc" }],
+      include: { scope: { select: { code: true } } },
+    })
+    .then((rows) => rows.map((row) => ({ ...row, scope: row.scope.code })));
 }
 
 export async function upsertHallCapacities(
-  rows: CapacityCsvRowInput[],
+  rows: Array<CapacityCsvRowInput & { scopeId: string }>,
   updatedById: string,
 ) {
   for (const row of rows) {
     await prisma.rasterHallCapacity.upsert({
       where: {
-        district_clubId_hall_weekday: {
-          district: row.district,
+        scopeId_clubId_hall_weekday: {
+          scopeId: row.scopeId,
           clubId: row.clubId,
           hall: row.hall,
           weekday: row.weekday,
@@ -82,15 +86,17 @@ export async function upsertHallCapacities(
         updatedById,
       },
       create: {
-        ...row,
+        scopeId: row.scopeId,
+        clubId: row.clubId,
+        hall: row.hall,
+        weekday: row.weekday,
+        capacity: row.capacity,
         basis: HallCapacityBasis.REVIEWED,
         updatedById,
       },
     });
   }
-  await markDistrictSnapshotsStale([
-    ...new Set(rows.map((row) => row.district)),
-  ]);
+  await markScopeSnapshotsStale([...new Set(rows.map((row) => row.scopeId))]);
   return { count: rows.length };
 }
 
@@ -111,7 +117,7 @@ export async function inferHallCapacitiesFromInputSet(
     }
     await prisma.rasterHallCapacity.create({
       data: {
-        district: row.district,
+        scopeId: row.scopeId,
         clubId: row.clubId,
         hall: row.hall,
         weekday: row.weekday,
@@ -124,8 +130,8 @@ export async function inferHallCapacitiesFromInputSet(
   }
   const pruned = await pruneStaleInferredCapacities(inferred);
   if (count > 0) {
-    await markDistrictSnapshotsStale([
-      ...new Set(inferred.map((row) => row.district)),
+    await markScopeSnapshotsStale([
+      ...new Set(inferred.map((row) => row.scopeId)),
     ]);
   }
   return { count, needsReview, pruned };
@@ -142,11 +148,12 @@ export async function reviewHallCapacitiesForInputSet(
   const rows: HallCapacityReviewRow[] = [];
 
   for (const row of inferred) {
+    const reviewRow = hallCapacityReviewRow(row);
     const stored = existing.get(capacityKey(row));
     if (!stored) {
       missingCount += 1;
       rows.push({
-        ...row,
+        ...reviewRow,
         id: null,
         storedCapacity: null,
         basis: null,
@@ -155,7 +162,7 @@ export async function reviewHallCapacitiesForInputSet(
     } else if (stored.capacity < row.capacity) {
       insufficientCount += 1;
       rows.push({
-        ...row,
+        ...reviewRow,
         id: stored.id,
         storedCapacity: stored.capacity,
         basis: stored.basis,
@@ -164,7 +171,7 @@ export async function reviewHallCapacitiesForInputSet(
     } else if (stored.capacity > row.capacity) {
       higherCount += 1;
       rows.push({
-        ...row,
+        ...reviewRow,
         id: stored.id,
         storedCapacity: stored.capacity,
         basis: stored.basis,
@@ -172,7 +179,7 @@ export async function reviewHallCapacitiesForInputSet(
       });
     } else {
       rows.push({
-        ...row,
+        ...reviewRow,
         id: stored.id,
         storedCapacity: stored.capacity,
         basis: stored.basis,
@@ -191,6 +198,16 @@ export async function reviewHallCapacitiesForInputSet(
   };
 }
 
+function hallCapacityReviewRow(row: InferredHallCapacity) {
+  return {
+    scope: row.scope,
+    clubId: row.clubId,
+    hall: row.hall,
+    weekday: row.weekday,
+    capacity: row.capacity,
+  };
+}
+
 export async function updateHallCapacity(
   id: string,
   data: { capacity: number; basis?: HallCapacityBasis; updatedById: string },
@@ -199,14 +216,14 @@ export async function updateHallCapacity(
     where: { id },
     data,
   });
-  await markDistrictSnapshotsStale([capacity.district]);
+  await markScopeSnapshotsStale([capacity.scopeId]);
   return capacity;
 }
 
-async function markDistrictSnapshotsStale(districts: string[]) {
-  for (const district of districts) {
+async function markScopeSnapshotsStale(scopeIds: string[]) {
+  for (const scopeId of scopeIds) {
     await prisma.rasterSnapshot.updateMany({
-      where: { district },
+      where: { scopeId },
       data: { stale: true },
     });
   }
@@ -218,7 +235,8 @@ async function inferCapacityRows(
   const inputSet = await prisma.rasterInputSet.findUnique({
     where: { id: inputSetId },
     select: {
-      district: true,
+      scopeId: true,
+      scope: { select: { code: true } },
       seasonModelJson: true,
       wishes: {
         select: {
@@ -233,6 +251,7 @@ async function inferCapacityRows(
     },
   });
   if (!inputSet) return [];
+  const displayScope = inputSet.scope.code;
 
   const model = inputSet.seasonModelJson
     ? (JSON.parse(inputSet.seasonModelJson) as {
@@ -269,10 +288,11 @@ async function inferCapacityRows(
       RasterWeekday,
       string,
     ];
-    const rowKey = [inputSet.district, clubId, hall, weekday].join("\0");
+    const rowKey = [inputSet.scopeId, clubId, hall, weekday].join("\0");
     const current = inferred.get(rowKey);
     inferred.set(rowKey, {
-      district: inputSet.district,
+      scopeId: inputSet.scopeId,
+      scope: displayScope,
       clubId,
       hall,
       weekday,
@@ -374,12 +394,12 @@ async function existingCapacityMap(inferred: InferredHallCapacity[]) {
       { id: string; capacity: number; basis: HallCapacityBasis }
     >();
   }
-  const districts = [...new Set(inferred.map((row) => row.district))];
+  const scopeIds = [...new Set(inferred.map((row) => row.scopeId))];
   const existing = await prisma.rasterHallCapacity.findMany({
-    where: { district: { in: districts } },
+    where: { scopeId: { in: scopeIds } },
     select: {
       id: true,
-      district: true,
+      scopeId: true,
       clubId: true,
       hall: true,
       weekday: true,
@@ -391,17 +411,17 @@ async function existingCapacityMap(inferred: InferredHallCapacity[]) {
 }
 
 async function pruneStaleInferredCapacities(inferred: InferredHallCapacity[]) {
-  const districts = [...new Set(inferred.map((row) => row.district))];
-  if (!districts.length) return 0;
+  const scopeIds = [...new Set(inferred.map((row) => row.scopeId))];
+  if (!scopeIds.length) return 0;
   const currentKeys = new Set(inferred.map(capacityKey));
   const stale = await prisma.rasterHallCapacity.findMany({
     where: {
-      district: { in: districts },
+      scopeId: { in: scopeIds },
       basis: HallCapacityBasis.INFERRED,
     },
     select: {
       id: true,
-      district: true,
+      scopeId: true,
       clubId: true,
       hall: true,
       weekday: true,
@@ -414,17 +434,17 @@ async function pruneStaleInferredCapacities(inferred: InferredHallCapacity[]) {
   await prisma.rasterHallCapacity.deleteMany({
     where: { id: { in: staleIds } },
   });
-  await markDistrictSnapshotsStale(districts);
+  await markScopeSnapshotsStale(scopeIds);
   return staleIds.length;
 }
 
 function capacityKey(row: {
-  district: string;
+  scopeId?: string;
   clubId: string;
   hall: string;
   weekday: RasterWeekday;
 }) {
-  return [row.district, row.clubId, row.hall, row.weekday].join("\0");
+  return [row.scopeId, row.clubId, row.hall, row.weekday].join("\0");
 }
 
 function normalizeWeekday(value: string | undefined): RasterWeekday | null {

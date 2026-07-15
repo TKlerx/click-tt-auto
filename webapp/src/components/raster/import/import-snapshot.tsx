@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { withBasePath } from "@/lib/base-path";
 
-export function ImportSnapshotForm({ district }: { district: string }) {
+export function ImportSnapshotForm({ scope }: { scope: string }) {
   const [message, setMessage] = useState<string | null>(null);
 
   async function submit(formData: FormData) {
@@ -23,7 +23,7 @@ export function ImportSnapshotForm({ district }: { district: string }) {
     const response = await fetch(withBasePath("/api/raster/snapshots/import"), {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ district, ...(payload as object) }),
+      body: JSON.stringify({ scope, ...(payload as object) }),
     });
     if (response.ok) {
       setMessage("Imported");

@@ -47,7 +47,7 @@ export async function PATCH(
   await logRasterAudit({
     action: AuditAction.RASTER_INPUT_UPLOADED,
     actorId: auth.user.id,
-    district: source.scope.code,
+    scope: source.scope.code,
     entityType: "RasterSource",
     entityId: source.id,
     details: {

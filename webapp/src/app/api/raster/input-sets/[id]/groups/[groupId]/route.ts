@@ -59,9 +59,9 @@ export async function PUT(
   }
 
   await logRasterAudit({
-    action: AuditAction.RASTER_INPUT_UPLOADED,
+    action: AuditAction.RASTER_PLANNING_CHANGED,
     actorId: context.user.id,
-    district: context.inputSet.district,
+    scope: context.inputSet.scope.code,
     entityType: "RasterInputSet",
     entityId: context.inputSet.id,
     details: {

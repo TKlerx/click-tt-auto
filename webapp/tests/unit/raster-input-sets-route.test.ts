@@ -21,7 +21,7 @@ describe("raster input set route", () => {
     vi.clearAllMocks();
   });
 
-  it("lists district input sets for a scoped viewer", async () => {
+  it("lists scope input sets for a scoped viewer", async () => {
     requireApiUser.mockResolvedValue({
       user: {
         id: "viewer-1",
@@ -34,7 +34,7 @@ describe("raster input set route", () => {
       {
         id: "input-1",
         name: "OWL 2026",
-        district: "OWL",
+        scopeId: "scope-1",
         status: "DRAFT",
         createdAt: new Date("2026-07-10T00:00:00Z"),
         _count: { wishes: 0, fixedRasterzahlen: 0, runs: 0 },
@@ -42,7 +42,7 @@ describe("raster input set route", () => {
     ] as never);
 
     const response = await GET(
-      new Request("http://localhost/api/raster/input-sets?district=OWL"),
+      new Request("http://localhost/api/raster/input-sets?scope=OWL"),
     );
 
     expect(response.status).toBe(200);
@@ -51,7 +51,7 @@ describe("raster input set route", () => {
     });
   });
 
-  it("creates district input sets for raster admins", async () => {
+  it("creates scope input sets for raster admins", async () => {
     requireApiUser.mockResolvedValue({
       user: {
         id: "admin-1",
@@ -62,7 +62,7 @@ describe("raster input set route", () => {
     prismaMock.rasterInputSet.create.mockResolvedValue({
       id: "input-1",
       name: "OWL 2026",
-      district: "OWL",
+      scopeId: "scope-1",
       createdById: "admin-1",
       createdAt: new Date("2026-07-10T00:00:00Z"),
       status: "DRAFT",
@@ -71,14 +71,14 @@ describe("raster input set route", () => {
     const response = await POST(
       new Request("http://localhost/api/raster/input-sets", {
         method: "POST",
-        body: JSON.stringify({ district: "OWL", name: "OWL 2026" }),
+        body: JSON.stringify({ scope: "OWL", name: "OWL 2026" }),
       }),
     );
 
     expect(response.status).toBe(201);
     expect(prismaMock.rasterInputSet.create).toHaveBeenCalledWith({
       data: {
-        district: "OWL",
+        scopeId: "scope-1",
         season: "2026/27",
         name: "OWL 2026",
         createdById: "admin-1",

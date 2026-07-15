@@ -23,21 +23,22 @@ describe("raster scenarios route", () => {
     vi.clearAllMocks();
   });
 
-  it("lists scenarios for a district and input set", async () => {
+  it("lists scenarios for a scope and input set", async () => {
     mockUser();
+    prismaMock.scope.findFirst.mockResolvedValue(scopeFixture() as never);
     prismaMock.rasterOptimizationRun.findMany.mockResolvedValue([
       runFixture({ id: "run-1" }),
     ] as never);
 
     const response = await GET(
       new Request(
-        "http://localhost/api/raster/scenarios?district=OWL&season=2026/27&inputSetId=input-1",
+        "http://localhost/api/raster/scenarios?scope=OWL&season=2026/27&inputSetId=input-1",
       ),
     );
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
-      scenarios: [{ id: "run-1", district: "OWL", season: "2026/27" }],
+      scenarios: [{ id: "run-1", scope: "OWL", season: "2026/27" }],
     });
   });
 
@@ -179,7 +180,7 @@ function runFixture(overrides = {}) {
     }),
     createdAt: new Date(scenario.createdAt),
     finishedAt: new Date(scenario.finishedAt!),
-    inputSet: { district: scenario.district, season: scenario.season },
+    inputSet: { scope: { code: scenario.scope }, season: scenario.season },
     snapshot: {
       id: `snapshot-${scenario.id}`,
       stale: scenario.stale,
@@ -192,5 +193,18 @@ function runFixture(overrides = {}) {
       }),
     },
     ...overrides,
+  };
+}
+
+function scopeFixture() {
+  return {
+    id: "scope-owl",
+    code: "OWL",
+    name: "OWL",
+    parent: {
+      code: "WTTV",
+      name: "WTTV",
+      parent: { code: "DE", name: "Germany" },
+    },
   };
 }

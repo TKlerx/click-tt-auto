@@ -38,7 +38,7 @@ type HallCapacityReview = {
   blockingCount: number;
   rows: Array<{
     id: string | null;
-    district: string;
+    scope: string;
     clubId: string;
     hall: string;
     weekday: string;
@@ -50,10 +50,10 @@ type HallCapacityReview = {
 };
 
 export function CreateInputSetForm({
-  district,
+  scope,
   season,
 }: {
-  district: string;
+  scope: string;
   season: string;
 }) {
   const router = useRouter();
@@ -65,7 +65,7 @@ export function CreateInputSetForm({
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        district,
+        scope,
         season,
         name: String(formData.get("name") ?? ""),
       }),
@@ -90,7 +90,7 @@ export function CreateInputSetForm({
         Input set name
         <input
           className="h-10 rounded-md border border-[var(--border)] bg-transparent px-3 text-sm font-normal"
-          defaultValue={`${district} ${season}`}
+          defaultValue={`${scope} ${season}`}
           name="name"
           required
         />
@@ -178,11 +178,13 @@ export function InputSetRunActions({
   status,
   runs,
   capacityReview,
+  showCapacityReview = true,
 }: {
   inputSetId: string;
   status: string;
   runs: RasterRunRow[];
   capacityReview?: HallCapacityReview;
+  showCapacityReview?: boolean;
 }) {
   const router = useRouter();
   const [message, setMessage] = useState<string | null>(null);
@@ -353,7 +355,7 @@ export function InputSetRunActions({
     try {
       const error = await putGymCapacity({
         capacity,
-        district: row.district,
+        scope: row.scope,
         id: row.id,
       });
       if (error) {
@@ -497,7 +499,7 @@ export function InputSetRunActions({
           </span>
         ) : null}
       </div>
-      {capacityBlocked && capacityReview ? (
+      {showCapacityReview && capacityBlocked && capacityReview ? (
         <CapacityWizard
           busy={busy}
           onAcceptAll={(rows) => void acceptInferredCapacities(rows)}

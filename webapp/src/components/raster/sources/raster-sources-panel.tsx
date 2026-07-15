@@ -28,14 +28,14 @@ type RasterInputSetRow = {
 };
 
 export function RasterSourcesPanel({
-  district,
+  scopeCode,
   season,
   scopes,
   sources,
   inputSet,
   canEdit,
 }: {
-  district: string;
+  scopeCode: string;
   season: string;
   scopes: RasterScopeOption[];
   sources: RasterSourceRow[];
@@ -294,7 +294,7 @@ export function RasterSourcesPanel({
           ))
         ) : (
           <p className="px-4 py-6 text-sm text-[var(--muted-foreground)]">
-            No sources for {district}.
+            No sources for {scopeCode}.
           </p>
         )}
       </div>
@@ -310,7 +310,7 @@ export function RasterSourcesPanel({
               </h3>
               <p className="mt-1 text-sm text-[var(--muted-foreground)]">
                 Upload one current group assignment file. Store it under a
-                parent district if sub-districts should inherit it.
+                parent scope if child scopes should inherit it.
               </p>
             </div>
             <input name="season" type="hidden" value={season} />
@@ -319,7 +319,7 @@ export function RasterSourcesPanel({
               Store source under
               <select
                 className="h-10 rounded-md border border-[var(--border)] bg-transparent px-3 text-sm font-normal"
-                defaultValue={district}
+                defaultValue={scopeCode}
                 name="scopeCode"
               >
                 {scopes.map((scope) => (
@@ -371,7 +371,7 @@ export function RasterSourcesPanel({
               Store source under
               <select
                 className="h-10 rounded-md border border-[var(--border)] bg-transparent px-3 text-sm font-normal"
-                defaultValue={district}
+                defaultValue={scopeCode}
                 name="scopeCode"
               >
                 {scopes.map((scope) => (
@@ -416,7 +416,7 @@ export function RasterSourcesPanel({
                 Store source under
                 <select
                   className="h-10 rounded-md border border-[var(--border)] bg-transparent px-3 text-sm font-normal"
-                  defaultValue={district}
+                  defaultValue={scopeCode}
                   name="scopeCode"
                 >
                   {scopes.map((scope) => (
