@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -237,7 +238,12 @@ def parse_start_minutes(value: object) -> int | None:
 
 
 def match_duration_minutes(team: dict[str, Any]) -> int:
-    return 120 if "jugend" in str(team.get("label") or "").lower() else 180
+    # Keep in step with requiredCapacity's matchDurationMinutes in
+    # src/raster/score/penalties.ts and _match_duration_minutes in
+    # webapp/worker/src/starter_worker/db.py. All three must agree: the solver
+    # optimizes against this duration and the other two score the result, so a
+    # divergence makes the objective disagree with the reported score.
+    return 120 if re.search(r"\bjugend\b", str(team.get("label") or ""), re.IGNORECASE) else 180
 
 
 def capacity_buckets(slot_teams: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
