@@ -37,6 +37,10 @@ Expected: a feasible-but-not-proven CP-SAT result is still comparable; failed/no
 
 Expected: manual KPIs are computed by the same scoring definitions as optimizer scenarios.
 
+## Live click-TT source sanity check
+
+When scenario inputs come from a refreshed click-TT admin source, confirm the source refresh completed with verified group-level `Terminmeldungen (pdf)` downloads. Do not treat collected `nuLigaAdminTTDE.woa/wo/...` links as stable direct-download URLs; those links contain click counters and can point at the wrong group/PDF outside the live navigation sequence.
+
 Implemented API routes use the `/api/raster` base path:
 
 - `GET /api/raster/scenarios?district=&season=&inputSetId=`

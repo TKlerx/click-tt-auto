@@ -99,7 +99,7 @@ As a district game organizer, I want the tool to pull the wishes and group assig
 
 **Acceptance Scenarios**:
 
-1. **Given** valid click-TT credentials, **When** the tool runs in scrape mode, **Then** it collects the same team/wish/group data the PDFs provide, reusing the existing login flow.
+1. **Given** valid click-TT credentials, **When** the tool runs in scrape mode, **Then** it collects the same team/wish/group data the PDFs provide, reusing the existing login flow and verifying each downloaded group-level wishes PDF belongs to the clicked group.
 2. **Given** click-TT is unreachable or its structure is unexpected, **When** scraping fails, **Then** the tool reports the failure clearly and the PDF path remains available as a fallback.
 
 ---
@@ -117,6 +117,7 @@ As a district game organizer, I want the tool to pull the wishes and group assig
 - **Second half (Rückrunde)**: Home/away swap in the second half; home-week derivation must cover the full season.
 - **Missing hall capacity**: Default to 1 home match per hall per slot and note that the default was applied.
 - **Group size outside supported rulebook sizes**: If a district group is not one of the supported sizes/modes (6er, 6er Doppelrunde, 7/8er, 9/10er, 11/12er, 13/14er), the tool refuses to score it rather than guessing a template.
+- **Stateful click-TT admin URLs**: nuLiga admin `wo/...` URLs contain click counters and may return the wrong group/PDF when replayed. Scrape mode must navigate by clicking through the live admin UI and must verify downloaded group-level `Terminmeldungen (pdf)` text against the clicked group before trusting it.
 
 ## Requirements _(mandatory)_
 
@@ -138,7 +139,7 @@ As a district game organizer, I want the tool to pull the wishes and group assig
 - **FR-014**: System MUST allow the organizer to pin additional teams to specific Rasterzahlen and permute only the rest.
 - **FR-015**: System MUST record explicit club Rasterzahl requests in the model but MUST NOT treat them as binding wishes for scoring or optimization.
 - **FR-016**: System MUST support PDF-file ingestion for all inputs (wishes, group assignment, fixed Rasterzahlen) as the guaranteed input path, independent of any live system.
-- **FR-017**: System SHOULD support ingesting wishes and group assignment directly from click-TT, reusing the existing authenticated navigation, with PDF ingestion remaining available as a fallback. (Priority P3.)
+- **FR-017**: System SHOULD support ingesting wishes and group assignment directly from click-TT, reusing the existing authenticated navigation, with PDF ingestion remaining available as a fallback. Scrape mode MUST NOT replay collected nuLiga admin `wo/...` URLs as stable links; it MUST click through the live admin UI and verify each downloaded group-level wishes PDF matches the clicked group. (Priority P3.)
 - **FR-018**: System MUST compute the objective as a weighted sum over penalty types (hall over-usage, broken _im Wechsel_ wish, broken _zeitgleich_ wish, Spieltag-4 same-club derby fallback, broken Spielwoche A/B preference), with the weight per type supplied by the organizer via configuration so the trade-off can be tuned per season.
 - **FR-022**: System MUST support per-team Spielwoche A/B rhythm hints and score them relationally within the same club/hall/weekday: equal hints prefer _zeitgleich_, different hints prefer _im Wechsel_. Missing A/B MUST be treated as flexible reviewable data, not as a validation blocker and not as an automatic soft penalty.
 - **FR-023**: System MUST capture absolute calendar constraints beyond A/B parity (e.g. even/odd Kalenderwoche, specific-Punktspieltag availability) into the model and surface them in the report, but is NOT required to optimize against them in v1.

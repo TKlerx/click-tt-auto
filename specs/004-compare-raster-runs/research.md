@@ -8,6 +8,7 @@ status, settings, KPI summary, details link, and staleness.
 **Rationale**: The admin compares results, not storage internals. One read model keeps the UI and KPI logic small.
 
 **Alternatives considered**:
+
 - Separate compare paths for runs vs manual plans - rejected because it duplicates KPI and table rendering.
 - A generic snapshot import feature - too broad for 004; manual schedule-number assignment is the actual need.
 
@@ -19,6 +20,7 @@ run the existing score/conflict derivation.
 **Rationale**: Shared KPIs only stay honest if they are computed by the same code.
 
 **Alternatives considered**:
+
 - Manual-only scoring code - rejected because it would drift.
 - Storing manual KPIs typed by users - rejected because it cannot be trusted.
 
@@ -30,6 +32,7 @@ percentage unless a future solver exposes real progress.
 **Rationale**: CP-SAT can run for minutes without linear progress. Fake precision is worse than a clear status.
 
 **Alternatives considered**:
+
 - Progress bar with guessed percentages - rejected as misleading.
 - Blocking request/response runs - rejected because existing runs are background jobs.
 
@@ -41,6 +44,7 @@ Unmatched rows are corrected in the same visual flow.
 **Rationale**: This covers the colleague workflow without building a spreadsheet clone.
 
 **Alternatives considered**:
+
 - Arbitrary PDF/OCR manual import - rejected for v1 as high effort and low reliability.
 - Upload only - rejected because the user explicitly needs visual entry.
 
@@ -52,4 +56,16 @@ comparison.
 **Rationale**: Importing it would pollute 004 with club identity, click-TT ingestion, retention, and i18n work.
 
 **Alternatives considered**:
+
 - Merge Claude branch as-is - rejected because it edits `specs/003-raster-review-webapp` and creates no 004 artifacts.
+
+## Decision: Scenario inputs from live click-TT refresh must be verified
+
+**Decision**: 004 treats live click-TT refresh as an upstream ingest/source concern, but scenario comparison may only use refreshed source data that passed group/PDF verification.
+
+**Rationale**: A comparison is only meaningful if all scenarios use trustworthy inputs. nuLiga admin `wo/...` URLs are stateful and can return the wrong group/PDF when replayed, so source verification belongs before scenario creation.
+
+**Alternatives considered**:
+
+- Let scenario comparison ignore source verification - rejected because stale or wrong inputs would make KPI differences meaningless.
+- Implement separate comparison-time PDF verification - rejected because source refresh already owns parsing and cache validity.

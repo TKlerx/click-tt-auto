@@ -84,6 +84,10 @@ function teamKey(row: TeamRasterAssignmentRow): string {
   return row.team.toLowerCase();
 }
 
+function assignmentGroupKey(row: TeamRasterAssignmentRow): string {
+  return row.sourceUrl || row.group.toLowerCase();
+}
+
 function baseTeamId(row: TeamRasterAssignmentRow): string {
   return `${slug(row.group)}-${slug(row.team)}`;
 }
@@ -143,6 +147,7 @@ export async function buildSeasonModelFromAssignments(
   const clubs = new Map<string, Club>();
   const teams: Team[] = [];
   const groups: SeasonModel["groups"] = [];
+  const teamIdsByGroupKey = new Map<string, string[]>();
   const baseIdCounts = new Map<string, number>();
   for (const row of rows) {
     const baseId = baseTeamId(row);
@@ -168,6 +173,11 @@ export async function buildSeasonModelFromAssignments(
     const baseId = baseTeamId(row);
     const teamId =
       baseIdCounts.get(baseId) === 1 ? baseId : disambiguatedTeamId(row, label);
+    const groupKey = assignmentGroupKey(row);
+    teamIdsByGroupKey.set(groupKey, [
+      ...(teamIdsByGroupKey.get(groupKey) ?? []),
+      teamId
+    ]);
     teams.push({
       id: teamId,
       clubId,
@@ -198,15 +208,17 @@ export async function buildSeasonModelFromAssignments(
     });
   }
 
-  for (const groupName of [...new Set(rows.map((row) => row.group))]) {
-    const teamIds = teams
-      .filter((team) => team.group?.name === groupName)
-      .map((team) => team.id);
+  for (const groupKey of [...new Set(rows.map(assignmentGroupKey))]) {
+    const groupRows = rows.filter(
+      (row) => assignmentGroupKey(row) === groupKey
+    );
+    const teamIds = teamIdsByGroupKey.get(groupKey) ?? [];
     rasterSizeForGroupSize(teamIds.length);
-    const league =
-      rows.find((row) => row.group === groupName)?.league ?? "click-TT";
+    const firstRow = groupRows[0];
+    if (!firstRow) continue;
+    const league = firstRow.league ?? firstRow.division ?? "click-TT";
     groups.push({
-      ref: { league, name: groupName },
+      ref: { league, name: firstRow.group },
       size: teamIds.length,
       teamIds
     });

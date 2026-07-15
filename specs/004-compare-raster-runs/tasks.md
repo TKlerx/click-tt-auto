@@ -117,6 +117,7 @@
 - [x] T044 Run focused unit tests for 004 and root scoring tests
 - [ ] T045 [Backlog] Add infeasibility diagnostics that identify which hard constraint family blocks a CP-SAT run in `scripts/solve-raster-cpsat.py` and `webapp/worker/src/starter_worker/main.py`
 - [ ] T046 [Backlog] Show infeasibility diagnostics next to the no-solution run state in `webapp/src/components/raster/input-set-actions.tsx`
+- [x] T047 Require verified refreshed inputs for comparisons: update root click-TT ingest to click live admin group links, download group-level `Terminmeldungen (pdf)` files, verify PDF text against the clicked group title, and keep same-named groups separate by source URL before those inputs can feed scenarios.
 
 ---
 
