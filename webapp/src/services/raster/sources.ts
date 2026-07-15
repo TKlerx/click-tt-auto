@@ -7,13 +7,13 @@ import { deleteStoredFile, getFilePath } from "@/lib/file-storage";
 import { rasterIngest } from "@/lib/raster/pipeline";
 import { normalizeRasterSeason } from "@/lib/raster/season";
 
-export async function listRasterSourcesForDistrict(
-  district: string,
+export async function listRasterSourcesForScopeCode(
+  scopeCode: string,
   season = normalizeRasterSeason(undefined),
   sourceType?: string,
 ) {
   const scope = await prisma.scope.findFirst({
-    where: { OR: [{ code: district }, { name: district }] },
+    where: { code: scopeCode },
     select: {
       id: true,
       parent: {
@@ -26,6 +26,39 @@ export async function listRasterSourcesForDistrict(
   });
   if (!scope) return [];
 
+  return listRasterSourcesForResolvedScope(scope, season, sourceType);
+}
+
+export async function listRasterSourcesForScope(
+  scopeId: string,
+  season = normalizeRasterSeason(undefined),
+  sourceType?: string,
+) {
+  const scope = await prisma.scope.findUnique({
+    where: { id: scopeId },
+    select: {
+      id: true,
+      parent: {
+        select: {
+          id: true,
+          parent: { select: { id: true } },
+        },
+      },
+    },
+  });
+  if (!scope) return [];
+
+  return listRasterSourcesForResolvedScope(scope, season, sourceType);
+}
+
+function listRasterSourcesForResolvedScope(
+  scope: {
+    id: string;
+    parent: { id: string; parent: { id: string } | null } | null;
+  },
+  season = normalizeRasterSeason(undefined),
+  sourceType?: string,
+) {
   const scopeIds = [
     scope.id,
     scope.parent?.id,

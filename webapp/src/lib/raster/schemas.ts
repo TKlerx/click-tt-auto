@@ -28,7 +28,7 @@ export const wishJsonSchema = z.object({
 });
 
 export const capacityCsvRowSchema = z.object({
-  district: nonEmptyString,
+  scope: nonEmptyString,
   clubId: nonEmptyString,
   hall: nonEmptyString,
   weekday: rasterWeekdaySchema,

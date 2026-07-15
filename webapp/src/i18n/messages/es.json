@@ -375,5 +375,17 @@
       "invalid": "Could not parse Teams channel link. Please check the URL format.",
       "applied": "Channel link parsed."
     }
+  },
+  "raster": {
+    "steps": {
+      "import": "Import data",
+      "review": "Review data",
+      "run": "Run optimizer",
+      "runs": "Review optimization runs"
+    },
+    "scopeLevels": {
+      "bezirk": "Bezirk",
+      "association": "Verband"
+    }
   }
 }

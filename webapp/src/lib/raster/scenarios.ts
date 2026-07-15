@@ -21,7 +21,7 @@ export type ScenarioStatus = (typeof scenarioStatuses)[number];
 export type RasterScenario = {
   id: string;
   inputSetId: string;
-  district: string;
+  scope: string;
   season: string;
   name: string;
   origin: ScenarioOrigin;
@@ -36,11 +36,11 @@ export type RasterScenario = {
 };
 
 export function isComparableScenario(
-  left: Pick<RasterScenario, "district" | "season" | "inputSetId">,
-  right: Pick<RasterScenario, "district" | "season" | "inputSetId">,
+  left: Pick<RasterScenario, "scope" | "season" | "inputSetId">,
+  right: Pick<RasterScenario, "scope" | "season" | "inputSetId">,
 ) {
   return (
-    left.district === right.district &&
+    left.scope === right.scope &&
     left.season === right.season &&
     left.inputSetId === right.inputSetId
   );

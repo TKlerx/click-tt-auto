@@ -1,0 +1,114 @@
+import { isValidElement, type ReactElement, type ReactNode } from "react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { Role } from "../../generated/prisma/enums";
+
+const { requireSession } = vi.hoisted(() => ({
+  requireSession: vi.fn(),
+}));
+
+const { prisma } = vi.hoisted(() => ({
+  prisma: {
+    scope: {
+      findMany: vi.fn(),
+      findFirst: vi.fn(),
+    },
+  },
+}));
+
+const services = vi.hoisted(() => ({
+  listHallCapacities: vi.fn(),
+  listInputSets: vi.fn(),
+  listRasterSourcesForScope: vi.fn(),
+  listScenarios: vi.fn(),
+  reviewHallCapacitiesForInputSet: vi.fn(),
+}));
+
+vi.mock("@/lib/auth", () => ({ requireSession }));
+vi.mock("@/lib/db", () => ({ prisma }));
+vi.mock("@/services/raster", () => services);
+
+import ImportPage from "@/app/(dashboard)/raster/import/page";
+import ReviewPage from "@/app/(dashboard)/raster/review/page";
+import RunPage from "@/app/(dashboard)/raster/run/page";
+import RunsPage from "@/app/(dashboard)/raster/runs/page";
+
+const steps = [
+  { name: "import", page: ImportPage, load: services.listRasterSourcesForScope },
+  { name: "review", page: ReviewPage, load: services.listHallCapacities },
+  { name: "run", page: RunPage, load: services.listInputSets },
+  { name: "runs", page: RunsPage, load: services.listScenarios },
+] as const;
+
+describe("raster step access", () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it.each(steps)(
+    "$name denies inaccessible scopes before loading step data",
+    async ({ page }) => {
+      requireSession.mockResolvedValue({
+        id: "user-1",
+        role: Role.SCOPE_USER,
+      });
+      prisma.scope.findMany.mockResolvedValue([scope("OWL")]);
+      prisma.scope.findFirst.mockResolvedValue(null);
+
+      const result = await page({
+        searchParams: Promise.resolve({ scope: "OWL", season: "2026/27" }),
+      });
+
+      expect(collectText(result).join(" ")).toContain("not authorized");
+      expect(services.listInputSets).not.toHaveBeenCalled();
+      expect(services.listHallCapacities).not.toHaveBeenCalled();
+      expect(services.listRasterSourcesForScope).not.toHaveBeenCalled();
+      expect(services.listScenarios).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(steps)("$name loads content for accessible scopes", async ({ page, load }) => {
+    requireSession.mockResolvedValue({
+      id: "admin-1",
+      role: Role.PLATFORM_ADMIN,
+    });
+    prisma.scope.findMany.mockResolvedValue([scope("OWL")]);
+    services.listInputSets.mockResolvedValue([]);
+    services.listHallCapacities.mockResolvedValue([]);
+    services.listRasterSourcesForScope.mockResolvedValue([]);
+    services.listScenarios.mockResolvedValue([]);
+
+    await page({
+      searchParams: Promise.resolve({ scope: "OWL", season: "2026/27" }),
+    });
+
+    expect(load).toHaveBeenCalled();
+  });
+});
+
+function scope(code: string) {
+  return {
+    id: `scope-${code}`,
+    code,
+    name: code,
+    parent: {
+      code: "WTTV",
+      name: "WTTV",
+      parent: { code: "DE", name: "Germany" },
+    },
+  };
+}
+
+function collectText(node: ReactNode): string[] {
+  if (node === null || node === undefined || typeof node === "boolean") return [];
+  if (typeof node === "string" || typeof node === "number") return [String(node)];
+  if (Array.isArray(node)) return node.flatMap((child) => collectText(child));
+  if (isValidElement(node)) {
+    const element = node as ReactElement<{ children?: ReactNode }>;
+    if (typeof element.type === "function") {
+      const render = element.type as (props: typeof element.props) => ReactNode;
+      return collectText(render(element.props));
+    }
+    return collectText(element.props.children);
+  }
+  return [];
+}

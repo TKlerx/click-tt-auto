@@ -21,20 +21,21 @@ describe("raster sources route", () => {
     vi.clearAllMocks();
   });
 
-  it("lists sources visible to a district viewer", async () => {
+  it("lists sources visible to a scope viewer", async () => {
     requireApiUser.mockResolvedValue({
       user: { id: "user-1", role: Role.SCOPE_USER, status: UserStatus.ACTIVE },
     });
     prismaMock.scope.findFirst
       .mockResolvedValueOnce({ id: "owl" } as never)
-      .mockResolvedValueOnce({
-        id: "owl",
-        parent: { id: "wttv", parent: { id: "de" } },
-      } as never);
+      .mockResolvedValueOnce({ id: "owl" } as never);
+    prismaMock.scope.findUnique.mockResolvedValueOnce({
+      id: "owl",
+      parent: { id: "wttv", parent: { id: "de" } },
+    } as never);
     prismaMock.rasterSource.findMany.mockResolvedValue([] as never);
 
     const response = await GET(
-      new Request("http://localhost/api/raster/sources?district=OWL"),
+      new Request("http://localhost/api/raster/sources?scope=OWL"),
     );
 
     expect(response.status).toBe(200);

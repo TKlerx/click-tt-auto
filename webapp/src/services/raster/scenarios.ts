@@ -7,7 +7,7 @@ import type {
 } from "@/lib/raster/scenarios";
 
 type ScenarioFilters = {
-  district?: string;
+  scopeId?: string;
   season?: string;
   inputSetId?: string;
 };
@@ -24,7 +24,7 @@ type RunWithScenarioData = {
   createdAt: Date;
   finishedAt: Date | null;
   inputSet: {
-    district: string;
+    scope: { code: string };
     season: string;
   };
   snapshot: {
@@ -42,12 +42,12 @@ export async function listScenarios(filters: ScenarioFilters = {}) {
     where: {
       ...(filters.inputSetId ? { inputSetId: filters.inputSetId } : {}),
       inputSet: {
-        ...(filters.district ? { district: filters.district } : {}),
+        ...(filters.scopeId ? { scopeId: filters.scopeId } : {}),
         ...(filters.season ? { season: filters.season } : {}),
       },
     },
     include: {
-      inputSet: { select: { district: true, season: true } },
+      inputSet: { select: { scope: { select: { code: true } }, season: true } },
       snapshot: true,
     },
     orderBy: { createdAt: "desc" },
@@ -60,7 +60,7 @@ export async function getScenario(id: string) {
   const run = await prisma.rasterOptimizationRun.findUnique({
     where: { id },
     include: {
-      inputSet: { select: { district: true, season: true } },
+      inputSet: { select: { scope: { select: { code: true } }, season: true } },
       snapshot: true,
     },
   });
@@ -72,7 +72,7 @@ export async function getScenariosByIds(ids: string[]) {
   const runs = await prisma.rasterOptimizationRun.findMany({
     where: { id: { in: ids } },
     include: {
-      inputSet: { select: { district: true, season: true } },
+      inputSet: { select: { scope: { select: { code: true } }, season: true } },
       snapshot: true,
     },
   });
@@ -88,7 +88,7 @@ export function scenarioFromRun(run: RunWithScenarioData): RasterScenario {
   return {
     id: run.id,
     inputSetId: run.inputSetId,
-    district: run.inputSet.district,
+    scope: run.inputSet.scope.code,
     season: run.inputSet.season,
     name:
       stringSetting(settings.name) ??

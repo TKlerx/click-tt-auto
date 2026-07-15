@@ -21,7 +21,7 @@ describe("raster district-scale views", () => {
     }));
     const capacities = Array.from({ length: 600 }, (_, index) => ({
       id: `capacity-${index}`,
-      district: "OWL",
+      scope: "OWL",
       clubId: `club-${index % 120}`,
       hall: String((index % 3) + 1),
       weekday: "FRIDAY",
@@ -42,7 +42,7 @@ describe("raster district-scale views", () => {
 
     const startedAt = performance.now();
     renderToStaticMarkup(<AssignmentTable assignments={assignments} />);
-    renderToStaticMarkup(<CapacityTable district="OWL" rows={capacities} />);
+    renderToStaticMarkup(<CapacityTable scope="OWL" rows={capacities} />);
     renderToStaticMarkup(<ConflictOverview conflicts={conflicts} />);
     const foundAssignments = assignments.filter((row) =>
       row.team.includes("Team 599"),

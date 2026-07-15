@@ -18,7 +18,7 @@ const baseRun = {
   createdAt: new Date("2026-07-10T00:00:00Z"),
   finishedAt: new Date("2026-07-10T00:01:00Z"),
   inputSet: {
-    district: "OWL",
+    scope: { code: "OWL" },
     season: "2026/27",
   },
   snapshot: null,

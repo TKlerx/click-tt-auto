@@ -4,7 +4,7 @@ import { AuditAction } from "../../../generated/prisma/enums";
 type RasterAuditInput = {
   action: AuditAction;
   actorId: string;
-  district: string;
+  scope: string;
   entityType: string;
   entityId: string;
   details?: Record<string, unknown>;
@@ -17,7 +17,7 @@ export async function logRasterAudit(input: RasterAuditInput) {
     entityType: input.entityType,
     entityId: input.entityId,
     details: {
-      district: input.district,
+      scope: input.scope,
       ...input.details,
     },
   });

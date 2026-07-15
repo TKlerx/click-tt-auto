@@ -23,21 +23,22 @@ describe("raster scenarios route", () => {
     vi.clearAllMocks();
   });
 
-  it("lists scenarios for a district and input set", async () => {
+  it("lists scenarios for a scope and input set", async () => {
     mockUser();
+    prismaMock.scope.findFirst.mockResolvedValue(scopeFixture() as never);
     prismaMock.rasterOptimizationRun.findMany.mockResolvedValue([
       runFixture({ id: "run-1" }),
     ] as never);
 
     const response = await GET(
       new Request(
-        "http://localhost/api/raster/scenarios?district=OWL&season=2026/27&inputSetId=input-1",
+        "http://localhost/api/raster/scenarios?scope=OWL&season=2026/27&inputSetId=input-1",
       ),
     );
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
-      scenarios: [{ id: "run-1", district: "OWL", season: "2026/27" }],
+      scenarios: [{ id: "run-1", scope: "OWL", season: "2026/27" }],
     });
   });
 
@@ -82,21 +83,24 @@ describe("raster scenarios route", () => {
     expect(response.status).toBe(422);
   });
 
-  // Every scenario's district is authorized, not just the first one's, and the
-  // check runs before the comparison. Comparable scenarios do share a district,
+  // Every scenario's scope is authorized, not just the first one's, and the
+  // check runs before the comparison. Comparable scenarios do share a scope,
   // so checking the first happened to cover them all -- but that relied on
   // isComparableScenario, a compatibility rule, to enforce an access rule.
-  // Here the districts differ and the user holds only the first: the access
+  // Here the scopes differ and the user holds only the first: the access
   // check must reject before the incompatibility is ever evaluated. Checking
   // scenarios[0] alone, or comparing first, returns 422 instead of 403 and
   // tells an unauthorized caller that both ids exist.
-  it("refuses a scenario whose district the caller cannot access, before comparing", async () => {
+  it("refuses a scenario whose scope the caller cannot access, before comparing", async () => {
     mockScopedUser();
     prismaMock.rasterOptimizationRun.findMany.mockResolvedValue([
-      runFixture({ id: "run-1", inputSet: { district: "OWL", season: "2026/27" } }),
+      runFixture({
+        id: "run-1",
+        inputSet: { scope: { code: "OWL" }, season: "2026/27" },
+      }),
       runFixture({
         id: "run-2",
-        inputSet: { district: "WESTFALEN_MITTE", season: "2026/27" },
+        inputSet: { scope: { code: "WESTFALEN_MITTE" }, season: "2026/27" },
       }),
     ] as never);
     // Authorized for OWL, not for WESTFALEN_MITTE. mockReset because
@@ -104,9 +108,9 @@ describe("raster scenarios route", () => {
     // an unconsumed one would leak into the next test.
     prismaMock.scope.findFirst.mockReset();
     prismaMock.scope.findFirst.mockImplementation((async (args: {
-      where: { AND: [{ OR: [{ code: string }] }] };
+      where: { AND: [{ code: string }, unknown] };
     }) =>
-      args.where.AND[0].OR[0].code === "OWL"
+      args.where.AND[0].code === "OWL"
         ? { id: "scope-owl" }
         : null) as never);
 
@@ -120,7 +124,7 @@ describe("raster scenarios route", () => {
     expect(response.status).toBe(403);
   });
 
-  it("compares when the caller can access every scenario's district", async () => {
+  it("compares when the caller can access every scenario's scope", async () => {
     mockScopedUser();
     prismaMock.rasterOptimizationRun.findMany.mockResolvedValue([
       runFixture({ id: "run-1", objectiveValue: 10 }),
@@ -179,7 +183,7 @@ function runFixture(overrides = {}) {
     }),
     createdAt: new Date(scenario.createdAt),
     finishedAt: new Date(scenario.finishedAt!),
-    inputSet: { district: scenario.district, season: scenario.season },
+    inputSet: { scope: { code: scenario.scope }, season: scenario.season },
     snapshot: {
       id: `snapshot-${scenario.id}`,
       stale: scenario.stale,
@@ -192,5 +196,18 @@ function runFixture(overrides = {}) {
       }),
     },
     ...overrides,
+  };
+}
+
+function scopeFixture() {
+  return {
+    id: "scope-owl",
+    code: "OWL",
+    name: "OWL",
+    parent: {
+      code: "WTTV",
+      name: "WTTV",
+      parent: { code: "DE", name: "Germany" },
+    },
   };
 }

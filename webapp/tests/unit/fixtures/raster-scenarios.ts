@@ -6,7 +6,7 @@ export function scenarioFixture(
   return {
     id: "scenario_1",
     inputSetId: "input_set_1",
-    district: "OWL",
+    scope: "OWL",
     season: "2026/27",
     name: "CP-SAT 10 min",
     origin: "optimizer",

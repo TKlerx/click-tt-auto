@@ -3,9 +3,11 @@ import { jsonError } from "@/lib/http";
 import { prisma } from "@/lib/db";
 import { Role } from "../../../generated/prisma/enums";
 import type { RouteErrorResult } from "@/services/api/types";
+import { isSelectableRasterScope } from "./scope-level";
 
 export type RasterAccessLevel = "viewer" | "scheduler" | "admin";
 export type RasterScopeOption = {
+  id: string;
   code: string;
   name: string;
   parent: {
@@ -21,8 +23,8 @@ const levelRoles: Record<RasterAccessLevel, Role[]> = {
   admin: [Role.PLATFORM_ADMIN],
 };
 
-export function rasterDistrictWhere(district: string) {
-  return { district };
+export function rasterScopeWhere(scopeId: string) {
+  return { scopeId };
 }
 
 export function canUseRasterLevel(
@@ -52,6 +54,7 @@ export async function listAccessibleRasterScopes(
           },
     select: {
       code: true,
+      id: true,
       name: true,
       parent: {
         select: {
@@ -63,9 +66,11 @@ export async function listAccessibleRasterScopes(
     },
   });
 
-  return [...scopes].sort((left, right) =>
-    rasterScopePath(left).localeCompare(rasterScopePath(right), "de"),
-  );
+  return [...scopes]
+    .filter(isSelectableRasterScope)
+    .sort((left, right) =>
+      rasterScopePath(left).localeCompare(rasterScopePath(right), "de"),
+    );
 }
 
 export function rasterScopePath(scope: RasterScopeOption) {
@@ -75,9 +80,9 @@ export function rasterScopePath(scope: RasterScopeOption) {
     .join(" / ");
 }
 
-export async function canAccessRasterDistrict(
+export async function canAccessRasterScope(
   user: Pick<SessionUser, "id" | "role">,
-  district: string,
+  scopeCode: string,
 ) {
   if (user.role === Role.PLATFORM_ADMIN) {
     return true;
@@ -86,7 +91,7 @@ export async function canAccessRasterDistrict(
   const scope = await prisma.scope.findFirst({
     where: {
       AND: [
-        { OR: [{ code: district }, { name: district }] },
+        { code: scopeCode },
         {
           OR: [
             { userAssignments: { some: { userId: user.id } } },
@@ -106,17 +111,35 @@ export async function canAccessRasterDistrict(
   return !!scope;
 }
 
+export async function resolveRasterScope(code: string) {
+  return prisma.scope.findFirst({
+    where: { code },
+    select: {
+      id: true,
+      code: true,
+      name: true,
+      parent: {
+        select: {
+          code: true,
+          name: true,
+          parent: { select: { code: true, name: true } },
+        },
+      },
+    },
+  });
+}
+
 export async function assertRasterAccess(
   user: Pick<SessionUser, "id" | "role">,
-  district: string,
+  scopeCode: string,
   level: RasterAccessLevel = "viewer",
 ): Promise<true | RouteErrorResult> {
   if (!canUseRasterLevel(user, level)) {
     return { error: jsonError("Not authorized", 403) };
   }
 
-  if (!(await canAccessRasterDistrict(user, district))) {
-    return { error: jsonError("Not authorized for this district", 403) };
+  if (!(await canAccessRasterScope(user, scopeCode))) {
+    return { error: jsonError("Not authorized for this scope", 403) };
   }
 
   return true;

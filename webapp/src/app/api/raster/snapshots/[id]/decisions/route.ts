@@ -50,7 +50,7 @@ export async function POST(
   await logRasterAudit({
     action: AuditAction.RASTER_REVIEW_DECISION_CHANGED,
     actorId: context.user.id,
-    district: context.snapshot.district,
+    scope: context.snapshot.scope.code,
     entityType: "RasterReviewDecision",
     entityId: decision.id,
     details: {

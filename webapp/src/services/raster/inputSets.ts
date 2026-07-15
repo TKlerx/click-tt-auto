@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { rasterDistrictWhere } from "@/lib/raster/access";
+import { rasterScopeWhere } from "@/lib/raster/access";
 import { rasterIngest } from "@/lib/raster/pipeline";
 import { normalizeRasterSeason } from "@/lib/raster/season";
 import { seasonModelSchema, type SeasonModelInput } from "@/lib/raster/schemas";
@@ -8,7 +8,7 @@ import type { TeamRasterAssignmentRow } from "../../../../src/raster/ingest/clic
 import type { WishParseResult } from "../../../../src/raster/ingest/wishes-pdf.js";
 import { extractRelationalWishes } from "../../../../src/raster/ingest/wishes-freetext.js";
 import type { Team } from "../../../../src/raster/types.js";
-import { listRasterSourcesForDistrict } from "./sources";
+import { listRasterSourcesForScope } from "./sources";
 import { replaceParsedWishes } from "./wishes";
 import { reviewHallCapacitiesForInputSet } from "./capacity";
 
@@ -47,12 +47,12 @@ type SeasonModelWithClubs = {
 };
 
 export async function listInputSets(
-  district: string,
+  scopeId: string,
   season = normalizeRasterSeason(undefined),
 ) {
   return prisma.rasterInputSet.findMany({
     where: {
-      ...rasterDistrictWhere(district),
+      ...rasterScopeWhere(scopeId),
       season: normalizeRasterSeason(season),
     },
     orderBy: { createdAt: "desc" },
@@ -94,7 +94,7 @@ export async function listInputSets(
 }
 
 export async function createInputSet(params: {
-  district: string;
+  scopeId: string;
   season: string;
   name: string;
   createdById: string;
@@ -108,6 +108,7 @@ export async function getInputSet(id: string) {
   return prisma.rasterInputSet.findUnique({
     where: { id },
     include: {
+      scope: true,
       _count: {
         select: { wishes: true, fixedRasterzahlen: true },
       },
@@ -190,12 +191,12 @@ function validateSeasonModelGroups(model: SeasonModelInput) {
 export async function syncInputSetSourceCaches(inputSetId: string) {
   const inputSet = await prisma.rasterInputSet.findUnique({
     where: { id: inputSetId },
-    select: { id: true, district: true, season: true, seasonModelJson: true },
+    select: { id: true, scopeId: true, season: true, seasonModelJson: true },
   });
   if (!inputSet) return null;
 
-  const sources = await listRasterSourcesForDistrict(
-    inputSet.district,
+  const sources = await listRasterSourcesForScope(
+    inputSet.scopeId,
     inputSet.season,
   );
   const groupSource = sources.find(

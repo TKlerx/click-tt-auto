@@ -10,7 +10,7 @@ import {
 import { z } from "zod";
 
 const bodySchema = z.object({
-  district: z.string().trim().min(1),
+  scope: z.string().trim().min(1),
   capacity: z.coerce.number().int().min(0),
   basis: z
     .enum([
@@ -38,7 +38,7 @@ export async function PUT(
 
   const access = await assertRasterAccess(
     auth.user,
-    parsed.data.district,
+    parsed.data.scope,
     "scheduler",
   );
   if (access !== true) return access.error;
@@ -52,7 +52,7 @@ export async function PUT(
   await logRasterAudit({
     action: AuditAction.RASTER_CAPACITY_CHANGED,
     actorId: auth.user.id,
-    district: parsed.data.district,
+    scope: parsed.data.scope,
     entityType: "RasterHallCapacity",
     entityId: id,
     details: {

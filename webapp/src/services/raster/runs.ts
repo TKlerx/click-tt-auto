@@ -12,7 +12,7 @@ export async function listOptimizationRuns(inputSetId: string) {
 export async function getOptimizationRun(id: string) {
   return prisma.rasterOptimizationRun.findUnique({
     where: { id },
-    include: { inputSet: true, snapshot: true },
+    include: { inputSet: { include: { scope: true } }, snapshot: true },
   });
 }
 

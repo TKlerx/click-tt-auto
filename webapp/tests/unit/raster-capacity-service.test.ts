@@ -15,9 +15,11 @@ describe("raster capacity service", () => {
     vi.clearAllMocks();
   });
 
+  const inputScope = { scopeId: "scope-owl", scope: { code: "OWL" } };
+
   it("infers long-lived hall capacity rows without overwriting reviewed rows", async () => {
     prismaMock.rasterInputSet.findUnique.mockResolvedValue({
-      district: "OWL",
+      ...inputScope,
       wishes: [],
       seasonModelJson: JSON.stringify({
         teams: [
@@ -41,7 +43,7 @@ describe("raster capacity service", () => {
     prismaMock.rasterHallCapacity.findMany.mockResolvedValue([
       {
         id: "capacity-1",
-        district: "OWL",
+        scopeId: "scope-owl",
         clubId: "club-a",
         hall: "1",
         weekday: "FRIDAY",
@@ -58,7 +60,7 @@ describe("raster capacity service", () => {
 
   it("does not block when stored capacity is equal or larger than inferred capacity", async () => {
     prismaMock.rasterInputSet.findUnique.mockResolvedValue({
-      district: "OWL",
+      ...inputScope,
       wishes: [],
       seasonModelJson: JSON.stringify({
         teams: [
@@ -79,7 +81,7 @@ describe("raster capacity service", () => {
     } as never);
     prismaMock.rasterHallCapacity.findMany.mockResolvedValue([
       {
-        district: "OWL",
+        scopeId: "scope-owl",
         clubId: "club-a",
         hall: "1",
         weekday: "FRIDAY",
@@ -87,7 +89,7 @@ describe("raster capacity service", () => {
         basis: HallCapacityBasis.REVIEWED,
       },
       {
-        district: "OWL",
+        scopeId: "scope-owl",
         clubId: "club-b",
         hall: "1",
         weekday: "SATURDAY",
@@ -105,7 +107,7 @@ describe("raster capacity service", () => {
       rows: [
         {
           id: undefined,
-          district: "OWL",
+          scope: "OWL",
           clubId: "club-a",
           hall: "1",
           weekday: "FRIDAY",
@@ -116,7 +118,7 @@ describe("raster capacity service", () => {
         },
         {
           id: undefined,
-          district: "OWL",
+          scope: "OWL",
           clubId: "club-b",
           hall: "1",
           weekday: "SATURDAY",
@@ -131,7 +133,7 @@ describe("raster capacity service", () => {
 
   it("blocks when inferred capacity exceeds the stored capacity", async () => {
     prismaMock.rasterInputSet.findUnique.mockResolvedValue({
-      district: "OWL",
+      ...inputScope,
       wishes: [],
       seasonModelJson: JSON.stringify({
         teams: [
@@ -155,7 +157,7 @@ describe("raster capacity service", () => {
     prismaMock.rasterHallCapacity.findMany.mockResolvedValue([
       {
         id: "capacity-1",
-        district: "OWL",
+        scopeId: "scope-owl",
         clubId: "club-a",
         hall: "1",
         weekday: "FRIDAY",
@@ -173,7 +175,7 @@ describe("raster capacity service", () => {
       rows: [
         {
           id: "capacity-1",
-          district: "OWL",
+          scope: "OWL",
           clubId: "club-a",
           hall: "1",
           weekday: "FRIDAY",
@@ -188,7 +190,7 @@ describe("raster capacity service", () => {
 
   it("infers capacities from parsed wishes when the season model has no week preference", async () => {
     prismaMock.rasterInputSet.findUnique.mockResolvedValue({
-      district: "OWL",
+      ...inputScope,
       seasonModelJson: JSON.stringify({
         teams: [
           {
@@ -239,7 +241,7 @@ describe("raster capacity service", () => {
 
   it("uses wish home slots instead of season-model placeholders for clubs with wishes", async () => {
     prismaMock.rasterInputSet.findUnique.mockResolvedValue({
-      district: "OWL",
+      ...inputScope,
       seasonModelJson: JSON.stringify({
         teams: [
           {
@@ -276,7 +278,7 @@ describe("raster capacity service", () => {
 
   it("does not infer extra capacity for non-overlapping same-day start times", async () => {
     prismaMock.rasterInputSet.findUnique.mockResolvedValue({
-      district: "OWL",
+      ...inputScope,
       seasonModelJson: JSON.stringify({ teams: [] }),
       wishes: [
         {
@@ -307,7 +309,7 @@ describe("raster capacity service", () => {
 
   it("uses two-hour duration for youth capacity inference", async () => {
     prismaMock.rasterInputSet.findUnique.mockResolvedValue({
-      district: "OWL",
+      ...inputScope,
       seasonModelJson: JSON.stringify({ teams: [] }),
       wishes: [
         {
@@ -339,7 +341,7 @@ describe("raster capacity service", () => {
 
   it("deduplicates wishes and places missing week preference on the lighter slot", async () => {
     prismaMock.rasterInputSet.findUnique.mockResolvedValue({
-      district: "OWL",
+      ...inputScope,
       seasonModelJson: JSON.stringify({ teams: [] }),
       wishes: [
         {
@@ -380,7 +382,7 @@ describe("raster capacity service", () => {
 
   it("reports stored capacities that are higher than the current inference", async () => {
     prismaMock.rasterInputSet.findUnique.mockResolvedValue({
-      district: "OWL",
+      ...inputScope,
       seasonModelJson: JSON.stringify({ teams: [] }),
       wishes: [
         {
@@ -396,7 +398,7 @@ describe("raster capacity service", () => {
     prismaMock.rasterHallCapacity.findMany.mockResolvedValue([
       {
         id: "capacity-1",
-        district: "OWL",
+        scopeId: "scope-owl",
         clubId: "club-a",
         hall: "1",
         weekday: "FRIDAY",

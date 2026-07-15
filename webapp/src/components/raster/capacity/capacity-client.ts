@@ -4,18 +4,18 @@ import { withBasePath } from "@/lib/base-path";
 
 export async function putGymCapacity({
   capacity,
-  district,
+  scope,
   id,
 }: {
   capacity: number;
-  district: string;
+  scope: string;
   id: string;
 }) {
   const response = await fetch(withBasePath(`/api/raster/capacity/${id}`), {
     method: "PUT",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      district,
+      scope,
       capacity,
       basis: "REVIEWED",
     }),

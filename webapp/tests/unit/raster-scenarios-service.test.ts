@@ -24,7 +24,7 @@ describe("raster scenario service", () => {
 
     await expect(
       listScenarios({
-        district: "OWL",
+        scopeId: "scope-owl",
         season: "2026/27",
         inputSetId: "input-1",
       }),
@@ -32,7 +32,7 @@ describe("raster scenario service", () => {
       {
         id: "run-1",
         inputSetId: "input-1",
-        district: "OWL",
+        scope: "OWL",
         season: "2026/27",
         name: "CP-SAT",
         origin: "optimizer",
@@ -45,13 +45,13 @@ describe("raster scenario service", () => {
       expect.objectContaining({
         where: {
           inputSetId: "input-1",
-          inputSet: { district: "OWL", season: "2026/27" },
+          inputSet: { scopeId: "scope-owl", season: "2026/27" },
         },
       }),
     );
   });
 
-  it("uses district, season, and input set as the compatibility boundary", () => {
+  it("uses scope, season, and input set as the compatibility boundary", () => {
     const base = scenarioFromRun(runFixture());
     expect(isComparableScenario(base, { ...base })).toBe(true);
     expect(
@@ -72,7 +72,7 @@ function runFixture(overrides = {}) {
     settings: "{}",
     createdAt: new Date("2026-07-12T10:00:00.000Z"),
     finishedAt: new Date("2026-07-12T10:06:00.000Z"),
-    inputSet: { district: "OWL", season: "2026/27" },
+    inputSet: { scope: { code: "OWL" }, season: "2026/27" },
     snapshot: {
       id: "snapshot-1",
       stale: false,

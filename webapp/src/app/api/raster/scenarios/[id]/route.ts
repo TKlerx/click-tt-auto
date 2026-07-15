@@ -16,7 +16,7 @@ export async function GET(
   }
   const access = await assertRasterAccess(
     auth.user,
-    details.scenario.district,
+    details.scenario.scope,
     "viewer",
   );
   if (access !== true) return access.error;

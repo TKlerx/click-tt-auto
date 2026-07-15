@@ -18,7 +18,7 @@ export default async function RasterSnapshotPage({
   const snapshot = await getSnapshot((await params).id);
   if (!snapshot) notFound();
 
-  const access = await assertRasterAccess(user, snapshot.district, "viewer");
+  const access = await assertRasterAccess(user, snapshot.scope.code, "viewer");
   if (access !== true) {
     return (
       <div className="rounded-lg border border-[var(--border)] px-4 py-6 text-sm text-[var(--muted-foreground)]">
@@ -37,7 +37,7 @@ export default async function RasterSnapshotPage({
     <div className="space-y-7">
       <section>
         <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[var(--muted-foreground)]">
-          {snapshot.district}
+          {snapshot.scope.code}
         </p>
         <h1 className="mt-3 text-3xl font-semibold leading-tight tracking-tight sm:text-5xl">
           Raster results

@@ -7,7 +7,7 @@ import { BusyLabel } from "@/components/ui/busy-label";
 
 export type CapacityRow = {
   id: string;
-  district: string;
+  scope: string;
   clubId: string;
   hall: string;
   weekday: string;
@@ -17,11 +17,11 @@ export type CapacityRow = {
 
 export function CapacityTable({
   canEdit = false,
-  district,
+  scope,
   rows,
 }: {
   canEdit?: boolean;
-  district: string;
+  scope: string;
   rows: CapacityRow[];
 }) {
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -33,7 +33,7 @@ export function CapacityTable({
     try {
       const error = await putGymCapacity({
         capacity,
-        district: row.district,
+        scope: row.scope,
         id: row.id,
       });
       if (error) {
@@ -81,7 +81,7 @@ export function CapacityTable({
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          district,
+          scope,
           clubId: String(formData.get("clubId") ?? ""),
           hall: String(formData.get("gym") ?? ""),
           weekday: String(formData.get("weekday") ?? ""),

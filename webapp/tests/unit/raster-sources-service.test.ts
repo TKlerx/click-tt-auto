@@ -3,7 +3,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { prismaMock } from "@/lib/__mocks__/db";
 import {
-  listRasterSourcesForDistrict,
+  listRasterSourcesForScopeCode,
   refreshRasterSource,
 } from "@/services/raster";
 
@@ -28,14 +28,14 @@ describe("raster sources service", () => {
     vi.clearAllMocks();
   });
 
-  it("lists district and ancestor scope sources", async () => {
+  it("lists selected and ancestor scope sources", async () => {
     prismaMock.scope.findFirst.mockResolvedValue({
       id: "owl",
       parent: { id: "wttv", parent: { id: "de" } },
     } as never);
     prismaMock.rasterSource.findMany.mockResolvedValue([] as never);
 
-    await listRasterSourcesForDistrict("OWL", "2026/27", "GROUP_ASSIGNMENT");
+    await listRasterSourcesForScopeCode("OWL", "2026/27", "GROUP_ASSIGNMENT");
 
     expect(prismaMock.rasterSource.findMany).toHaveBeenCalledWith({
       where: {

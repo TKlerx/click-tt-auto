@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { rasterDistrictWhere } from "@/lib/raster/access";
+import { rasterScopeWhere } from "@/lib/raster/access";
 import type { Prisma } from "../../../generated/prisma/client";
 import {
   derbySpieltag,
@@ -48,15 +48,18 @@ export type SnapshotPenaltyEvent = {
   teams: string[];
 };
 
-export async function listSnapshots(district: string) {
+export async function listSnapshots(scopeId: string) {
   return prisma.rasterSnapshot.findMany({
-    where: { ...rasterDistrictWhere(district), archivedAt: null },
+    where: { ...rasterScopeWhere(scopeId), archivedAt: null },
     orderBy: { createdAt: "desc" },
   });
 }
 
 export async function getSnapshot(id: string) {
-  return prisma.rasterSnapshot.findFirst({ where: { id, archivedAt: null } });
+  return prisma.rasterSnapshot.findFirst({
+    where: { id, archivedAt: null },
+    include: { scope: true },
+  });
 }
 
 export async function listSnapshotConflicts(
@@ -223,7 +226,7 @@ export async function createReviewDecision(params: {
 }
 
 export async function importSnapshot(params: {
-  district: string;
+  scopeId: string;
   objectiveBreakdown?: string;
   assignments: ImportedAssignment[];
   conflicts: ImportedConflict[];
@@ -231,7 +234,7 @@ export async function importSnapshot(params: {
   return prisma.$transaction(async (tx) => {
     const snapshot = await tx.rasterSnapshot.create({
       data: {
-        district: params.district,
+        scopeId: params.scopeId,
         origin: SnapshotOrigin.IMPORTED,
         optimality: SnapshotOptimality.IMPORTED_HEURISTIC,
         totalConflicts: params.conflicts.length,
