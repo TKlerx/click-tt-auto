@@ -93,6 +93,7 @@ Umlauts are common in German club names, so this is the normal case. FR-012 ther
 
 - **FR-014 assumes one login reaches both click-TT and nuLiga admin.** Plausible — click-TT runs on nuLiga (`nuLigaTTDE.woa`) — but unverified. If the admin area needs a separate account, this needs revisiting. Worth checking before planning the CLI half.
 - **The export is generated asynchronously** — Exportieren, then wait for a link, roughly 5 seconds. Short, but it is a wait, not a fetch: FR-015 requires waiting for the link and saving nothing partial if it never comes.
+- **A download link is not proof of what it delivers** (FR-015a, added 2026-07-15). `AGENTS.md` records from experience that nuLiga admin URLs "contain stateful click counters and can return the wrong group/PDF when opened later or out of sequence", and that a downloaded PDF must be verified against the clicked page title before being trusted. The same hazard applies to this export. The CLI verifies `Region`/`Saison` before saving; FR-005's import-time check is a backstop, not the primary defence — it finds the mistake in the wrong component, later.
 - **FR-032 keeps this additive.** Scopes with no imported roster behave exactly as before. That is what lets 008 ship without this feature, at the cost of a noisier review.
 
 ### Relationship to other features

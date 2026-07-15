@@ -110,9 +110,21 @@ The export is asynchronous (~5 seconds), so FR-015's requirement is a poll with 
 
 **Unverified, and honestly so**: the Downloads page's DOM. The selectors cannot be written from a screenshot with confidence, and this plan does not pretend otherwise — the existing `auth.ts` uses resilient locators (`getByLabel(/benutzer|email|login|username/i)` with a fallback chain), and the same approach applies. Expect one iteration against the real page.
 
+**The repo has already learned this lesson, and it is stronger than "brittle"**. `AGENTS.md` records, under manual additions:
+
+> Do not replay `nuLigaAdminTTDE.woa/wo/...` links collected from an admin page. Those URLs contain stateful click counters and can return the wrong group/PDF when opened later or out of sequence.
+>
+> For Rasterzahl ingest, navigate by clicking through the live admin UI. After downloading a group-level `Terminmeldungen (pdf)`, verify the PDF text contains the clicked group page title before trusting it.
+
+Two consequences for this feature, and the second was missing until `/speckit.analyze` surfaced the note:
+
+- **Navigate, do not replay** (FR-015b). Already the decision above, now with a real reason rather than an aesthetic one.
+- **Verify what came back** (FR-015a). If an admin URL can return the *wrong* file, then a download link is not proof of what it delivers. The CLI must check the CSV's `Region` and `Saison` against the Meisterschaft it selected, before saving. FR-005 catches this at import — but that is the webapp discovering a mistake the CLI made, after the file has been carried around and possibly filed under the wrong Bezirk. The existing practice ("verify the PDF text contains the clicked group page title") is exactly this check, already proven necessary once.
+
 **Alternatives considered**:
 - *A separate login for the admin area*: unnecessary — it is the same app.
-- *Hit the export URL directly, skipping the form*: faster and brittle; the export is generated server-side and the link is not predictable.
+- *Hit the export URL directly, skipping the form*: not merely brittle — `AGENTS.md` says it can silently return the wrong data.
+- *Trust the download and let FR-005 catch mismatches at import*: the failure is then found by a different component, later, with no way to tell whether the CLI mis-selected or the admin mis-filed.
 
 ---
 
