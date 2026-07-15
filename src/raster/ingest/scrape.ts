@@ -11,6 +11,7 @@ import {
   type TeamRasterAssignmentRow
 } from "./clicktt-assignments.js";
 import { buildSeasonModel, buildSeasonModelFromAssignments } from "./model.js";
+import { extractPdfText } from "./pdf-text.js";
 import type { SeasonModel } from "../types.js";
 
 interface LinkSnapshot {
@@ -45,6 +46,10 @@ function canDownload(url: string, base: string): boolean {
     host === "www.click-tt.de" ||
     host.endsWith(".click-tt.de")
   );
+}
+
+function normalized(value: string): string {
+  return value.replace(/\s+/g, " ").trim().toLowerCase();
 }
 
 async function collectLinks(page: Page): Promise<LinkSnapshot[]> {
@@ -171,7 +176,15 @@ export async function scrapeSeasonModel(
         outDir,
         "wishes"
       );
-      if (wish) wishFilesByUrl.set(row.wishUrl, wish);
+      if (!wish) continue;
+      const expected = normalized(row.league ?? row.group);
+      const text = normalized(await extractPdfText(wish));
+      if (!text.includes(expected)) {
+        throw new Error(
+          `Downloaded Terminmeldungen PDF does not match ${row.league ?? row.group}: ${wish}`
+        );
+      }
+      wishFilesByUrl.set(row.wishUrl, wish);
     }
     if (modelRows.length > 0) {
       return await buildSeasonModelFromAssignments(
