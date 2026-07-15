@@ -51,7 +51,9 @@ Four things follow:
 
 ## Context: one bundle instead of many uploads
 
-Wish PDFs already reach the CLI's download directory. Once the CSV lands beside them, a season's inputs for a scope are a single directory — so the CLI emits one bundle and the webapp takes one upload, rather than an admin uploading a CSV plus one PDF per club.
+Wish PDFs already reach the CLI's download directory. Once the CSV lands beside them, a season's inputs for a scope are one directory — which the CLI **zips**, so the result of a collection run is a single file the admin uploads, rather than a CSV plus one PDF per club.
+
+The zip is the CLI's output, not a step the admin performs. "Bundle" throughout this spec means that zip (FR-017).
 
 This matters most when a bundle is **incomplete**. A zip with no CSV, or with no wish PDFs, is a normal mistake — a half-finished collection, or the wrong directory. Importing what is there and staying quiet about the rest is how a scope ends up half-loaded without anyone noticing, so the system says what is missing instead.
 
@@ -121,7 +123,7 @@ An admin runs the existing CLI and gets the roster export alongside the wish PDF
 1. **Given** valid credentials, **When** the admin runs the collection command for a Bezirk and season, **Then** it signs in, requests the Tabellen export for that Meisterschaft, waits for the link, and saves the CSV alongside the wish PDFs.
 2. **Given** the export takes time to generate, **When** the command runs, **Then** it waits for the download link rather than failing immediately.
 3. **Given** the export never appears, **When** the wait elapses, **Then** the command reports what it was waiting for and saves nothing partial.
-4. **Given** downloads complete, **When** the command finishes, **Then** it emits a single bundle of the CSV and the wish PDFs.
+4. **Given** downloads complete, **When** the command finishes, **Then** it emits a single **zip file** containing the CSV and the wish PDFs — not a directory to be compressed by hand.
 5. **Given** the command runs, **When** it authenticates, **Then** it uses credentials from the environment, and no credential reaches the webapp.
 
 ---
@@ -213,7 +215,7 @@ An admin can see which teams the roster expects but no parsed source mentions, a
 - **FR-014**: The CLI MUST be able to download the Tabellen export for a Meisterschaft, reusing the authenticated Playwright session it already uses to download wish PDFs (`scrapeSeasonModel`, `src/raster/ingest/scrape.ts:91`).
 - **FR-015**: The CLI MUST wait for the export's download link rather than assuming an immediate download. Where it never appears, the CLI MUST report what it was waiting for and save nothing partial.
 - **FR-016**: The CLI MUST request the export in a character set it can read reliably, rather than accepting whatever the form defaults to (see FR-010 to FR-013).
-- **FR-017**: The CLI MUST emit the CSV and the wish PDFs for a scope and season as one bundle.
+- **FR-017**: The CLI MUST emit the CSV and the wish PDFs for a scope and season as **one zip file**. Not a directory for the admin to compress — the collection run's result is a single artifact, ready to upload. "Bundle" elsewhere in this spec means this zip.
 - **FR-018**: Credentials MUST come from the environment and remain in the CLI. The webapp MUST NOT hold click-TT credentials or drive an authenticated click-TT session — it stays read-only toward click-TT, per constitution Principle II.
 
 #### Bundle upload

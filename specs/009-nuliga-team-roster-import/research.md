@@ -94,7 +94,7 @@ Uniqueness on `(rosterId, vereinNr, altersklasse, mannschaftNr)` is what makes F
 
 **Rationale**: The spec's SC-001 states 404 teams / 85 clubs / 43 groups, and those numbers came from parsing the actual file rather than from a guess. A fixture makes that a test rather than a claim. It also carries the cases that matter and would be tedious to synthesise honestly: `SC GW Paderborn` (42706) with six adult teams, `TTV Grün-Weiß Daseburg` (42522) with the umlauts, and the exact `Altersklasse` vocabulary.
 
-**Open**: the file is real club data (89KB, public standings). `data/hall-capacity.csv` and `data/upper-fixed.csv` are already tracked, so there is precedent — but committing it is the user's call, not the plan's. If it is not committed, the tests need a synthetic file, and SC-001's numbers become unverifiable.
+**Resolved 2026-07-15**: the file is committed, alongside the already-tracked `data/hall-capacity.csv` and `data/upper-fixed.csv`. SC-001's 404 / 85 / 43 are therefore testable against the real export rather than restated against a synthetic stand-in — and the cases that matter come for free: `SC GW Paderborn` (42706) with six adult teams, `TTV Grün-Weiß Daseburg` (42522) with the umlauts, and the exact `Altersklasse` vocabulary. Synthesising those honestly would have been tedious and would have proved less.
 
 **A second fixture is needed regardless**: an ISO-8859-15 version, to test R-301 both ways. It can be generated from the UTF-8 one at test time rather than committed.
 
@@ -124,7 +124,7 @@ The export is asynchronous (~5 seconds), so FR-015's requirement is a poll with 
 | R-302 | Where the parser lives | CLI, consumed via the existing `pipeline.ts` bridge. One parser, not two |
 | R-303 | Bundle format | CLI **writes** the zip; webapp reads it. Two dependencies, each justified |
 | R-304 | Roster storage | Two tables, upsert on the canonical key. No delete-and-recreate |
-| R-305 | Fixture | The real OWL export, if it may be committed |
+| R-305 | Fixture | The real OWL export, committed. ISO-8859-15 counterpart generated at test time |
 | R-306 | Downloads navigation | Same session — `baseUrl` is already nuLiga admin. DOM selectors need one real iteration |
 
 **No NEEDS CLARIFICATION remain.** Spec Q2 (does the roster replace `splitTeamName`?) and Q3 (roster changes under an existing input set) are deliberately still open — see data-model.md and the checklist.

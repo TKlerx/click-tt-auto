@@ -17,8 +17,8 @@
 
 ## Phase 1: Setup
 
-- [ ] T001 Decide whether `data/Tabellen__aktuelle_Tabellen_-_Filter_Meisterschaft__20260715120301.csv` may be committed as a fixture (research R-305). It is 89KB of real, public standings data; `data/hall-capacity.csv` and `data/upper-fixed.csv` are already tracked, so there is precedent — but it is the user's call, not the plan's.
-- [ ] T001a **If T001 says no**: build a synthetic fixture in `tests/fixtures/roster-sample.csv` carrying the cases that matter — a club with several adult teams (the real one has six), a club name with `ü`/`ö`/`ß`, every `Altersklasse` value, and the full column set including the standings columns to be ignored. Then restate SC-001's counts against the synthetic file, because 404/85/43 describe the real export and become unverifiable claims otherwise. **If T001 says yes**, this task is not needed.
+- [x] T001 **Resolved 2026-07-15: yes.** `data/Tabellen__aktuelle_Tabellen_-_Filter_Meisterschaft__20260715120301.csv` is committed as the fixture — one export, real OWL 2026/27 data, alongside the already-tracked `data/hall-capacity.csv` and `data/upper-fixed.csv`. SC-001's 404/85/43 are therefore testable against the real file rather than restated against a synthetic one. No synthetic fixture is needed.
+  - The ISO-8859-15 counterpart for T007 is still **generated at test time** from this file rather than committed — two encodings of identical content is a fixture that can silently drift.
 - [ ] T002 [P] Add a `RosterCharset` enum (`UTF8`, `ISO_8859_15`) and the roster tables to `webapp/prisma/schema.postgres.prisma` per data-model.md, and generate the migration.
 
 **Checkpoint**: T001 decides whether the rest can be verified against real data.
