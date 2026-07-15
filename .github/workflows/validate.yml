@@ -86,10 +86,34 @@ jobs:
       - name: Install Semgrep
         run: python -m pip install semgrep
 
-      - name: Install Playwright browsers
+      - name: Typecheck
         working-directory: webapp
-        run: pnpm exec playwright install --with-deps
+        run: pnpm run typecheck
 
-      - name: Run validation
+      - name: Lint
         working-directory: webapp
-        run: bash ./validate.sh all
+        run: pnpm run lint
+
+      - name: Architecture
+        working-directory: webapp
+        run: pnpm run architecture
+
+      - name: Python quality
+        working-directory: webapp
+        run: pnpm run quality:python
+
+      - name: CLI quality
+        working-directory: webapp
+        run: pnpm run quality:cli
+
+      - name: Semgrep
+        working-directory: webapp
+        run: pnpm run semgrep
+
+      - name: Runtime credential validation
+        working-directory: webapp
+        run: pnpm run validate:runtime-credentials
+
+      - name: Test
+        working-directory: webapp
+        run: pnpm test
