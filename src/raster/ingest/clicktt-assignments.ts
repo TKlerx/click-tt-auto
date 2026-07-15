@@ -4,6 +4,7 @@ type Locator = {
   first(): {
     textContent(): Promise<string | null>;
   };
+  nth(index: number): Locator;
   textContent(): Promise<string | null>;
 };
 
@@ -17,6 +18,12 @@ type Page = {
   locator(selector: string): Locator;
   url(): string;
   waitForLoadState(state: "domcontentloaded"): Promise<unknown>;
+};
+
+type IndexedGroupLink = {
+  group: string;
+  href: string;
+  occurrence: number;
 };
 
 export interface TeamRasterAssignmentRow {
@@ -127,26 +134,61 @@ export async function scrapeTeamRasterAssignments(
 
   const groupPattern = new RegExp(
     options.groupNamePattern ??
-      "^(?:Bezirksoberliga|\\d+\\.\\s*Bezirksliga|Bezirksklasse|Kreisliga|Kreisklasse|NRW-Liga|Verbandsliga|Landesliga)",
+      "^(?:WDM\\s+Bezirk\\s+Qualifikation|Bezirksoberliga|(?:\\d+\\.\\s*)?(?:Bezirksliga|Bezirksklasse|Kreisliga|Kreisklasse)|NRW-Liga|Verbandsliga|Landesliga)",
     "i"
   );
   const groups = (
     await page.locator("a").evaluateAll((anchors) =>
       anchors.map((anchor) => ({
         group: (anchor.textContent ?? "").replace(/\s+/g, " ").trim(),
-        href: anchor.getAttribute("href") ?? ""
+        href: anchor instanceof HTMLAnchorElement ? anchor.href : ""
       }))
     )
-  ).filter((link) => groupPattern.test(link.group) && link.href);
+  )
+    .filter(
+      (link): link is Omit<IndexedGroupLink, "occurrence"> =>
+        groupPattern.test(link.group) && Boolean(link.href)
+    )
+    .map((link, index, links) => ({
+      ...link,
+      occurrence: links
+        .slice(0, index)
+        .filter((other) => other.group === link.group).length
+    }));
 
   const rows: TeamRasterAssignmentRow[] = [];
+  const seenGroups = new Set<string>();
   for (const group of groups) {
+    if (seenGroups.has(group.href)) continue;
+    seenGroups.add(group.href);
     await page.getByText("SpielbetriebOrganisation", { exact: false }).click();
     await page.waitForLoadState("domcontentloaded");
-    await page.getByRole("link", { name: group.group, exact: true }).click();
+    await page
+      .getByRole("link", { name: group.group, exact: true })
+      .nth(group.occurrence)
+      .click();
     await page.waitForLoadState("domcontentloaded");
 
     const sourceUrl = page.url();
+    const title =
+      (
+        await page
+          .locator("h1")
+          .first()
+          .textContent()
+          .catch(() => null)
+      )
+        ?.replace(/\s+/g, " ")
+        .trim() || group.group;
+    const groupWishUrl =
+      (await page.locator("a").evaluateAll((anchors) => {
+        const link = anchors.find((anchor) =>
+          /Terminmeldungen\s*\(pdf\)/i.test(
+            (anchor.textContent ?? "").replace(/\s+/g, " ").trim()
+          )
+        );
+        return link instanceof HTMLAnchorElement ? link.href : undefined;
+      })) ?? undefined;
     const assignments = await page.locator("tr").evaluateAll((trs) =>
       trs.flatMap((tr) => {
         const cells = Array.from(tr.querySelectorAll("th,td")).map((cell) =>
@@ -165,7 +207,7 @@ export async function scrapeTeamRasterAssignments(
           {
             rasterzahl,
             team: cells[1],
-            wishUrl:
+            rowWishUrl:
               wishLink instanceof HTMLAnchorElement ? wishLink.href : undefined
           }
         ];
@@ -173,12 +215,14 @@ export async function scrapeTeamRasterAssignments(
     );
 
     for (const assignment of assignments) {
+      const wishUrl = groupWishUrl ?? assignment.rowWishUrl;
       rows.push({
+        league: title,
         group: group.group,
         rasterzahl: assignment.rasterzahl,
         team: assignment.team,
         sourceUrl,
-        ...(assignment.wishUrl ? { wishUrl: assignment.wishUrl } : {})
+        ...(wishUrl ? { wishUrl } : {})
       });
     }
   }
