@@ -133,6 +133,22 @@ enum RasterConfidence {
   REVIEW
 }
 
+enum RasterWishOrigin {
+  IMPORTED
+  MANUAL
+}
+
+enum RasterWishImportKind {
+  PDF
+  JSON
+}
+
+enum RasterConflictDecision {
+  KEEP_EXISTING
+  USE_IMPORTED
+  MANUAL
+}
+
 enum HallCapacityBasis {
   REVIEWED
   INFERRED
@@ -218,6 +234,9 @@ model User {
   scopeAssignments              UserScopeAssignment[]
   auditEntries                  AuditEntry[]                  @relation("AuditActor")
   backgroundJobs                BackgroundJob[]               @relation("BackgroundJobCreator")
+  rasterWishImportBatches       RasterWishImportBatch[]       @relation("RasterWishImportStarter")
+  reviewedRasterWishes          RasterWish[]                  @relation("RasterWishReviewer")
+  decidedRasterWishConflicts    RasterWishConflict[]          @relation("RasterWishConflictDecider")
   personalAccessTokens          PersonalAccessToken[]
   cliAuthCodes                  CliAuthCode[]
   teamsIntegrationConfigUpdates TeamsIntegrationConfig[]      @relation("TeamsIntegrationUpdatedBy")
@@ -603,6 +622,9 @@ model RasterInputSet {
   scope                  Scope                         @relation(fields: [scopeId], references: [id], onDelete: Restrict)
   createdBy              User                          @relation("RasterInputSetCreator", fields: [createdById], references: [id], onDelete: Restrict)
   wishes                 RasterWish[]
+  wishImportBatches      RasterWishImportBatch[]
+  wishImportRows         RasterImportedWishRow[]
+  wishConflicts          RasterWishConflict[]
   fixedRasterzahlen      RasterFixedRasterzahl[]
   runs                   RasterOptimizationRun[]
   matchReviews           RasterMatchReview[]
@@ -626,10 +648,84 @@ model RasterWish {
   notes               String?
   source              RasterWishSource
   confidence          RasterConfidence @default(REVIEW)
+  origin              RasterWishOrigin @default(IMPORTED)
+  reviewedAt          DateTime?
+  reviewedById        String?
   inputSet            RasterInputSet   @relation(fields: [inputSetId], references: [id], onDelete: Cascade)
+  reviewedBy          User?            @relation("RasterWishReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  importedRows        RasterImportedWishRow[]
+  conflicts           RasterWishConflict[]
 
   @@index([inputSetId])
   @@index([clubId])
+  @@index([reviewedById])
+  @@unique([inputSetId, clubId, teamLabel])
+}
+
+model RasterWishImportBatch {
+  id          String                 @id @default(cuid())
+  inputSetId  String
+  startedById String
+  startedAt   DateTime               @default(now())
+  sourceKind  RasterWishImportKind
+  inputSet    RasterInputSet         @relation(fields: [inputSetId], references: [id], onDelete: Cascade)
+  startedBy   User                   @relation("RasterWishImportStarter", fields: [startedById], references: [id], onDelete: Restrict)
+  rows        RasterImportedWishRow[]
+
+  @@index([inputSetId, startedAt])
+  @@index([startedById])
+}
+
+model RasterImportedWishRow {
+  id                  String                @id @default(cuid())
+  batchId             String
+  inputSetId          String
+  sourceFile          String?
+  matchedWishId       String?
+  clubId              String
+  clubName            String
+  teamLabel           String?
+  homeWeekday         RasterWeekday
+  hall                String?
+  startTime           String?
+  spielwochePref      String?
+  requestedRasterzahl String?
+  notes               String?
+  valueFingerprint    String
+  // This row is the one that brought the wish into existence, which is what
+  // "added by this import" means (FR-011).
+  createdWish         Boolean               @default(false)
+  batch               RasterWishImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  inputSet            RasterInputSet        @relation(fields: [inputSetId], references: [id], onDelete: Cascade)
+  matchedWish         RasterWish?           @relation(fields: [matchedWishId], references: [id], onDelete: SetNull)
+  conflicts           RasterWishConflict[]
+
+  @@index([batchId])
+  @@index([inputSetId])
+  @@index([matchedWishId])
+}
+
+model RasterWishConflict {
+  id                String                 @id @default(cuid())
+  inputSetId        String
+  wishId            String
+  importedRowId     String
+  differingFields   String
+  decision          RasterConflictDecision?
+  // The wish as it stood when the decision was taken, so the audit trail keeps
+  // the value the decision replaced (FR-010), not just the one it chose.
+  previousValueJson String?
+  decidedValueJson  String?
+  decidedById       String?
+  decidedAt         DateTime?
+  inputSet         RasterInputSet          @relation(fields: [inputSetId], references: [id], onDelete: Cascade)
+  wish             RasterWish              @relation(fields: [wishId], references: [id], onDelete: Cascade)
+  importedRow      RasterImportedWishRow   @relation(fields: [importedRowId], references: [id], onDelete: Cascade)
+  decidedBy        User?                   @relation("RasterWishConflictDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+
+  @@unique([wishId, importedRowId])
+  @@index([inputSetId, decision])
+  @@index([decidedById])
 }
 
 model RasterHallCapacity {
@@ -672,6 +768,7 @@ model RasterOptimizationRun {
   outcome            OptimizationRunOutcome?
   objectiveValue     Float?
   objectiveBreakdown String?
+  unresolvedWishConflictsJson String @default("{}")
   solverStatus       String?
   settings           String                  @default("{}")
   createdAt          DateTime                @default(now())

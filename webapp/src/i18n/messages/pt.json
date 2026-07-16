@@ -377,6 +377,38 @@
     }
   },
   "raster": {
+    "wishImports": {
+      "title": "Revisão da importação de desejos",
+      "empty": "Nenhum item para rever na importação de desejos.",
+      "current": "Atual",
+      "imported": "Importado",
+      "keepCurrent": "Manter o atual",
+      "useImported": "Usar o importado",
+      "unmatchedCount": "{count, plural, one {# linha importada sem correspondência} other {# linhas importadas sem correspondência}}",
+      "existingWishId": "ID do desejo existente",
+      "match": "Corresponder",
+      "missingCount": "{count, plural, one {# desejo ativo em falta nas importações atuais} other {# desejos ativos em falta nas importações atuais}}",
+      "stillValid": "Ainda válido",
+      "saving": "A guardar",
+      "saveFailed": "Falha ao guardar ({status})",
+      "hallLabel": "Pavilhão {hall}",
+      "filterLabel": "Filtrar itens de revisão",
+      "filter": {
+        "all": "Todos",
+        "added": "Adicionados",
+        "unmatched": "Sem correspondência",
+        "missing": "Em falta",
+        "settled": "Resolvidos",
+        "overwrites": "Sobrepõe a sua alteração",
+        "sourceChanged": "Origem alterada"
+      },
+      "addedCount": "{count, plural, one {# desejo adicionado, ainda por rever} other {# desejos adicionados, ainda por rever}}",
+      "settledCount": "{count, plural, one {# correspondência resolvida} other {# correspondências resolvidas}}",
+      "noopMatch": "Sem alterações",
+      "acceptedMatch": "Decidido: {decision}",
+      "overwritesCount": "{count, plural, one {# importação desfaria a sua alteração} other {# importações desfariam as suas alterações}}",
+      "sourceChangedCount": "{count, plural, one {# desejo mudou na origem} other {# desejos mudaram na origem}}"
+    },
     "steps": {
       "import": "Import data",
       "review": "Review data",

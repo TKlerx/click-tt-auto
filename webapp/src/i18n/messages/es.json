@@ -377,6 +377,38 @@
     }
   },
   "raster": {
+    "wishImports": {
+      "title": "Revisión de la importación de deseos",
+      "empty": "No hay elementos para revisar de la importación de deseos.",
+      "current": "Actual",
+      "imported": "Importado",
+      "keepCurrent": "Mantener el actual",
+      "useImported": "Usar el importado",
+      "unmatchedCount": "{count, plural, one {# fila importada sin emparejar} other {# filas importadas sin emparejar}}",
+      "existingWishId": "ID del deseo existente",
+      "match": "Emparejar",
+      "missingCount": "{count, plural, one {# deseo activo ausente de las importaciones actuales} other {# deseos activos ausentes de las importaciones actuales}}",
+      "stillValid": "Sigue siendo válido",
+      "saving": "Guardando",
+      "saveFailed": "Error al guardar ({status})",
+      "hallLabel": "Pabellón {hall}",
+      "filterLabel": "Filtrar elementos de revisión",
+      "filter": {
+        "all": "Todos",
+        "added": "Añadidos",
+        "unmatched": "Sin emparejar",
+        "missing": "Ausentes",
+        "settled": "Resueltos",
+        "overwrites": "Sobrescribe tu cambio",
+        "sourceChanged": "La fuente cambió"
+      },
+      "addedCount": "{count, plural, one {# deseo añadido, aún sin revisar} other {# deseos añadidos, aún sin revisar}}",
+      "settledCount": "{count, plural, one {# emparejamiento resuelto} other {# emparejamientos resueltos}}",
+      "noopMatch": "Sin cambios",
+      "acceptedMatch": "Decidido: {decision}",
+      "overwritesCount": "{count, plural, one {# importación desharía tu cambio} other {# importaciones desharían tus cambios}}",
+      "sourceChangedCount": "{count, plural, one {# deseo cambió en la fuente} other {# deseos cambiaron en la fuente}}"
+    },
     "steps": {
       "import": "Import data",
       "review": "Review data",

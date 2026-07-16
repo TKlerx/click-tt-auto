@@ -377,6 +377,38 @@
     }
   },
   "raster": {
+    "wishImports": {
+      "title": "Prüfung des Wunsch-Imports",
+      "empty": "Keine Einträge zur Prüfung des Wunsch-Imports.",
+      "current": "Aktuell",
+      "imported": "Importiert",
+      "keepCurrent": "Aktuellen Wert behalten",
+      "useImported": "Importierten Wert übernehmen",
+      "unmatchedCount": "{count, plural, one {# nicht zugeordnete Importzeile} other {# nicht zugeordnete Importzeilen}}",
+      "existingWishId": "ID des vorhandenen Wunsches",
+      "match": "Zuordnen",
+      "missingCount": "{count, plural, one {# aktiver Wunsch fehlt im aktuellen Import} other {# aktive Wünsche fehlen im aktuellen Import}}",
+      "stillValid": "Weiterhin gültig",
+      "saving": "Wird gespeichert",
+      "saveFailed": "Speichern fehlgeschlagen ({status})",
+      "hallLabel": "Halle {hall}",
+      "filterLabel": "Einträge filtern",
+      "filter": {
+        "all": "Alle",
+        "added": "Hinzugefügt",
+        "unmatched": "Nicht zugeordnet",
+        "missing": "Fehlend",
+        "settled": "Erledigt",
+        "overwrites": "Überschreibt Ihre Änderung",
+        "sourceChanged": "Quelle geändert"
+      },
+      "addedCount": "{count, plural, one {# hinzugefügter Wunsch, noch nicht geprüft} other {# hinzugefügte Wünsche, noch nicht geprüft}}",
+      "settledCount": "{count, plural, one {# erledigte Zuordnung} other {# erledigte Zuordnungen}}",
+      "noopMatch": "Keine Änderung",
+      "acceptedMatch": "Entschieden: {decision}",
+      "overwritesCount": "{count, plural, one {# Import würde Ihre Änderung rückgängig machen} other {# Importe würden Ihre Änderungen rückgängig machen}}",
+      "sourceChangedCount": "{count, plural, one {# Wunsch wurde in der Quelle geändert} other {# Wünsche wurden in der Quelle geändert}}"
+    },
     "steps": {
       "import": "Import data",
       "review": "Review data",

@@ -377,6 +377,38 @@
     }
   },
   "raster": {
+    "wishImports": {
+      "title": "Wish import review",
+      "empty": "No wish import review items.",
+      "current": "Current",
+      "imported": "Imported",
+      "keepCurrent": "Keep current",
+      "useImported": "Use imported",
+      "unmatchedCount": "{count, plural, one {# unmatched imported row} other {# unmatched imported rows}}",
+      "existingWishId": "Existing wish id",
+      "match": "Match",
+      "missingCount": "{count, plural, one {# active wish missing from current imports} other {# active wishes missing from current imports}}",
+      "stillValid": "Still valid",
+      "saving": "Saving",
+      "saveFailed": "Save failed ({status})",
+      "hallLabel": "Gym {hall}",
+      "filterLabel": "Filter review items",
+      "filter": {
+        "all": "All",
+        "added": "Added",
+        "unmatched": "Unmatched",
+        "missing": "Missing",
+        "settled": "Settled",
+        "overwrites": "Overwrites your edit",
+        "sourceChanged": "Source changed"
+      },
+      "addedCount": "{count, plural, one {# added wish, not yet reviewed} other {# added wishes, not yet reviewed}}",
+      "settledCount": "{count, plural, one {# settled match} other {# settled matches}}",
+      "noopMatch": "No change",
+      "acceptedMatch": "Decided: {decision}",
+      "overwritesCount": "{count, plural, one {# import would undo your edit} other {# imports would undo your edits}}",
+      "sourceChangedCount": "{count, plural, one {# wish changed at the source} other {# wishes changed at the source}}"
+    },
     "steps": {
       "import": "Import data",
       "review": "Review data",

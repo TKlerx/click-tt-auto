@@ -377,6 +377,38 @@
     }
   },
   "raster": {
+    "wishImports": {
+      "title": "Révision de l'import des souhaits",
+      "empty": "Aucun élément à réviser pour l'import des souhaits.",
+      "current": "Actuel",
+      "imported": "Importé",
+      "keepCurrent": "Conserver l'actuel",
+      "useImported": "Utiliser l'importé",
+      "unmatchedCount": "{count, plural, one {# ligne importée non appariée} other {# lignes importées non appariées}}",
+      "existingWishId": "ID du souhait existant",
+      "match": "Apparier",
+      "missingCount": "{count, plural, one {# souhait actif absent des imports actuels} other {# souhaits actifs absents des imports actuels}}",
+      "stillValid": "Toujours valable",
+      "saving": "Enregistrement",
+      "saveFailed": "Échec de l'enregistrement ({status})",
+      "hallLabel": "Salle {hall}",
+      "filterLabel": "Filtrer les éléments à réviser",
+      "filter": {
+        "all": "Tous",
+        "added": "Ajoutés",
+        "unmatched": "Non appariés",
+        "missing": "Absents",
+        "settled": "Réglés",
+        "overwrites": "Annule votre modification",
+        "sourceChanged": "Source modifiée"
+      },
+      "addedCount": "{count, plural, one {# souhait ajouté, pas encore révisé} other {# souhaits ajoutés, pas encore révisés}}",
+      "settledCount": "{count, plural, one {# appariement réglé} other {# appariements réglés}}",
+      "noopMatch": "Aucun changement",
+      "acceptedMatch": "Décidé : {decision}",
+      "overwritesCount": "{count, plural, one {# import annulerait votre modification} other {# imports annuleraient vos modifications}}",
+      "sourceChangedCount": "{count, plural, one {# souhait a changé à la source} other {# souhaits ont changé à la source}}"
+    },
     "steps": {
       "import": "Import data",
       "review": "Review data",

@@ -76,6 +76,7 @@ describe("raster runs route", () => {
     prismaMock.$transaction.mockImplementation(async (callback) =>
       callback(prismaMock),
     );
+    prismaMock.rasterWishConflict.findMany.mockResolvedValue([]);
     prismaMock.rasterOptimizationRun.create.mockResolvedValue({
       id: "run-1",
       inputSetId: "input-wttv",
@@ -100,6 +101,10 @@ describe("raster runs route", () => {
       data: {
         inputSetId: "input-wttv",
         startedById: "admin-1",
+        unresolvedWishConflictsJson: JSON.stringify({
+          count: 0,
+          conflicts: [],
+        }),
         settings: JSON.stringify({
           strategy: "cp_sat",
           timeLimitSeconds: 60,
@@ -137,6 +142,7 @@ describe("raster runs route", () => {
     prismaMock.$transaction.mockImplementation(async (callback) =>
       callback(prismaMock),
     );
+    prismaMock.rasterWishConflict.findMany.mockResolvedValue([]);
     prismaMock.rasterOptimizationRun.create.mockResolvedValue({
       id: "run-1",
       inputSetId: "input-wttv",

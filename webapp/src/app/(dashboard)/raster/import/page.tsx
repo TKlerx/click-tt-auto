@@ -1,7 +1,12 @@
 import { Role } from "../../../../../generated/prisma/enums";
 import { CreateInputSetForm } from "@/components/raster/input-set-actions";
 import { RasterSourcesPanel } from "@/components/raster/sources/raster-sources-panel";
-import { listInputSets, listRasterSourcesForScope } from "@/services/raster";
+import { WishImportReviewPanel } from "@/components/raster/wish-import-review-panel";
+import {
+  listInputSets,
+  listRasterSourcesForScope,
+  listWishImportReview,
+} from "@/services/raster";
 import {
   RasterStepError,
   type RasterStepSearchParams,
@@ -20,6 +25,8 @@ export default async function RasterImportPage({
     listInputSets(context.scope.id, context.season),
     listRasterSourcesForScope(context.scope.id, context.season),
   ]);
+  const inputSet = inputSets[0] ?? null;
+  const review = inputSet ? await listWishImportReview(inputSet.id) : null;
   const canEdit = context.user.role === Role.PLATFORM_ADMIN;
 
   return (
@@ -27,7 +34,7 @@ export default async function RasterImportPage({
       <RasterSourcesPanel
         canEdit={canEdit}
         scopeCode={context.scope.code}
-        inputSet={inputSets[0] ?? null}
+        inputSet={inputSet}
         season={context.season}
         scopes={context.scopes}
         sources={sources}
@@ -44,12 +51,12 @@ export default async function RasterImportPage({
             season={context.season}
           />
         ) : null}
-        {inputSets.length ? (
+        {inputSet ? (
           <div className="grid grid-cols-[minmax(12rem,1fr)_8rem_8rem_8rem] gap-3 px-4 py-3 text-sm">
-            <span className="font-medium">{inputSets[0].name}</span>
-            <span>{inputSets[0].status}</span>
-            <span>{inputSets[0]._count.wishes} wishes</span>
-            <span>{inputSets[0]._count.runs} runs</span>
+            <span className="font-medium">{inputSet.name}</span>
+            <span>{inputSet.status}</span>
+            <span>{inputSet._count.wishes} wishes</span>
+            <span>{inputSet._count.runs} runs</span>
           </div>
         ) : (
           <p className="px-4 py-6 text-sm text-[var(--muted-foreground)]">
@@ -57,6 +64,13 @@ export default async function RasterImportPage({
           </p>
         )}
       </section>
+      {inputSet && review ? (
+        <WishImportReviewPanel
+          canEdit={canEdit}
+          inputSetId={inputSet.id}
+          review={review}
+        />
+      ) : null}
     </div>
   );
 }

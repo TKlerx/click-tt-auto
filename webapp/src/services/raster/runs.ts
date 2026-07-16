@@ -65,11 +65,19 @@ export async function startOptimizationRun(params: {
 }) {
   await syncInputSetSourceCaches(params.inputSetId);
   return prisma.$transaction(async (tx) => {
+    const unresolvedWishConflicts = await tx.rasterWishConflict.findMany({
+      where: { inputSetId: params.inputSetId, decision: null },
+      select: { id: true, wishId: true, importedRowId: true },
+    });
     const run = await tx.rasterOptimizationRun.create({
       data: {
         inputSetId: params.inputSetId,
         startedById: params.startedById,
         settings: JSON.stringify(params.settings),
+        unresolvedWishConflictsJson: JSON.stringify({
+          count: unresolvedWishConflicts.length,
+          conflicts: unresolvedWishConflicts,
+        }),
       },
     });
     const job = await tx.backgroundJob.create({
