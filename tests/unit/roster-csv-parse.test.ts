@@ -29,6 +29,35 @@ describe("roster CSV parser", () => {
     ]);
   });
 
+  it("reads quoted cells without swallowing delimiters or escaped quotes", () => {
+    const parsed = parseRosterCsvBytes(
+      encode(
+        [
+          "Region;Saison;Liga;Gruppe;VereinNr;VereinName;Altersklasse;MannschaftNr",
+          `OWL;2026/27;Liga;"Gruppe;A";042;"SC ""GW"" Paderborn";Erwachsene;1`
+        ].join("\n")
+      )
+    );
+
+    expect(parsed.rows[0]).toMatchObject({
+      gruppe: "Gruppe;A",
+      vereinName: 'SC "GW" Paderborn'
+    });
+  });
+
+  it("treats an empty quoted cell as missing, not as a quote character", () => {
+    expect(() =>
+      parseRosterCsvBytes(
+        encode(
+          [
+            "Region;Saison;Liga;Gruppe;VereinNr;VereinName;Altersklasse;MannschaftNr",
+            `OWL;2026/27;Liga;Gruppe;042;"";Erwachsene;1`
+          ].join("\n")
+        )
+      )
+    ).toThrow(/Missing VereinName/);
+  });
+
   it("rejects missing required columns by name", () => {
     expect(() =>
       parseRosterCsvBytes(encode("Region;Saison\nOWL;2026/27"))

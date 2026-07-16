@@ -21,6 +21,8 @@ export async function importRasterRoster(params: {
   const sourceRegion = onlyValue(params.parsed.rows.map((row) => row.region));
   const sourceSeason = onlyValue(params.parsed.rows.map((row) => row.season));
   const season = normalizeRasterSeason(params.season);
+  // The roster mirrors one export, so the summary counts what is stored.
+  const rows = dedupeByTeamKey(params.parsed.rows);
 
   if (sourceSeason !== season) {
     throw new Error(
@@ -61,22 +63,59 @@ export async function importRasterRoster(params: {
           },
         });
 
-    for (const row of params.parsed.rows) {
-      await tx.rasterRosterTeam.upsert({
-        where: {
-          rosterId_vereinNr_altersklasse_mannschaftNr: {
-            rosterId: roster.id,
-            vereinNr: row.vereinNr,
-            altersklasse: row.altersklasse,
-            mannschaftNr: row.mannschaftNr,
-          },
-        },
-        update: {
+    const storedTeams = await tx.rasterRosterTeam.findMany({
+      where: { rosterId: roster.id },
+      select: {
+        id: true,
+        vereinNr: true,
+        vereinName: true,
+        altersklasse: true,
+        mannschaftNr: true,
+        liga: true,
+        gruppe: true,
+      },
+    });
+    const storedByKey = new Map(
+      storedTeams.map((team) => [teamKey(team), team]),
+    );
+
+    const importedKeys = new Set(rows.map(teamKey));
+    const withdrawn = storedTeams.filter(
+      (team) => !importedKeys.has(teamKey(team)),
+    );
+    if (withdrawn.length) {
+      await tx.rasterRosterTeam.deleteMany({
+        where: { id: { in: withdrawn.map((team) => team.id) } },
+      });
+    }
+
+    const created: typeof rows = [];
+    for (const row of rows) {
+      const match = storedByKey.get(teamKey(row));
+      if (!match) {
+        created.push(row);
+        continue;
+      }
+      if (
+        match.vereinName === row.vereinName &&
+        match.liga === row.liga &&
+        match.gruppe === row.gruppe
+      ) {
+        continue;
+      }
+      await tx.rasterRosterTeam.update({
+        where: { id: match.id },
+        data: {
           vereinName: row.vereinName,
           liga: row.liga,
           gruppe: row.gruppe,
         },
-        create: {
+      });
+    }
+
+    if (created.length) {
+      await tx.rasterRosterTeam.createMany({
+        data: created.map((row) => ({
           rosterId: roster.id,
           vereinNr: row.vereinNr,
           vereinName: row.vereinName,
@@ -84,7 +123,7 @@ export async function importRasterRoster(params: {
           mannschaftNr: row.mannschaftNr,
           liga: row.liga,
           gruppe: row.gruppe,
-        },
+        })),
       });
     }
 
@@ -93,9 +132,9 @@ export async function importRasterRoster(params: {
 
   return {
     rosterId: roster.id,
-    teams: params.parsed.rows.length,
-    clubs: new Set(params.parsed.rows.map((row) => row.vereinNr)).size,
-    groups: new Set(params.parsed.rows.map((row) => row.gruppe)).size,
+    teams: rows.length,
+    clubs: new Set(rows.map((row) => row.vereinNr)).size,
+    groups: new Set(rows.map((row) => row.gruppe)).size,
     charset: params.parsed.charset,
   };
 }
@@ -150,6 +189,19 @@ export async function getRasterRosterCoverage(scopeId: string, season: string) {
         !rosterKeys.has([wish.clubName, wish.teamLabel ?? ""].join("\0")),
     ),
   };
+}
+
+function teamKey(team: {
+  vereinNr: string;
+  altersklasse: string;
+  mannschaftNr: string;
+}) {
+  return [team.vereinNr, team.altersklasse, team.mannschaftNr].join("\0");
+}
+
+// The upsert loop this replaced let a later duplicate row win; keep that.
+function dedupeByTeamKey(rows: RosterCsvParseResult["rows"]) {
+  return [...new Map(rows.map((row) => [teamKey(row), row])).values()];
 }
 
 function onlyValue(values: string[]) {

@@ -91,18 +91,27 @@ function decodeRosterCsv(bytes: Uint8Array): {
   text: string;
   charset: RosterCharset;
 } {
-  try {
-    const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-    if (mojibakeMarkers.some((marker) => text.includes(marker))) {
-      throw new Error("Refusing Tabellen export with mojibake markers.");
-    }
-    return { text, charset: "utf-8" };
-  } catch (error) {
-    if (error instanceof Error && /mojibake/.test(error.message)) throw error;
+  const text = decodeUtf8OrNull(bytes);
+  if (text === null) {
+    // ISO-8859-15 cannot fail to decode, so it is only ever the fallback.
     return {
       text: new TextDecoder("iso-8859-15").decode(bytes),
       charset: "iso-8859-15"
     };
+  }
+  if (mojibakeMarkers.some((marker) => text.includes(marker))) {
+    throw new Error(
+      "Refusing Tabellen export with mojibake markers; re-export it as UTF-8 or ISO-8859-15."
+    );
+  }
+  return { text, charset: "utf-8" };
+}
+
+function decodeUtf8OrNull(bytes: Uint8Array): string | null {
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    return null;
   }
 }
 
@@ -114,7 +123,7 @@ function parseDelimitedRows(text: string): string[][] {
 
   for (let index = 0; index < text.length; index += 1) {
     const char = text[index];
-    if (char === '"' && text[index + 1] === '"') {
+    if (char === '"' && quoted && text[index + 1] === '"') {
       cell += '"';
       index += 1;
     } else if (char === '"') {

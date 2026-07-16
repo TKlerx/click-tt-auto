@@ -7,7 +7,10 @@ const tx = vi.hoisted(() => ({
     update: vi.fn(),
   },
   rasterRosterTeam: {
-    upsert: vi.fn(),
+    findMany: vi.fn(),
+    createMany: vi.fn(),
+    update: vi.fn(),
+    deleteMany: vi.fn(),
   },
 }));
 
@@ -51,7 +54,10 @@ describe("raster roster service", () => {
     tx.rasterTeamRoster.findFirst.mockResolvedValue(null);
     tx.rasterTeamRoster.create.mockResolvedValue({ id: "roster-1" });
     tx.rasterTeamRoster.update.mockResolvedValue({ id: "roster-1" });
-    tx.rasterRosterTeam.upsert.mockResolvedValue({});
+    tx.rasterRosterTeam.findMany.mockResolvedValue([]);
+    tx.rasterRosterTeam.createMany.mockResolvedValue({ count: 0 });
+    tx.rasterRosterTeam.update.mockResolvedValue({});
+    tx.rasterRosterTeam.deleteMany.mockResolvedValue({ count: 0 });
   });
 
   it("imports rows as canonical roster teams", async () => {
@@ -71,19 +77,29 @@ describe("raster roster service", () => {
       groups: 2,
       charset: "utf-8",
     });
-    expect(tx.rasterRosterTeam.upsert).toHaveBeenCalledTimes(2);
-    expect(tx.rasterRosterTeam.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: {
-          rosterId_vereinNr_altersklasse_mannschaftNr: {
-            rosterId: "roster-1",
-            vereinNr: "42706",
-            altersklasse: "Erwachsene",
-            mannschaftNr: "1",
-          },
+    expect(tx.rasterRosterTeam.createMany).toHaveBeenCalledTimes(1);
+    expect(tx.rasterRosterTeam.createMany).toHaveBeenCalledWith({
+      data: [
+        {
+          rosterId: "roster-1",
+          vereinNr: "42706",
+          vereinName: "SC GW Paderborn",
+          altersklasse: "Erwachsene",
+          mannschaftNr: "1",
+          liga: "Liga A",
+          gruppe: "Gruppe A",
         },
-      }),
-    );
+        {
+          rosterId: "roster-1",
+          vereinNr: "42706",
+          vereinName: "SC GW Paderborn",
+          altersklasse: "Erwachsene",
+          mannschaftNr: "2",
+          liga: "Liga B",
+          gruppe: "Gruppe B",
+        },
+      ],
+    });
   });
 
   it("reuses the latest roster on re-import", async () => {

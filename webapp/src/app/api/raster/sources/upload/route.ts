@@ -11,6 +11,8 @@ import { importRasterRoster, upsertRasterSource } from "@/services/raster";
 type UploadScope = { id: string; code: string; name: string };
 type UploadSource = Awaited<ReturnType<typeof upsertRasterSource>>;
 
+const maxUploadBytes = 64 * 1024 * 1024;
+
 export async function POST(request: Request) {
   const auth = await requireApiUser(request);
   if ("error" in auth) return auth.error;
@@ -27,6 +29,16 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { error: "Invalid source upload" },
       { status: 422 },
+    );
+  }
+
+  const oversized = files.find((file) => file.size > maxUploadBytes);
+  if (oversized) {
+    return NextResponse.json(
+      {
+        error: `${oversized.name || "Uploaded file"} is larger than ${Math.round(maxUploadBytes / (1024 * 1024))} MB.`,
+      },
+      { status: 413 },
     );
   }
 
