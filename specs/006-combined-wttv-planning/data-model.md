@@ -58,12 +58,15 @@ Answers FR-031 and FR-032, and nothing else:
 - **Excluded groups** (FR-032a): which groups were excluded from planning
 - **Wish gaps** (FR-032b): teams with no matched wish, or a wish lacking game day, gym, or start time
 - **Capacity gaps** (FR-032c): gym capacities missing, or stored below what the wishes require
+- **Unresolved wish conflicts** (FR-032d / 008 FR-009a): unresolved import-conflict row ids and count at run start
 
 **Not held**: game week A/B absence, which is a legitimate value rather than a gap (FR-033). Recording it would train readers to ignore the gap list.
 
 ### `coverageComplete` — the fragile field
 
 True requires **both** halves: every scope spanned, and no gaps at all. It is the only case *not* marked incomplete (FR-034), which makes it simultaneously the rarest path and the one where being wrong does damage — a falsely-complete run is worse than an unmarked one, because it is trusted.
+
+Feature 008's unresolved-conflict recording is absorbed here. Do not keep a second run metadata mechanism for it.
 
 The likely defect is computing it from the scope set alone ("did we span everything?") and forgetting the gaps, since a full-scope run is the case someone reaches for when testing.
 
@@ -112,6 +115,7 @@ The rekey belongs in 005 with the other two, so `district` leaves the schema in 
 | `RasterFixedRasterzahl` | Fixed numbers stay optional (FR-014). A combined run supplies none unless an admin did |
 | `RasterInputSet.seasonModelJson` | Holds `groups[].planningStatus`. Excluded groups are read from here when freezing coverage |
 | `RasterHallCapacity` | Capacity gaps (FR-032c) are computed against it, using 005's existing `blockingCount = missingCount + insufficientCount` rule |
+| `RasterWishConflict` | Unresolved rows are frozen into `coverageJson.unresolvedWishConflicts` (FR-032d / 008 FR-009a) |
 | `RasterAssignment`, `RasterConflict` | Unchanged. Scope narrowing (FR-022) filters them via their teams' scopes rather than by storing scope on each row |
 
 ---

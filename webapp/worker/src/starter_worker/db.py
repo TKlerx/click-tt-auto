@@ -363,20 +363,54 @@ class JobStore:
                 ).fetchone()
                 if row is None:
                     raise ValueError(f"Raster run {run_id} not found")
-                return dict(row)
+                result = dict(row)
+                result["seasonModels"] = [
+                    {"scopeId": result["scopeId"], "seasonModelJson": result["seasonModelJson"]}
+                ]
+                return result
 
         with psycopg.connect(self._postgres_database_url, row_factory=dict_row) as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
                     """
-                    SELECT run.id, run.status, run.settings, input."scopeId", input."seasonModelJson"
+                    SELECT run.id, run.status, run.settings, input.id AS "inputSetId",
+                           input."scopeId", input.season, input."seasonModelJson",
+                           COALESCE(
+                             ARRAY_AGG(scope."scopeId") FILTER (WHERE scope."scopeId" IS NOT NULL),
+                             ARRAY[]::text[]
+                           ) AS "scopeIds"
                     FROM "RasterOptimizationRun" run
                     JOIN "RasterInputSet" input ON input.id = run."inputSetId"
+                    LEFT JOIN "RasterInputSetScope" scope ON scope."inputSetId" = input.id
                     WHERE run.id = %s
+                    GROUP BY run.id, run.status, run.settings, input.id, input."scopeId",
+                             input.season, input."seasonModelJson"
                     """,
                     (run_id,),
                 )
                 row = cursor.fetchone()
+                if row is not None and row.get("scopeIds"):
+                    cursor.execute(
+                        """
+                        SELECT DISTINCT ON ("scopeId") "scopeId", "seasonModelJson"
+                        FROM "RasterInputSet"
+                        WHERE "scopeId" = ANY(%s)
+                          AND season = %s
+                          AND id <> %s
+                          AND "seasonModelJson" IS NOT NULL
+                        ORDER BY "scopeId", "createdAt" DESC
+                        """,
+                        (row["scopeIds"], row["season"], row["inputSetId"]),
+                    )
+                    row["seasonModels"] = list(cursor.fetchall())
+                elif row is not None:
+                    row["scopeIds"] = [row["scopeId"]]
+                    row["seasonModels"] = [
+                        {
+                            "scopeId": row["scopeId"],
+                            "seasonModelJson": row["seasonModelJson"],
+                        }
+                    ]
             connection.commit()
             if row is None:
                 raise ValueError(f"Raster run {run_id} not found")
@@ -405,8 +439,9 @@ class JobStore:
                 raise ValueError(f"Raster run {run_id} not found")
             return str(row[0])
 
-    def list_raster_hall_capacities(self, scope_id: str) -> list[dict[str, Any]]:
+    def list_raster_hall_capacities(self, scope: object) -> list[dict[str, Any]]:
         if self._is_sqlite:
+            scope_id = str(scope[0] if isinstance(scope, list) and scope else scope)
             with closing(self._sqlite_conn()) as connection:
                 connection.row_factory = sqlite3.Row
                 rows = connection.execute(
@@ -425,9 +460,9 @@ class JobStore:
                     """
                     SELECT "clubId", hall, weekday, capacity
                     FROM "RasterHallCapacity"
-                    WHERE "scopeId" = %s
+                    WHERE "scopeId" = ANY(%s)
                     """,
-                    (scope_id,),
+                    (list(scope) if isinstance(scope, list) else [str(scope)],),
                 )
                 rows = cursor.fetchall()
             connection.commit()
@@ -437,7 +472,9 @@ class JobStore:
         self,
         *,
         run_id: str,
-        scope_id: str,
+        district: str,
+        scope_id: object | None = None,
+        spanned_scope_ids: list[str] | None = None,
         model: dict[str, Any],
         solver_output: dict[str, Any],
     ) -> str:
@@ -526,7 +563,7 @@ class JobStore:
                     (
                         snapshot_id,
                         run_id,
-                        scope_id,
+                        str(scope_id or district),
                         optimality,
                         len(overages),
                         total_excess,
@@ -567,6 +604,15 @@ class JobStore:
                         metadata.get("status"),
                         run_id,
                     ),
+                )
+                scope_rows = [( _new_id(), snapshot_id, scope_id_value) for scope_id_value in (spanned_scope_ids or [str(scope_id or district)])]
+                cursor.executemany(
+                    """
+                    INSERT INTO "RasterSnapshotScope" (id, "snapshotId", "scopeId")
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT ("snapshotId", "scopeId") DO NOTHING
+                    """,
+                    scope_rows,
                 )
             connection.commit()
             return snapshot_id

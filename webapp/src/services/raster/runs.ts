@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { buildCoverageRecordForInputSet } from "@/lib/raster/coverage";
 import type { RunSettingsInput } from "@/lib/raster/schemas";
 import { syncInputSetSourceCaches } from "./inputSets";
 
@@ -64,20 +65,28 @@ export async function startOptimizationRun(params: {
   settings: RunSettingsInput;
 }) {
   await syncInputSetSourceCaches(params.inputSetId);
+  const coverage = await buildCoverageRecordForInputSet(params.inputSetId);
   return prisma.$transaction(async (tx) => {
-    const unresolvedWishConflicts = await tx.rasterWishConflict.findMany({
-      where: { inputSetId: params.inputSetId, decision: null },
-      select: { id: true, wishId: true, importedRowId: true },
-    });
+    const unresolvedWishConflicts =
+      (await tx.rasterWishConflict.findMany({
+        where: { inputSetId: params.inputSetId, decision: null },
+        select: { id: true, wishId: true, importedRowId: true },
+      })) ?? [];
+    const coverageWithWishConflicts = {
+      ...coverage,
+      complete: coverage.complete && unresolvedWishConflicts.length === 0,
+      unresolvedWishConflicts: {
+        count: unresolvedWishConflicts.length,
+        conflicts: unresolvedWishConflicts,
+      },
+    };
     const run = await tx.rasterOptimizationRun.create({
       data: {
         inputSetId: params.inputSetId,
         startedById: params.startedById,
         settings: JSON.stringify(params.settings),
-        unresolvedWishConflictsJson: JSON.stringify({
-          count: unresolvedWishConflicts.length,
-          conflicts: unresolvedWishConflicts,
-        }),
+        coverageComplete: coverageWithWishConflicts.complete,
+        coverageJson: JSON.stringify(coverageWithWishConflicts),
       },
     });
     const job = await tx.backgroundJob.create({

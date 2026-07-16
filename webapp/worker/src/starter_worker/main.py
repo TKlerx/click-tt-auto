@@ -10,7 +10,7 @@ import time
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from .config import WorkerConfig, load_config
 from .db import BackgroundJob, JobStore
@@ -101,10 +101,10 @@ def process_raster_run(store: JobStore, job: BackgroundJob) -> dict[str, object]
             "processedAt": datetime.now(timezone.utc).isoformat(),
         }
     model = _model_with_capacity_overrides(
-        _exclude_unplanned_groups(
-            _parse_json_object(context["seasonModelJson"], "seasonModelJson")
+        _exclude_unplanned_groups(_raster_run_model(context)),
+        store.list_raster_hall_capacities(
+            context.get("scopeIds") or context.get("district") or context.get("scopeId")
         ),
-        store.list_raster_hall_capacities(str(context["scopeId"])),
     )
     settings = _parse_json_object(context.get("settings") or "{}", "settings")
     solver_output = _solve_raster_model(model, settings)
@@ -116,7 +116,9 @@ def process_raster_run(store: JobStore, job: BackgroundJob) -> dict[str, object]
         }
     snapshot_id = store.persist_raster_run_result(
         run_id=run_id,
-        scope_id=str(context["scopeId"]),
+        district=str(context.get("district") or context.get("scopeId") or ""),
+        scope_id=context.get("scopeId"),
+        spanned_scope_ids=context.get("scopeIds") or [],
         model=model,
         solver_output=solver_output,
     )
@@ -136,6 +138,97 @@ def _parse_json_object(value: object, name: str) -> dict[str, object]:
     if not isinstance(parsed, dict):
         raise ValueError(f"{name} must be a JSON object")
     return parsed
+
+
+def _json_list(model: dict[str, object], key: str) -> list[object]:
+    value = model.get(key)
+    return value if isinstance(value, list) else []
+
+
+def _raster_run_model(context: dict[str, Any]) -> dict[str, object]:
+    season_models = context.get("seasonModels")
+    if not isinstance(season_models, list) or not season_models:
+        return _parse_json_object(context["seasonModelJson"], "seasonModelJson")
+    if len(season_models) == 1:
+        return _parse_json_object(season_models[0].get("seasonModelJson"), "seasonModelJson")
+
+    merged: dict[str, list[object]] = {
+        "clubs": [],
+        "teams": [],
+        "groups": [],
+        "wishes": [],
+        "absoluteConstraints": [],
+        "warnings": [],
+    }
+    for row in season_models:
+        if not isinstance(row, dict):
+            continue
+        scope_id = str(row.get("scopeId") or "").strip()
+        if not scope_id:
+            continue
+        scoped = _scope_prefixed_model(
+            _parse_json_object(row.get("seasonModelJson"), "seasonModelJson"),
+            scope_id,
+        )
+        for key in ("clubs", "teams", "groups", "wishes", "absoluteConstraints", "warnings"):
+            value = scoped.get(key)
+            if isinstance(value, list):
+                merged[key].extend(value)
+    return cast(dict[str, object], merged)
+
+
+def _scope_prefixed_model(model: dict[str, object], scope_id: str) -> dict[str, object]:
+    def prefixed(value: object) -> str:
+        return f"{scope_id}:{value}"
+
+    team_ids: dict[str, str] = {}
+    club_ids: dict[str, str] = {}
+    clubs: list[object] = []
+    for club in _json_list(model, "clubs"):
+        if not isinstance(club, dict):
+            continue
+        old_id = str(club.get("id") or "")
+        next_club = {**club, "id": prefixed(old_id)}
+        club_ids[old_id] = str(next_club["id"])
+        clubs.append(next_club)
+
+    teams: list[object] = []
+    for team in _json_list(model, "teams"):
+        if not isinstance(team, dict):
+            continue
+        old_id = str(team.get("id") or "")
+        next_team = {
+            **team,
+            "id": prefixed(old_id),
+            "clubId": club_ids.get(str(team.get("clubId") or ""), prefixed(team.get("clubId") or "")),
+            "rasterzahl": {"kind": "assignable"},
+        }
+        team_ids[old_id] = str(next_team["id"])
+        teams.append(next_team)
+
+    groups: list[object] = []
+    for group in _json_list(model, "groups"):
+        if not isinstance(group, dict):
+            continue
+        team_ids_value = group.get("teamIds")
+        team_ids_list = team_ids_value if isinstance(team_ids_value, list) else []
+        groups.append(
+            {
+                **group,
+                "id": prefixed(group.get("id") or len(groups)),
+                "teamIds": [
+                    team_ids.get(str(team_id), prefixed(team_id))
+                    for team_id in team_ids_list
+                ],
+            }
+        )
+
+    return {
+        **model,
+        "clubs": clubs,
+        "teams": teams,
+        "groups": groups,
+    }
 
 
 def _exclude_unplanned_groups(model: dict[str, object]) -> dict[str, object]:

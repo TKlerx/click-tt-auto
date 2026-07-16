@@ -1307,10 +1307,11 @@ if ($Phase -in "all", "full", "test", "commit") {
 if ($Phase -in "all", "test", "commit") {
     Write-Step "E2E regression - raster source projection"
     try {
+        $e2ePort = if ($env:E2E_PORT) { $env:E2E_PORT } else { "3290" }
         $commandLine = if ($IsWindows -or $env:OS -eq "Windows_NT") {
-            "set CI=1 && set E2E_PORT=3290 && pnpm run test:e2e:projection"
+            "set CI=1 && set E2E_PORT=$e2ePort && pnpm run test:e2e:projection"
         } else {
-            "CI=1 E2E_PORT=3290 pnpm run test:e2e:projection"
+            "CI=1 E2E_PORT=$e2ePort pnpm run test:e2e:projection"
         }
 
         $result = Invoke-NativeCommandCaptured $commandLine
@@ -1378,10 +1379,11 @@ if ($Phase -in "full", "e2e") {
         Write-Warn "playwright skipped (no e2e spec files found)"
     } else {
         try {
+            $e2ePort = if ($env:E2E_PORT) { $env:E2E_PORT } else { "3290" }
             $commandLine = if ($IsWindows -or $env:OS -eq "Windows_NT") {
-                "set CI=1 && set E2E_PORT=3290 && pnpm run test:e2e"
+                "set CI=1 && set E2E_PORT=$e2ePort && pnpm run test:e2e"
             } else {
-                "CI=1 E2E_PORT=3290 pnpm run test:e2e"
+                "CI=1 E2E_PORT=$e2ePort pnpm run test:e2e"
             }
 
             $result = Invoke-NativeCommandCaptured $commandLine

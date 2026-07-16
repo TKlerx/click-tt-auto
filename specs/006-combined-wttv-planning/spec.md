@@ -71,7 +71,7 @@ An admin picks several scopes — two Bezirke, or the Verband plus three Bezirke
 
 ### User Story 2 - Know what a run did not see (Priority: P1)
 
-Every run records what it covered and what it lacked: which scopes were spanned, which groups were excluded, which teams had no wish, which gym capacities were missing or below requirement. That record is persisted with the run and shown wherever the run or its snapshot appears, so nobody mistakes a two-Bezirk experiment with gaps for a plan.
+Every run records what it covered and what it lacked: which scopes were spanned, which groups were excluded, which teams had no wish, which gym capacities were missing or below requirement, and which wish-import conflicts were still unresolved. That record is persisted with the run and shown wherever the run or its snapshot appears, so nobody mistakes a two-Bezirk experiment with gaps for a plan.
 
 **Why this priority**: Equal first, and deliberately so. User Story 1 without this produces snapshots indistinguishable from real plans — which is worse than not having User Story 1 at all. The point of allowing incomplete runs is that they are *known* to be incomplete. These ship together.
 
@@ -128,6 +128,7 @@ An admin looks at one place and sees, for a season, which scopes have complete i
 - A scope has no input set at all for the season, as distinct from having an incomplete one — the run spans it and finds nothing.
 - A new Bezirk is added to the hierarchy mid-season, changing what "every scope" means, and therefore whether an earlier run that spanned "everything" still did.
 - A scope's inputs change between assembling a combined input set and starting the run, so the coverage record and the pre-run warning disagree.
+- A run starts while wish-import conflicts from feature 008 are still unresolved.
 - A scope's sources change while a combined run is executing.
 - A combined run is started while single-scope runs are queued for scopes it spans.
 - A combined run exceeds the run time limit, or the solver returns no proven optimum within it.
@@ -166,6 +167,7 @@ An admin looks at one place and sees, for a season, which scopes have complete i
   - **FR-032a**: Groups excluded from planning.
   - **FR-032b**: Teams with no matched wish, or whose wish lacks game day, gym, or start time.
   - **FR-032c**: Gym capacities missing, or stored below what the wishes require.
+  - **FR-032d**: Unresolved wish-import conflicts present when the run starts (feature 008 FR-009a), including enough identity to report count and affected conflict rows after later resolution.
 - **FR-033**: A team whose parsed wish carries no game week A/B preference MUST NOT count as a gap. Absence of an A/B preference is a legitimate value, not missing data.
 - **FR-034**: A run with any subset of scopes or any input gap MUST be marked incomplete. A run spanning every scope with no gaps MUST NOT be.
 - **FR-035**: The incomplete marking MUST apply to single-scope runs as well as combined ones. A single-scope run with excluded groups is incomplete by the same rule. (This settles feature 005's Q4.)

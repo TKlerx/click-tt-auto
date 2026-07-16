@@ -10,7 +10,9 @@ const reuseExistingServer = process.env.E2E_REUSE_SERVER === "1";
 
 process.env.E2E_PORT = String(port);
 process.env.E2E_BASE_PATH = normalizedBasePath;
+process.env.APP_DATABASE_URL = databaseUrl;
 process.env.DATABASE_URL = databaseUrl;
+process.env.MIGRATION_DATABASE_URL = databaseUrl;
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -28,7 +30,9 @@ export default defineConfig({
       ...process.env,
       PORT: String(port),
       BASE_PATH: normalizedBasePath,
+      APP_DATABASE_URL: databaseUrl,
       DATABASE_URL: databaseUrl,
+      MIGRATION_DATABASE_URL: databaseUrl,
       AUTH_BASE_URL: process.env.AUTH_BASE_URL ?? authBaseUrl,
       E2E_BASE_PATH: normalizedBasePath,
       INITIAL_ADMIN_EMAIL:

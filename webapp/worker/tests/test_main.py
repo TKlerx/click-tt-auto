@@ -9,6 +9,7 @@ import tempfile
 import unittest
 from contextlib import closing
 from pathlib import Path
+from typing import cast
 from unittest.mock import patch
 
 from starter_worker.config import WorkerConfig, load_config
@@ -21,6 +22,7 @@ from starter_worker.main import (
     _log_job_failed,
     _log_jobs_requeued_stale,
     _log_teams_poll_scheduled,
+    _raster_run_model,
     _solve_raster_model,
     process_inbound_mail_poll,
     process_job,
@@ -248,6 +250,60 @@ class WorkerTests(unittest.TestCase):
         self.assertEqual(result["status"], "CANCELLED")
         self.assertEqual(row, ("CANCELLED", "CANCELLED", None))
         self.assertEqual(snapshots, 0)
+
+    def test_combined_raster_model_prefixes_scopes_and_drops_inherited_fixed_numbers(self) -> None:
+        context = {
+            "seasonModels": [
+                {
+                    "scopeId": "scope-a",
+                    "seasonModelJson": json.dumps(
+                        {
+                            "clubs": [{"id": "club", "name": "Club A"}],
+                            "teams": [
+                                {
+                                    "id": "team",
+                                    "clubId": "club",
+                                    "label": "I",
+                                    "rasterzahl": {"kind": "fixed", "value": 3},
+                                }
+                            ],
+                            "groups": [{"id": "group", "teamIds": ["team"]}],
+                        }
+                    ),
+                },
+                {
+                    "scopeId": "scope-b",
+                    "seasonModelJson": json.dumps(
+                        {
+                            "clubs": [{"id": "club", "name": "Club B"}],
+                            "teams": [
+                                {
+                                    "id": "team",
+                                    "clubId": "club",
+                                    "label": "I",
+                                    "rasterzahl": {"kind": "fixed", "value": 4},
+                                }
+                            ],
+                            "groups": [{"id": "group", "teamIds": ["team"]}],
+                        }
+                    ),
+                },
+            ]
+        }
+
+        model = _raster_run_model(context)
+        teams = cast(list[dict[str, object]], model["teams"])
+        groups = cast(list[dict[str, object]], model["groups"])
+
+        self.assertEqual([team["id"] for team in teams], ["scope-a:team", "scope-b:team"])
+        self.assertEqual(
+            [team["rasterzahl"] for team in teams],
+            [{"kind": "assignable"}, {"kind": "assignable"}],
+        )
+        self.assertEqual(
+            [group["teamIds"] for group in groups],
+            [["scope-a:team"], ["scope-b:team"]],
+        )
 
     def test_worker_runtime_has_ortools(self) -> None:
         result = subprocess.run(

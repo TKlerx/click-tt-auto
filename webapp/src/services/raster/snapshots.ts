@@ -52,19 +52,40 @@ export async function listSnapshots(scopeId: string) {
   return prisma.rasterSnapshot.findMany({
     where: { ...rasterScopeWhere(scopeId), archivedAt: null },
     orderBy: { createdAt: "desc" },
+    include: {
+      run: {
+        select: { coverageComplete: true, coverageJson: true },
+      },
+      spannedScopes: {
+        select: {
+          scopeId: true,
+          scope: { select: { code: true, name: true } },
+        },
+      },
+    },
   });
 }
 
 export async function getSnapshot(id: string) {
   return prisma.rasterSnapshot.findFirst({
     where: { id, archivedAt: null },
-    include: { scope: true },
+    include: {
+      scope: true,
+      run: true,
+      spannedScopes: {
+        select: {
+          scopeId: true,
+          scope: { select: { code: true, name: true } },
+        },
+      },
+    },
   });
 }
 
 export async function listSnapshotConflicts(
   snapshotId: string,
   filters: {
+    scopeId?: string | null;
     club?: string | null;
     weekday?: string | null;
     hall?: string | null;
@@ -75,6 +96,9 @@ export async function listSnapshotConflicts(
   return prisma.rasterConflict.findMany({
     where: {
       snapshotId,
+      ...(filters.scopeId
+        ? { clubId: { startsWith: `${filters.scopeId}:` } }
+        : {}),
       ...(filters.club ? { clubName: { contains: filters.club } } : {}),
       ...(filters.weekday ? { weekday: filters.weekday as never } : {}),
       ...(filters.hall ? { hall: filters.hall } : {}),
@@ -166,9 +190,17 @@ function parseGroupModes(seasonModelJson?: string | null): GroupModeLookup {
   return modes;
 }
 
-export async function summarizeSnapshotConflicts(snapshotId: string) {
+export async function summarizeSnapshotConflicts(
+  snapshotId: string,
+  filters: { scopeId?: string | null } = {},
+) {
   const conflicts = await prisma.rasterConflict.findMany({
-    where: { snapshotId },
+    where: {
+      snapshotId,
+      ...(filters.scopeId
+        ? { clubId: { startsWith: `${filters.scopeId}:` } }
+        : {}),
+    },
     select: { clubId: true, clubName: true, excess: true },
   });
   const byClub = new Map<
@@ -194,6 +226,7 @@ export async function summarizeSnapshotConflicts(snapshotId: string) {
 export async function listSnapshotAssignments(
   snapshotId: string,
   filters: {
+    scopeId?: string | null;
     club?: string | null;
     league?: string | null;
     group?: string | null;
@@ -204,6 +237,9 @@ export async function listSnapshotAssignments(
   return prisma.rasterAssignment.findMany({
     where: {
       snapshotId,
+      ...(filters.scopeId
+        ? { clubId: { startsWith: `${filters.scopeId}:` } }
+        : {}),
       ...(filters.club ? { clubName: { contains: filters.club } } : {}),
       ...(filters.league ? { league: { contains: filters.league } } : {}),
       ...(filters.group ? { group: { contains: filters.group } } : {}),

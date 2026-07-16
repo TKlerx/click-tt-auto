@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  infeasibleScopeMessage,
   mapOutcomeToSnapshotOptimality,
   mapSolverStatusToOutcome,
 } from "@/lib/raster/run-outcome";
@@ -33,5 +34,11 @@ describe("raster run outcome helpers", () => {
     expect(
       mapOutcomeToSnapshotOptimality(OptimizationRunOutcome.FAILED),
     ).toBeNull();
+  });
+
+  it("names a spanned scope for infeasible combined runs", () => {
+    expect(
+      infeasibleScopeMessage(JSON.stringify({ spannedScopes: ["scope-a"] })),
+    ).toContain("scope-a");
   });
 });

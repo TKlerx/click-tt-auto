@@ -2,8 +2,23 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { prismaMock } from "@/lib/__mocks__/db";
 import { startOptimizationRun } from "@/services/raster/runs";
 
+const { buildCoverageRecordForInputSet } = vi.hoisted(() => ({
+  buildCoverageRecordForInputSet: vi.fn().mockResolvedValue({
+    complete: true,
+    spannedScopes: ["scope-owl"],
+    spannedAll: true,
+    excludedGroups: [],
+    wishGaps: [],
+    capacityGaps: [],
+  }),
+}));
+
 vi.mock("@/lib/db", () => ({
   prisma: prismaMock,
+}));
+
+vi.mock("@/lib/raster/coverage", () => ({
+  buildCoverageRecordForInputSet,
 }));
 
 describe("raster runs service", () => {

@@ -5,6 +5,16 @@ import { InputSetStatus, Role, UserStatus } from "../../generated/prisma/enums";
 const { requireApiUser } = vi.hoisted(() => ({
   requireApiUser: vi.fn(),
 }));
+const { buildCoverageRecordForInputSet } = vi.hoisted(() => ({
+  buildCoverageRecordForInputSet: vi.fn().mockResolvedValue({
+    complete: true,
+    spannedScopes: ["scope-wttv"],
+    spannedAll: true,
+    excludedGroups: [],
+    wishGaps: [],
+    capacityGaps: [],
+  }),
+}));
 
 vi.mock("@/lib/db", () => ({
   prisma: prismaMock,
@@ -12,6 +22,10 @@ vi.mock("@/lib/db", () => ({
 
 vi.mock("@/lib/route-auth", () => ({
   requireApiUser,
+}));
+
+vi.mock("@/lib/raster/coverage", () => ({
+  buildCoverageRecordForInputSet,
 }));
 
 import { POST } from "@/app/api/raster/input-sets/[id]/runs/route";
@@ -98,19 +112,25 @@ describe("raster runs route", () => {
 
     expect(response.status).toBe(202);
     expect(prismaMock.rasterOptimizationRun.create).toHaveBeenCalledWith({
-      data: {
+      data: expect.objectContaining({
         inputSetId: "input-wttv",
         startedById: "admin-1",
-        unresolvedWishConflictsJson: JSON.stringify({
-          count: 0,
-          conflicts: [],
-        }),
         settings: JSON.stringify({
           strategy: "cp_sat",
           timeLimitSeconds: 60,
           weights: {},
         }),
-      },
+        coverageComplete: true,
+        coverageJson: JSON.stringify({
+          complete: true,
+          spannedScopes: ["scope-wttv"],
+          spannedAll: true,
+          excludedGroups: [],
+          wishGaps: [],
+          capacityGaps: [],
+          unresolvedWishConflicts: { count: 0, conflicts: [] },
+        }),
+      }),
     });
     expect(prismaMock.backgroundJob.create).toHaveBeenCalledWith({
       data: {

@@ -409,6 +409,25 @@
       "overwritesCount": "{count, plural, one {# importação desfaria a sua alteração} other {# importações desfariam as suas alterações}}",
       "sourceChangedCount": "{count, plural, one {# desejo mudou na origem} other {# desejos mudaram na origem}}"
     },
+    "combined": {
+      "title": "Planeamento combinado",
+      "selectScopes": "Selecionar ambitos",
+      "startRun": "Iniciar execucao combinada",
+      "minimumScopes": "Selecione pelo menos dois ambitos.",
+      "gapSummary": "Lacunas antes de iniciar"
+    },
+    "readiness": {
+      "title": "Resumo de preparacao",
+      "complete": "Completo",
+      "incomplete": "Incompleto",
+      "missingItems": "Itens em falta"
+    },
+    "coverage": {
+      "incomplete": "Incompleto",
+      "complete": "Completo",
+      "combined": "Combinado",
+      "spannedScopes": "Ambitos abrangidos"
+    },
     "steps": {
       "import": "Import data",
       "review": "Review data",

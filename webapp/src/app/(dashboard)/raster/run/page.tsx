@@ -48,6 +48,7 @@ export default async function RasterRunPage({
       {context.user.role === Role.PLATFORM_ADMIN ? (
         <InputSetRunActions
           capacityReview={capacityReview ?? undefined}
+          combined={inputSet.spannedScopes.length > 1}
           inputSetId={inputSet.id}
           runs={inputSet.runs}
           showCapacityReview={false}

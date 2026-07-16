@@ -4,11 +4,14 @@ import { RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { withBasePath } from "@/lib/base-path";
+import { infeasibleScopeMessage } from "@/lib/raster/run-outcome";
 import { putGymCapacity } from "@/components/raster/capacity/capacity-client";
 import {
   RunSettingsFields,
   type RasterRunStrategy,
 } from "@/components/raster/run-controls";
+import { CombinedBadge } from "@/components/raster/coverage/combined-badge";
+import { IncompleteBadge } from "@/components/raster/coverage/incomplete-badge";
 import { BusyLabel } from "@/components/ui/busy-label";
 
 type FixedScheduleNumber = {
@@ -25,6 +28,9 @@ type RasterRunRow = {
   objectiveValue: number | null;
   solverStatus?: string | null;
   settings?: string | null;
+  coverageComplete?: boolean | null;
+  coverageJson?: string | null;
+  sourceChangedSinceStart?: boolean;
   createdAt: Date | string;
   finishedAt: Date | string | null;
   snapshot: { id: string } | null;
@@ -179,12 +185,14 @@ export function InputSetRunActions({
   runs,
   capacityReview,
   showCapacityReview = true,
+  combined = false,
 }: {
   inputSetId: string;
   status: string;
   runs: RasterRunRow[];
   capacityReview?: HallCapacityReview;
   showCapacityReview?: boolean;
+  combined?: boolean;
 }) {
   const router = useRouter();
   const [message, setMessage] = useState<string | null>(null);
@@ -525,7 +533,11 @@ export function InputSetRunActions({
               key={run.id}
             >
               <div className="grid gap-2 md:grid-cols-[9rem_12rem_10rem_minmax(8rem,1fr)_auto]">
-                <span className="font-medium">{runStateLabel(run)}</span>
+                <span className="flex items-center gap-2 font-medium">
+                  {runStateLabel(run)}
+                  <CombinedBadge combined={combined} />
+                  <IncompleteBadge complete={run.coverageComplete} />
+                </span>
                 <span>{runOutcomeLabel(run.outcome, run.status)}</span>
                 <span className="text-[var(--muted-foreground)]">
                   {runStrategyLabel(run.settings)}
@@ -571,9 +583,16 @@ export function InputSetRunActions({
               <RunPhaseBar
                 outcome={run.outcome}
                 solverStatus={run.solverStatus}
+                coverageJson={run.coverageJson}
                 snapshotId={run.snapshot?.id}
                 status={run.status}
               />
+              {run.sourceChangedSinceStart ? (
+                <p className="text-xs text-amber-300">
+                  Sources changed after this combined run was queued. Results
+                  may no longer reflect current inputs.
+                </p>
+              ) : null}
             </div>
           ))}
         </div>
@@ -831,11 +850,13 @@ function formatRunTimestamp(value: Date | string) {
 function RunPhaseBar({
   outcome,
   solverStatus,
+  coverageJson,
   status,
   snapshotId,
 }: {
   outcome?: string | null;
   solverStatus?: string | null;
+  coverageJson?: string | null;
   status: string;
   snapshotId?: string;
 }) {
@@ -896,7 +917,7 @@ function RunPhaseBar({
         <p className="text-xs text-red-300">
           {solverStatus ||
             (outcome === "INFEASIBLE"
-              ? "No feasible assignment exists with the current hard constraints."
+              ? infeasibleScopeMessage(coverageJson)
               : "The optimizer failed because of a software or worker error.")}
         </p>
       ) : null}

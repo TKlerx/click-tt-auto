@@ -85,7 +85,9 @@ export function WishImportReviewPanel({
         const payload = (await response.json().catch(() => ({}))) as {
           error?: string;
         };
-        setMessage(payload.error ?? t("saveFailed", { status: response.status }));
+        setMessage(
+          payload.error ?? t("saveFailed", { status: response.status }),
+        );
         return;
       }
       router.refresh();
@@ -124,7 +126,11 @@ export function WishImportReviewPanel({
       <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
         {t("title")}
       </h2>
-      <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label={t("filterLabel")}>
+      <div
+        className="mt-3 flex flex-wrap gap-2"
+        role="group"
+        aria-label={t("filterLabel")}
+      >
         {FILTERS.filter(
           (option) => option === "all" || option !== "missing" || showMissing,
         ).map((option) => (

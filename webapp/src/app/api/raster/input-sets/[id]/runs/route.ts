@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
+import { startRasterRunResponse } from "@/app/api/raster/_lib/start-run-response";
 import { logRasterAudit } from "@/lib/raster/audit";
 import { requireRasterInputSet } from "@/lib/raster/route-context";
-import { runSettingsSchema } from "@/lib/raster/schemas";
-import { startOptimizationRun } from "@/services/raster";
 import {
   AuditAction,
   InputSetStatus,
@@ -25,32 +24,21 @@ export async function POST(
     );
   }
 
-  const parsed = runSettingsSchema.safeParse(
-    await request.json().catch(() => ({})),
-  );
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: "Invalid run settings", issues: parsed.error.issues },
-      { status: 422 },
-    );
-  }
-
-  const run = await startOptimizationRun({
+  return startRasterRunResponse(request, {
     inputSetId: context.inputSet.id,
     startedById: context.user.id,
-    settings: parsed.data,
-  });
-  await logRasterAudit({
-    action: AuditAction.RASTER_RUN_STARTED,
-    actorId: context.user.id,
-    scope: context.inputSet.scope.code,
-    entityType: "RasterOptimizationRun",
-    entityId: run.id,
-    details: {
-      inputSetId: context.inputSet.id,
-      settings: parsed.data,
+    onStarted: async ({ run, settings }) => {
+      await logRasterAudit({
+        action: AuditAction.RASTER_RUN_STARTED,
+        actorId: context.user.id,
+        scope: context.inputSet.scope.code,
+        entityType: "RasterOptimizationRun",
+        entityId: run.id,
+        details: {
+          inputSetId: context.inputSet.id,
+          settings,
+        },
+      });
     },
   });
-
-  return NextResponse.json({ run }, { status: 202 });
 }

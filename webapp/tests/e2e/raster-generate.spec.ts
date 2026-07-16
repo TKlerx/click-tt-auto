@@ -57,7 +57,7 @@ test("OWL raster page shows inherited WTTV sources without refreshing them on re
   await loginWithPassword(page, email, password);
   await expectOnDashboard(page);
 
-  await page.goto(`${appBasePath}/raster?${rasterQuery}`);
+  await page.goto(`${appBasePath}/raster/import?${rasterQuery}`);
   await expect(page.getByText(sourceName)).toBeVisible();
   expect(refreshRequests).toEqual([]);
 

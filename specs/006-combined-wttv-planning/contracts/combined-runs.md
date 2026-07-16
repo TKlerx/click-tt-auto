@@ -64,12 +64,14 @@ Consumed by run lists, snapshot lists, and the snapshot view. One shape, two hal
 | `excludedGroups` | group ids | FR-032a |
 | `wishGaps` | team ids + what was missing | FR-032b |
 | `capacityGaps` | club/hall/weekday + missing or insufficient | FR-032c |
+| `unresolvedWishConflicts` | unresolved conflict ids + count | FR-032d / 008 FR-009a; frozen at run start |
 
 ### Rules
 
 - **`complete` is not `spannedAll`.** A run spanning every scope with gaps is incomplete. The likely bug is treating them as synonyms, because a full-scope run is what someone reaches for when testing.
 - **A/B absence is not a gap** (FR-033). It never appears in `wishGaps`.
 - **Frozen at start** (FR-038). Never recomputed. Coverage describes *then*; readiness describes *now*; they must not share a code path.
+- **008 conflicts live here.** Do not keep a separate run metadata mechanism for unresolved wish-import conflicts once this coverage record exists.
 - **Single-scope runs carry it too** (FR-035). A Bezirk run with excluded groups is incomplete by the same rule. This is what settles feature 005's Q4 — scoping coverage to combined runs only would leave 005's partial runs unmarked, which is the hazard the mechanism exists to close.
 
 ### Presentation
