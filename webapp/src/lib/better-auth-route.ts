@@ -30,5 +30,8 @@ export function getBetterAuthAbsolutePath(pathname: string) {
 
 export function getAbsoluteAppUrl(pathname: string) {
   const basePath = process.env.BASE_PATH ?? "";
-  return `${getConfiguredAuthBaseUrl()}${basePath}${pathname}`;
+  const baseUrl = getConfiguredAuthBaseUrl();
+  return basePath && new URL(baseUrl).pathname.replace(/\/$/, "") === basePath
+    ? `${baseUrl}${pathname}`
+    : `${baseUrl}${basePath}${pathname}`;
 }
