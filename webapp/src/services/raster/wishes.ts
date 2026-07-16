@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { diffWishValues, fingerprintWishValue } from "@/lib/raster/wish-diff";
-import { findMatchingWish } from "@/lib/raster/wish-identity";
+import { wishIdentityKey } from "@/lib/raster/wish-identity";
 import type { WishJsonInput } from "@/lib/raster/schemas";
 import {
   RasterConfidence,
@@ -59,7 +59,7 @@ export async function importParsedWishes(params: {
       hall: team.hall,
       startTime: team.startTime,
       spielwochePref: team.spielwochePref,
-      requestedRasterzahl: stringifyOptional(team.requestedRasterzahl),
+      requestedRasterzahl: serializeRasterzahl(team.requestedRasterzahl),
       source: RasterWishSource.PDF_PARSED,
       confidence:
         unmatched || team.confidence !== "ok"
@@ -98,7 +98,7 @@ export async function importJsonWishes(params: {
       hall: wish.hall,
       startTime: wish.startTime,
       spielwochePref: wish.spielwochePref,
-      requestedRasterzahl: stringifyOptional(wish.requestedRasterzahl),
+      requestedRasterzahl: serializeRasterzahl(wish.requestedRasterzahl),
       notes: wish.notes,
       source,
       confidence: RasterConfidence.REVIEW,
@@ -128,87 +128,115 @@ async function importWishRows(params: {
         sourceKind: params.sourceKind,
       },
     });
-    const activeWishes = await tx.rasterWish.findMany({
-      where: { inputSetId: params.inputSetId },
-    });
-    let added = 0;
-    let conflicts = 0;
-    let noops = 0;
-    let unmatched = 0;
+    const plans = params.rows.map((row) => ({
+      row,
+      identity: wishIdentityKey(row.clubId, row.teamLabel),
+      fingerprint: fingerprintWishValue(row),
+    }));
 
-    for (const row of params.rows) {
-      const matched =
-        findMatchingWish(row, activeWishes) ??
-        (!row.unmatched ? null : undefined);
-      let wish = matched;
-      if (matched === null) {
-        wish = await tx.rasterWish.create({
-          data: {
+    const wishByIdentity = new Map(
+      (
+        await tx.rasterWish.findMany({
+          where: { inputSetId: params.inputSetId },
+        })
+      ).map((wish) => [wishIdentityKey(wish.clubId, wish.teamLabel), wish]),
+    );
+    // A (wish, imported value) pair is settled whether its conflict was decided
+    // or is still open, so one prefetch replaces two lookups per row.
+    const settledConflicts = new Set(
+      (
+        await tx.rasterWishConflict.findMany({
+          where: { inputSetId: params.inputSetId },
+          select: {
+            wishId: true,
+            importedRow: { select: { valueFingerprint: true } },
+          },
+        })
+      ).map((conflict) =>
+        conflictKey(conflict.wishId, conflict.importedRow.valueFingerprint),
+      ),
+    );
+
+    const newWishes = new Map<string, ImportWishRow>();
+    const creatorIndex = new Map<string, number>();
+    plans.forEach((plan, index) => {
+      if (plan.row.unmatched) return;
+      if (wishByIdentity.has(plan.identity)) return;
+      if (newWishes.has(plan.identity)) return;
+      newWishes.set(plan.identity, plan.row);
+      creatorIndex.set(plan.identity, index);
+    });
+    const createdWishes = newWishes.size
+      ? await tx.rasterWish.createManyAndReturn({
+          data: [...newWishes.values()].map((row) => ({
             inputSetId: params.inputSetId,
             ...wishCreateData(row),
             origin: RasterWishOrigin.IMPORTED,
-          },
-        });
-        activeWishes.push(wish);
-        added += 1;
+          })),
+        })
+      : [];
+    for (const wish of createdWishes) {
+      wishByIdentity.set(wishIdentityKey(wish.clubId, wish.teamLabel), wish);
+    }
+
+    const importedRows = plans.length
+      ? await tx.rasterImportedWishRow.createManyAndReturn({
+          data: plans.map((plan) => ({
+            batchId: batch.id,
+            inputSetId: params.inputSetId,
+            sourceFile: params.sourceFile,
+            matchedWishId: wishByIdentity.get(plan.identity)?.id ?? null,
+            ...rowData(plan.row),
+            valueFingerprint: plan.fingerprint,
+          })),
+        })
+      : [];
+    if (importedRows.length !== plans.length) {
+      throw new Error("Imported wish rows were not returned in input order");
+    }
+
+    let noops = 0;
+    let unmatched = 0;
+    const conflictData: {
+      inputSetId: string;
+      wishId: string;
+      importedRowId: string;
+      differingFields: string;
+    }[] = [];
+    plans.forEach((plan, index) => {
+      const wish = wishByIdentity.get(plan.identity);
+      if (!wish) {
+        unmatched += 1;
+        return;
       }
-      if (matched === undefined) unmatched += 1;
-
-      const fingerprint = fingerprintWishValue(row);
-      const importedRow = await tx.rasterImportedWishRow.create({
-        data: {
-          batchId: batch.id,
-          inputSetId: params.inputSetId,
-          sourceFile: params.sourceFile,
-          matchedWishId: wish?.id,
-          ...rowData(row),
-          valueFingerprint: fingerprint,
-        },
-      });
-      if (!wish || matched === null) continue;
-
-      const differingFields = diffWishValues(wish, row);
+      if (creatorIndex.get(plan.identity) === index) return;
+      const differingFields = diffWishValues(wish, plan.row);
       if (!differingFields.length) {
         noops += 1;
-        continue;
+        return;
       }
-      const alreadyDecided = await tx.rasterWishConflict.findFirst({
-        where: {
-          wishId: wish.id,
-          decision: { not: null },
-          importedRow: { valueFingerprint: fingerprint },
-        },
-      });
-      if (alreadyDecided) {
+      const key = conflictKey(wish.id, plan.fingerprint);
+      if (settledConflicts.has(key)) {
         noops += 1;
-        continue;
+        return;
       }
-      const alreadyOpen = await tx.rasterWishConflict.findFirst({
-        where: {
-          importedRow: { valueFingerprint: fingerprint },
-          wishId: wish.id,
-          decision: null,
-        },
+      settledConflicts.add(key);
+      conflictData.push({
+        inputSetId: params.inputSetId,
+        wishId: wish.id,
+        importedRowId: importedRows[index].id,
+        differingFields: JSON.stringify(differingFields),
       });
-      if (alreadyOpen) {
-        noops += 1;
-        continue;
-      }
-      await tx.rasterWishConflict.create({
-        data: {
-          inputSetId: params.inputSetId,
-          wishId: wish.id,
-          importedRowId: importedRow.id,
-          differingFields: JSON.stringify(differingFields),
-        },
-      });
-      conflicts += 1;
+    });
+    if (conflictData.length) {
+      await tx.rasterWishConflict.createMany({ data: conflictData });
     }
+
     return {
       batchId: batch.id,
       count: params.rows.length,
-      added,
-      conflicts,
+      added: createdWishes.length,
+      conflicts: conflictData.length,
       noops,
       unmatched,
     };
@@ -255,7 +283,7 @@ export async function resolveWishConflict(params: {
       params.decision === RasterConflictDecision.USE_IMPORTED
         ? conflict.importedRow
         : params.decision === RasterConflictDecision.MANUAL
-          ? { ...conflict.wish, ...params.manualValue }
+          ? { ...conflict.wish, ...serializeManualValue(params.manualValue) }
           : null;
     if (chosen) {
       await tx.rasterWish.update({
@@ -369,7 +397,7 @@ export async function updateWish(wishId: string, wish: WishJsonInput) {
       hall: wish.hall,
       startTime: wish.startTime,
       spielwochePref: wish.spielwochePref,
-      requestedRasterzahl: stringifyOptional(wish.requestedRasterzahl),
+      requestedRasterzahl: serializeRasterzahl(wish.requestedRasterzahl),
       notes: wish.notes,
       origin: RasterWishOrigin.MANUAL,
       reviewedAt: new Date(),
@@ -410,6 +438,8 @@ function dedupeTeams(parsedTeams: WishParseResult["teams"]) {
   });
 }
 
+// `requestedRasterzahl` is stored as a JSON string. Values reaching rowData are
+// already serialized; only raw input crossing the API boundary needs encoding.
 type WritableWish = {
   clubId: string;
   clubName: string;
@@ -418,7 +448,7 @@ type WritableWish = {
   hall?: string | null;
   startTime?: string | null;
   spielwochePref?: string | null;
-  requestedRasterzahl?: unknown;
+  requestedRasterzahl?: string | null;
   notes?: string | null;
   source?: RasterWishSource;
   confidence?: RasterConfidence;
@@ -433,7 +463,7 @@ function rowData(wish: WritableWish) {
     hall: wish.hall,
     startTime: wish.startTime,
     spielwochePref: wish.spielwochePref,
-    requestedRasterzahl: stringifyOptional(wish.requestedRasterzahl),
+    requestedRasterzahl: wish.requestedRasterzahl,
     notes: wish.notes,
   };
 }
@@ -446,8 +476,22 @@ function wishCreateData(wish: ImportWishRow) {
   };
 }
 
-function stringifyOptional(value: unknown) {
+function serializeRasterzahl(value: unknown) {
   return value === undefined ? undefined : JSON.stringify(value);
+}
+
+function conflictKey(wishId: string, fingerprint: string) {
+  return `${wishId}\0${fingerprint}`;
+}
+
+function serializeManualValue(manualValue?: Partial<WishJsonInput>) {
+  if (!manualValue) return {};
+  const { requestedRasterzahl, ...rest } = manualValue;
+  if (!("requestedRasterzahl" in manualValue)) return rest;
+  return {
+    ...rest,
+    requestedRasterzahl: serializeRasterzahl(requestedRasterzahl),
+  };
 }
 
 type CurrentWishTeam = {
@@ -471,17 +515,14 @@ async function listMissingWishes(inputSetId: string) {
   const rosterClubIds = await getRosterClubIds(inputSetId);
   const produced = new Set(
     parsedTeams.map((team) =>
-      [
+      wishIdentityKey(
         rosterClubIds?.get(team.clubName) ?? team.clubId,
-        (team.teamLabel ?? "").trim().toLowerCase(),
-      ].join("\0"),
+        team.teamLabel,
+      ),
     ),
   );
   return activeWishes.filter(
-    (wish) =>
-      !produced.has(
-        [wish.clubId, (wish.teamLabel ?? "").trim().toLowerCase()].join("\0"),
-      ),
+    (wish) => !produced.has(wishIdentityKey(wish.clubId, wish.teamLabel)),
   );
 }
 

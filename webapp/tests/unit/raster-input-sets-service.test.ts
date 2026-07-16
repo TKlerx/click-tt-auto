@@ -249,16 +249,16 @@ describe("raster input set service", () => {
           confidence: "REVIEW",
         },
       ] as never);
-    prismaMock.rasterWish.create.mockResolvedValue({
-      id: "wish-1",
-    } as never);
+    prismaMock.rasterWish.createManyAndReturn.mockResolvedValue([
+      { id: "wish-1", clubId: "ttv-lage", teamLabel: "Erwachsene IV" },
+    ] as never);
     prismaMock.rasterWishImportBatch.create.mockResolvedValue({
       id: "batch-1",
     } as never);
-    prismaMock.rasterImportedWishRow.create.mockResolvedValue({
-      id: "row-1",
-    } as never);
-    prismaMock.rasterWishConflict.findFirst.mockResolvedValue(null);
+    prismaMock.rasterImportedWishRow.createManyAndReturn.mockResolvedValue([
+      { id: "row-1" },
+    ] as never);
+    prismaMock.rasterWishConflict.findMany.mockResolvedValue([] as never);
 
     await syncInputSetSourceCaches("input-1");
 

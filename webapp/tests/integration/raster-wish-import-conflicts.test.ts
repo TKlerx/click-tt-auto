@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { fingerprintWishValue } from "@/lib/raster/wish-diff";
 import { RasterWeekday } from "../../generated/prisma/enums";
 
 const prisma = vi.hoisted(() => ({
@@ -10,12 +11,14 @@ const prisma = vi.hoisted(() => ({
     findMany: vi.fn(),
     findFirst: vi.fn(),
     create: vi.fn(),
+    createManyAndReturn: vi.fn(),
     update: vi.fn(),
     updateMany: vi.fn(),
     deleteMany: vi.fn(),
   },
   rasterImportedWishRow: {
     create: vi.fn(),
+    createManyAndReturn: vi.fn(),
     findMany: vi.fn(),
     findFirst: vi.fn(),
     update: vi.fn(),
@@ -24,6 +27,7 @@ const prisma = vi.hoisted(() => ({
     findMany: vi.fn(),
     findFirst: vi.fn(),
     create: vi.fn(),
+    createMany: vi.fn(),
     update: vi.fn(),
   },
 }));
@@ -72,6 +76,13 @@ const parsed = {
   warnings: [],
 };
 
+// The value the parsed fixture imports, keyed exactly as the service keys it.
+const importedFingerprint = fingerprintWishValue({
+  homeWeekday: "FRIDAY",
+  hall: "2",
+  startTime: "20:00",
+});
+
 describe("raster wish import conflicts", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -87,6 +98,9 @@ describe("raster wish import conflicts", () => {
       id: "row-1",
       valueFingerprint: "fp-1",
     });
+    prisma.rasterImportedWishRow.createManyAndReturn.mockResolvedValue([
+      { id: "row-1", valueFingerprint: importedFingerprint },
+    ]);
     prisma.rasterImportedWishRow.findMany.mockResolvedValue([]);
     prisma.rasterWishConflict.findMany.mockResolvedValue([]);
     prisma.rasterWishConflict.findFirst.mockResolvedValue(null);
@@ -104,21 +118,26 @@ describe("raster wish import conflicts", () => {
     expect(result.conflicts).toBe(1);
     expect(prisma.rasterWish.update).not.toHaveBeenCalled();
     expect(prisma.rasterWish.deleteMany).not.toHaveBeenCalled();
-    expect(prisma.rasterWishConflict.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        inputSetId: "input-1",
-        wishId: "wish-1",
-        importedRowId: "row-1",
-      }),
+    expect(prisma.rasterWishConflict.createMany).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({
+          inputSetId: "input-1",
+          wishId: "wish-1",
+          importedRowId: "row-1",
+        }),
+      ],
     });
   });
 
   it("remembers decided imported values and does not re-raise them", async () => {
     prisma.rasterWish.findMany.mockResolvedValue([activeWish]);
-    prisma.rasterWishConflict.findFirst.mockResolvedValueOnce({
-      id: "conflict-1",
-      decision: "KEEP_EXISTING",
-    });
+    prisma.rasterWishConflict.findMany.mockResolvedValueOnce([
+      {
+        wishId: "wish-1",
+        decision: "KEEP_EXISTING",
+        importedRow: { valueFingerprint: importedFingerprint },
+      },
+    ]);
 
     const result = await importParsedWishes({
       inputSetId: "input-1",
@@ -127,7 +146,7 @@ describe("raster wish import conflicts", () => {
     });
 
     expect(result.noops).toBe(1);
-    expect(prisma.rasterWishConflict.create).not.toHaveBeenCalled();
+    expect(prisma.rasterWishConflict.createMany).not.toHaveBeenCalled();
   });
 
   it("imports a new wish once and treats the exact next import as a no-op", async () => {
@@ -142,7 +161,9 @@ describe("raster wish import conflicts", () => {
         reviewedById: null,
       },
     ]);
-    prisma.rasterWish.create.mockResolvedValue({ id: "wish-2" });
+    prisma.rasterWish.createManyAndReturn.mockResolvedValue([
+      { id: "wish-2", clubId: "club-a", teamLabel: "I" },
+    ]);
 
     const first = await importParsedWishes({
       inputSetId: "input-1",
@@ -157,7 +178,7 @@ describe("raster wish import conflicts", () => {
 
     expect(first.added).toBe(1);
     expect(second.noops).toBe(1);
-    expect(prisma.rasterWish.create).toHaveBeenCalledTimes(1);
+    expect(prisma.rasterWish.createManyAndReturn).toHaveBeenCalledTimes(1);
   });
 
   it("manual matching of an unmatched row creates a conflict when values differ", async () => {
