@@ -7,8 +7,9 @@ import {
 } from "./helpers/auth";
 import { assignUserToScope, seedLocalUser } from "./helpers/db";
 
-const district = "OWL";
-const scope = { code: district, name: "Ostwestfalen-Lippe" };
+const scopeCode = "OWL";
+const season = "2026/27";
+const scope = { code: scopeCode, name: "Ostwestfalen-Lippe" };
 
 async function seedRasterUser(input: {
   email: string;
@@ -61,7 +62,7 @@ test("raster role matrix allows admin, scheduler, and viewer actions correctly",
   const inputSetResponse = await adminRequest.post(
     `${appBasePath}/api/raster/input-sets`,
     {
-      data: { district, name: `OWL role matrix ${suffix}` },
+      data: { scope: scopeCode, season, name: `OWL role matrix ${suffix}` },
     },
   );
   expect(inputSetResponse.status()).toBe(201);
@@ -73,7 +74,7 @@ test("raster role matrix allows admin, scheduler, and viewer actions correctly",
     `${appBasePath}/api/raster/snapshots/import`,
     {
       data: {
-        district,
+        scope: scopeCode,
         assignments: [
           {
             league: "Bezirksoberliga",
@@ -104,14 +105,14 @@ test("raster role matrix allows admin, scheduler, and viewer actions correctly",
     "RasterScheduler123",
   );
   const schedulerList = await schedulerRequest.get(
-    `${appBasePath}/api/raster/input-sets?district=${district}`,
+    `${appBasePath}/api/raster/input-sets?scope=${scopeCode}&season=${encodeURIComponent(season)}`,
   );
   expect(schedulerList.status()).toBe(200);
 
   const schedulerInputCreate = await schedulerRequest.post(
     `${appBasePath}/api/raster/input-sets`,
     {
-      data: { district, name: "blocked scheduler input set" },
+      data: { scope: scopeCode, season, name: "blocked scheduler input set" },
     },
   );
   expect(schedulerInputCreate.status()).toBe(403);
@@ -140,7 +141,7 @@ test("raster role matrix allows admin, scheduler, and viewer actions correctly",
           name: "capacity.csv",
           mimeType: "text/csv",
           buffer: Buffer.from(
-            "district,clubId,hall,weekday,capacity\nOWL,club-e2e,1,FRIDAY,2\n",
+            "scope,clubId,hall,weekday,capacity\nOWL,club-e2e,1,FRIDAY,2\n",
           ),
         },
       },
@@ -177,14 +178,14 @@ test("raster role matrix allows admin, scheduler, and viewer actions correctly",
   const viewerPage = await browser.newPage();
   const viewerRequest = await login(viewerPage, viewerEmail, "RasterViewer123");
   const viewerList = await viewerRequest.get(
-    `${appBasePath}/api/raster/input-sets?district=${district}`,
+    `${appBasePath}/api/raster/input-sets?scope=${scopeCode}&season=${encodeURIComponent(season)}`,
   );
   expect(viewerList.status()).toBe(200);
 
   const viewerInputCreate = await viewerRequest.post(
     `${appBasePath}/api/raster/input-sets`,
     {
-      data: { district, name: "blocked viewer input set" },
+      data: { scope: scopeCode, season, name: "blocked viewer input set" },
     },
   );
   expect(viewerInputCreate.status()).toBe(403);
@@ -197,7 +198,7 @@ test("raster role matrix allows admin, scheduler, and viewer actions correctly",
           name: "capacity.csv",
           mimeType: "text/csv",
           buffer: Buffer.from(
-            "district,clubId,hall,weekday,capacity\nOWL,club-e2e,1,FRIDAY,2\n",
+            "scope,clubId,hall,weekday,capacity\nOWL,club-e2e,1,FRIDAY,2\n",
           ),
         },
       },
