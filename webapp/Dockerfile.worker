@@ -13,6 +13,24 @@ COPY webapp/worker/uv.lock ./uv.lock
 
 CMD ["uv", "audit", "--frozen", "--no-dev"]
 
+FROM python:3.12-slim AS builder
+
+WORKDIR /worker
+
+RUN apt-get update -y \
+    && apt-get upgrade -y \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir uv
+
+COPY webapp/worker/pyproject.toml ./pyproject.toml
+COPY webapp/worker/uv.lock ./uv.lock
+COPY webapp/worker/README.md ./README.md
+COPY webapp/worker/src ./src
+
+RUN uv sync --frozen --no-dev \
+    && rm -rf /root/.cache/uv
+
 FROM python:3.12-slim
 
 WORKDIR /worker
@@ -33,16 +51,10 @@ RUN apt-get update -y \
     && apt-get upgrade -y \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir uv
-
-COPY webapp/worker/pyproject.toml ./pyproject.toml
-COPY webapp/worker/uv.lock ./uv.lock
-COPY webapp/worker/README.md ./README.md
+COPY --from=builder /worker/.venv ./.venv
 COPY webapp/worker/src ./src
 COPY scripts /app/scripts
 COPY src/raster /app/src/raster
-
-RUN uv sync --frozen --no-dev
 
 RUN groupadd --system --gid 1001 worker \
     && useradd --system --uid 1001 --gid worker starter-worker \
