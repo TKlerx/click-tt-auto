@@ -24,10 +24,18 @@ const standaloneServer = [
 ].find((path) => existsSync(path));
 
 if (command === "start" && standaloneServer && process.platform !== "win32") {
+  const standaloneRoot = standaloneServer.includes("/webapp/")
+    ? join(dirname(standaloneServer), "..")
+    : dirname(standaloneServer);
   const staticSource = ".next/static";
   const staticTarget = join(dirname(standaloneServer), ".next", "static");
+  const rasterSource = "../src/raster";
+  const rasterTarget = join(standaloneRoot, "src", "raster");
   if (existsSync(staticSource)) {
     cpSync(staticSource, staticTarget, { recursive: true, force: true });
+  }
+  if (existsSync(rasterSource)) {
+    cpSync(rasterSource, rasterTarget, { recursive: true, force: true });
   }
 }
 

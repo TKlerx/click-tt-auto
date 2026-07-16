@@ -12,9 +12,8 @@ import { hasRealAzureAdConfig } from "@/lib/azure-auth";
 import { hashPassword } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 
-function redirectTo(request: Request, target: string) {
-  const basePath = process.env.BASE_PATH ?? "";
-  return NextResponse.redirect(new URL(`${basePath}${target}`, request.url));
+function redirectTo(target: string) {
+  return NextResponse.redirect(getAbsoluteAppUrl(target));
 }
 
 function getSafeRedirectTarget(value: string | null) {
@@ -123,17 +122,17 @@ export async function GET(request: Request) {
     });
 
     if (!authResponse.ok) {
-      return redirectTo(request, "/login?error=sso-mock-failed");
+      return redirectTo("/login?error=sso-mock-failed");
     }
 
     return applySetCookieHeaders(
-      redirectTo(request, redirectTarget),
+      redirectTo(redirectTarget),
       authResponse,
     );
   }
 
   if (!hasRealAzureAdConfig()) {
-    return redirectTo(request, "/login?error=sso-config");
+    return redirectTo("/login?error=sso-config");
   }
 
   const authResponse = await auth.api.signInSocial({
