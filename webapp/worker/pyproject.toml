@@ -11,6 +11,7 @@ dependencies = [
 ]
 
 [project.scripts]
+starter-worker = "starter_worker.main:main"
 raster-review-worker = "starter_worker.main:main"
 
 [build-system]
