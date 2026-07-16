@@ -45,9 +45,14 @@ Both keep their auth and their shape. What changes is that **neither writes an a
 
 | Endpoint | Method | Purpose |
 |---|---|---|
-| `/api/raster/input-sets/[id]/wish-imports` | `GET` | Batches, conflicts, unmatched rows, missing-from-import (FR-011) |
-| `/api/raster/input-sets/[id]/wish-imports/conflicts/[conflictId]` | `POST` | Resolve: keep existing, use imported, or a manual value (FR-004) |
-| `/api/raster/input-sets/[id]/wish-imports/rows/[rowId]/match` | `POST` | Match an unmatched row to a team by hand (FR-003a) |
+| `/api/raster/input-sets/[id]/wish-imports` | `GET` | Batches, unresolved conflicts, unmatched rows, added wishes, settled (accepted/no-op) matches, missing-from-import (FR-011) |
+| `/api/raster/input-sets/[id]/wish-imports/conflicts/[conflictId]` | `POST` | Resolve: keep existing, use imported, or a manual value (FR-004). A `MANUAL` decision without a value is rejected — it would otherwise keep the existing wish and merely relabel its origin, which is not a decision anyone made |
+| `/api/raster/input-sets/[id]/wish-imports/rows/[rowId]/match` | `POST` | Match an unmatched row to a team by hand (FR-003a). Pairs with an existing wish for that team if one appeared since the row was flagged, rather than creating a duplicate; a concurrent match returns `409` |
+| `/api/raster/input-sets/[id]/wish-imports/missing/[wishId]` | `POST` | Confirm a missing-from-import wish is still valid (FR-007) |
+
+Each unresolved conflict carries its wish's `origin`, which is what separates an
+import that would undo a manual correction from one where the source moved
+(FR-011a).
 
 **Authorisation**: the `scheduler` level, consistent with the other input-set write routes after feature 007. Until 007 lands, whatever those routes currently use.
 
