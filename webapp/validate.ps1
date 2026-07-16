@@ -1244,7 +1244,7 @@ if ($Phase -in "all", "full", "test", "commit") {
     try {
         $previousDatabaseUrl = $env:DATABASE_URL
         if ([string]::IsNullOrWhiteSpace($env:APP_DATABASE_URL) -and [string]::IsNullOrWhiteSpace($env:DATABASE_URL)) {
-            $env:DATABASE_URL = "postgresql://starter:starter_e2e_password@localhost:55432/business_app_starter_e2e_test"
+            $env:DATABASE_URL = "postgresql://starter:starter_e2e_password@localhost:45432/business_app_starter_e2e_test"
         }
 
         $generateResult = Invoke-NativeCommandCaptured "pnpm run prisma:generate"

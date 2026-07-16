@@ -25,7 +25,7 @@ function runDbWorker<TInput, TResult>(
 ): TResult {
   const databaseUrl =
     process.env.DATABASE_URL ??
-    "postgresql://starter:starter_e2e_password@localhost:55432/business_app_starter_e2e_test";
+    "postgresql://starter:starter_e2e_password@localhost:45432/business_app_starter_e2e_test";
   const output = runDbWorkerWithRetry(operation, payload, databaseUrl).trim();
 
   return output ? (JSON.parse(output) as TResult) : (null as TResult);

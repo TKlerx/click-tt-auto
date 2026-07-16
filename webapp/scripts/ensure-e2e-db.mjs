@@ -1,7 +1,11 @@
 import { spawnSync } from "node:child_process";
+import net from "node:net";
 
+// Port 45432 sits below the Windows dynamic port range (49152+), where Hyper-V
+// reserves blocks at boot. A published port inside that range can become
+// unbindable after a reboot: see waitForPublishedPort.
 const DEFAULT_E2E_DATABASE_URL =
-  "postgresql://starter:starter_e2e_password@localhost:55432/business_app_starter_e2e_test";
+  "postgresql://starter:starter_e2e_password@localhost:45432/business_app_starter_e2e_test";
 
 const databaseUrl =
   process.env.DATABASE_URL?.trim() || DEFAULT_E2E_DATABASE_URL;
@@ -22,9 +26,9 @@ const postgresPassword = decodeURIComponent(
 );
 const postgresDb =
   parsed.pathname.replace(/^\//, "") || "business_app_starter_e2e_test";
-const hostPort = parsed.port || "55432";
+const hostPort = parsed.port || "45432";
 
-ensureDockerPostgres();
+await ensureDockerPostgres();
 ensureTargetDatabase();
 
 const env = {
@@ -42,7 +46,7 @@ runStep(
 );
 runStep("Seed PostgreSQL E2E data", "pnpm exec tsx prisma/seed.ts", env);
 
-function ensureDockerPostgres() {
+async function ensureDockerPostgres() {
   const existing = runDockerCaptured([
     "ps",
     "-a",
@@ -75,6 +79,55 @@ function ensureDockerPostgres() {
   }
 
   waitForPostgres();
+  await waitForPublishedPort();
+}
+
+// pg_isready only proves PostgreSQL is up *inside* the container. The published
+// port can still be unreachable from the host, which surfaces later as an
+// unexplained Prisma P1001. Fail here instead, where the cause is knowable.
+async function waitForPublishedPort() {
+  const deadline = Date.now() + 30_000;
+  let lastError = "";
+
+  while (Date.now() < deadline) {
+    lastError = await probeHostPort();
+    if (!lastError) return;
+    await delay(500);
+  }
+
+  throw new Error(
+    [
+      `PostgreSQL is running inside ${containerName}, but ${parsed.hostname}:${hostPort} is not reachable from this host (${lastError}).`,
+      process.platform === "win32"
+        ? [
+            "On Windows this usually means the port falls inside a reserved range. Check:",
+            "  netsh interface ipv4 show excludedportrange protocol=tcp",
+            `If ${hostPort} falls inside a listed range, set DATABASE_URL to a free port below 49152.`,
+          ].join("\n")
+        : "Check that the container's published port is not blocked by the host.",
+    ].join("\n"),
+  );
+}
+
+function probeHostPort() {
+  return new Promise((resolve) => {
+    const socket = net.connect({
+      host: parsed.hostname,
+      port: Number(hostPort),
+    });
+    const finish = (result) => {
+      socket.destroy();
+      resolve(result);
+    };
+    socket.setTimeout(2000);
+    socket.on("connect", () => finish(""));
+    socket.on("timeout", () => finish("timed out"));
+    socket.on("error", (error) => finish(error.code ?? String(error)));
+  });
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function waitForPostgres() {
