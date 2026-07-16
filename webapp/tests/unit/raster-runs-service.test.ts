@@ -22,6 +22,7 @@ describe("raster runs service", () => {
     prismaMock.$transaction.mockImplementation(async (callback) =>
       callback(prismaMock),
     );
+    prismaMock.rasterWishConflict.findMany.mockResolvedValue([]);
     prismaMock.rasterOptimizationRun.create.mockResolvedValue({
       id: "run-1",
       inputSetId: "input-1",
@@ -40,7 +41,13 @@ describe("raster runs service", () => {
 
     expect(prismaMock.rasterInputSet.findUnique).toHaveBeenCalledWith({
       where: { id: "input-1" },
-      select: { id: true, scopeId: true, season: true, seasonModelJson: true },
+      select: {
+        id: true,
+        scopeId: true,
+        season: true,
+        seasonModelJson: true,
+        createdById: true,
+      },
     });
     expect(
       prismaMock.rasterInputSet.findUnique.mock.invocationCallOrder[0],
