@@ -1,6 +1,9 @@
 import { Role } from "../../../../../generated/prisma/enums";
 import { InputSetRunActions } from "@/components/raster/input-set-actions";
-import { listInputSets, reviewHallCapacitiesForInputSet } from "@/services/raster";
+import {
+  listInputSets,
+  reviewHallCapacitiesForInputSet,
+} from "@/services/raster";
 import {
   RasterStepError,
   type RasterStepSearchParams,
@@ -15,7 +18,8 @@ export default async function RasterRunPage({
   const context = await requireRasterStep(searchParams);
   if ("error" in context) return <RasterStepError message={context.error} />;
 
-  const inputSet = (await listInputSets(context.scope.id, context.season))[0] ?? null;
+  const inputSet =
+    (await listInputSets(context.scope.id, context.season))[0] ?? null;
   const capacityReview = inputSet
     ? await reviewHallCapacitiesForInputSet(inputSet.id)
     : null;
@@ -51,7 +55,8 @@ export default async function RasterRunPage({
         />
       ) : (
         <p className="mt-3 text-sm text-[var(--muted-foreground)]">
-          You can view this step, but run controls are only shown to platform admins.
+          You can view this step, but run controls are only shown to platform
+          admins.
         </p>
       )}
     </section>

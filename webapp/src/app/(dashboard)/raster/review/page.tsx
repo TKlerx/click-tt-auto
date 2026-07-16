@@ -3,9 +3,7 @@ import { CapacityTable } from "@/components/raster/capacity/capacity-table";
 import { InferCapacitiesButton } from "@/components/raster/capacity/infer-capacities-button";
 import { MatchReviewPanel } from "@/components/raster/match-review-panel";
 import { listMatchReviewState } from "@/lib/raster/match-review";
-import {
-  FixedScheduleNumbersForm,
-} from "@/components/raster/input-set-actions";
+import { FixedScheduleNumbersForm } from "@/components/raster/input-set-actions";
 import {
   GroupModeReview,
   GroupPlanningReview,
@@ -70,7 +68,9 @@ export default async function RasterReviewPage({
             rows={inputSet.fixedRasterzahlen}
           />
         ) : null}
-        <ModelWarnings warnings={extractModelWarnings(inputSet.seasonModelJson)} />
+        <ModelWarnings
+          warnings={extractModelWarnings(inputSet.seasonModelJson)}
+        />
         <MatchReviewPanel
           canEdit={canEdit}
           inputSetId={inputSet.id}

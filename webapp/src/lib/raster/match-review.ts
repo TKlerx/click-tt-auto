@@ -51,8 +51,7 @@ export function deriveMatchReviewState(
       recordId,
       label: team.label ?? team.name ?? recordId,
       fingerprint,
-      status:
-        reviewedFingerprint === fingerprint ? "settled" : "outstanding",
+      status: reviewedFingerprint === fingerprint ? "settled" : "outstanding",
       reason: !reviewedFingerprint
         ? "never_reviewed"
         : reviewedFingerprint === fingerprint
@@ -131,7 +130,5 @@ function normalizeMatchText(value: string | null | undefined) {
 }
 
 function hash(value: unknown) {
-  return createHash("sha256")
-    .update(JSON.stringify(value))
-    .digest("hex");
+  return createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }

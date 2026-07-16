@@ -23,6 +23,7 @@ export async function replaceParsedWishes(
   parsed: WishParseResult,
 ) {
   const clubsById = new Map(parsed.clubs.map((club) => [club.id, club]));
+  const rosterClubIds = await getRosterClubIds(inputSetId);
   const teams = dedupeTeams(parsed.teams);
   await prisma.$transaction(async (tx) => {
     await tx.rasterInputSet.update({
@@ -34,27 +35,45 @@ export async function replaceParsedWishes(
       await tx.rasterWish.createMany({
         data: teams.map((team) => ({
           inputSetId,
-          clubId: team.clubId,
+          clubId:
+            rosterClubIds?.get(clubsById.get(team.clubId)?.name ?? "") ??
+            team.clubId,
           clubName: clubsById.get(team.clubId)?.name ?? team.clubId,
           teamLabel: team.label,
           homeWeekday: weekdayMap[team.homeWeekday],
           hall: team.hall,
           startTime: team.startTime,
           spielwochePref: team.spielwochePref,
-          requestedRasterzahl: team.requestedRasterzahl
-            ? JSON.stringify(team.requestedRasterzahl)
-            : undefined,
+          requestedRasterzahl: stringifyOptional(team.requestedRasterzahl),
           source: RasterWishSource.PDF_PARSED,
           confidence:
-            team.confidence === "ok"
-              ? RasterConfidence.OK
-              : RasterConfidence.REVIEW,
+            rosterClubIds &&
+            !rosterClubIds.has(clubsById.get(team.clubId)?.name ?? "")
+              ? RasterConfidence.REVIEW
+              : team.confidence === "ok"
+                ? RasterConfidence.OK
+                : RasterConfidence.REVIEW,
         })),
       });
     }
   });
 
   return { count: teams.length };
+}
+
+async function getRosterClubIds(inputSetId: string) {
+  const inputSet = await prisma.rasterInputSet.findUnique({
+    where: { id: inputSetId },
+    select: { scopeId: true, season: true },
+  });
+  if (!inputSet) return null;
+  const roster = await prisma.rasterTeamRoster.findFirst({
+    where: { scopeId: inputSet.scopeId, season: inputSet.season },
+    orderBy: { importedAt: "desc" },
+    select: { teams: { select: { vereinName: true, vereinNr: true } } },
+  });
+  if (!roster) return null;
+  return new Map(roster.teams.map((team) => [team.vereinName, team.vereinNr]));
 }
 
 function dedupeTeams(parsedTeams: WishParseResult["teams"]) {
@@ -97,10 +116,7 @@ export async function replaceJsonWishes(
           hall: wish.hall,
           startTime: wish.startTime,
           spielwochePref: wish.spielwochePref,
-          requestedRasterzahl:
-            wish.requestedRasterzahl === undefined
-              ? undefined
-              : JSON.stringify(wish.requestedRasterzahl),
+          requestedRasterzahl: stringifyOptional(wish.requestedRasterzahl),
           notes: wish.notes,
           source,
           confidence: RasterConfidence.REVIEW,
@@ -123,11 +139,12 @@ export async function updateWish(wishId: string, wish: WishJsonInput) {
       hall: wish.hall,
       startTime: wish.startTime,
       spielwochePref: wish.spielwochePref,
-      requestedRasterzahl:
-        wish.requestedRasterzahl === undefined
-          ? undefined
-          : JSON.stringify(wish.requestedRasterzahl),
+      requestedRasterzahl: stringifyOptional(wish.requestedRasterzahl),
       notes: wish.notes,
     },
   });
+}
+
+function stringifyOptional(value: unknown) {
+  return value === undefined ? undefined : JSON.stringify(value);
 }

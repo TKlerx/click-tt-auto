@@ -4,6 +4,7 @@ import { chromium, type APIRequestContext, type Page } from "playwright";
 import { login } from "../../auth.js";
 import { loadConfig } from "../../config.js";
 import { assignmentRowsToCsv } from "./assignment-table.js";
+import { writeRasterDownloadBundle } from "./bundle.js";
 import {
   scrapePublicLeagueAssignments,
   scrapeTeamRasterAssignments,
@@ -11,6 +12,10 @@ import {
   type TeamRasterAssignmentRow
 } from "./clicktt-assignments.js";
 import { buildSeasonModel, buildSeasonModelFromAssignments } from "./model.js";
+import {
+  downloadNuligaRosterExport,
+  type NuligaRosterExportOptions
+} from "./nuliga-export.js";
 import { extractPdfText } from "./pdf-text.js";
 import type { SeasonModel } from "../types.js";
 
@@ -90,7 +95,8 @@ function interesting(link: LinkSnapshot): boolean {
 
 export async function scrapeSeasonModel(
   fixedRows: TeamRasterAssignmentRow[] = [],
-  publicLeagueUrl?: string
+  publicLeagueUrl?: string,
+  rosterExport?: NuligaRosterExportOptions
 ): Promise<SeasonModel> {
   const config = loadConfig();
   const browser = await chromium.launch({
@@ -109,6 +115,9 @@ export async function scrapeSeasonModel(
 
   try {
     await login(page, config.baseUrl, config.username, config.password);
+    if (rosterExport) {
+      await downloadNuligaRosterExport(page, outDir, rosterExport);
+    }
     const assignmentRows = await scrapeTeamRasterAssignments(page);
     const assignmentClubNames = new Set(
       assignmentRows.map((row) =>
@@ -187,11 +196,13 @@ export async function scrapeSeasonModel(
       wishFilesByUrl.set(row.wishUrl, wish);
     }
     if (modelRows.length > 0) {
-      return await buildSeasonModelFromAssignments(
+      const model = await buildSeasonModelFromAssignments(
         modelRows,
         wishFilesByUrl,
         fixedRows
       );
+      await writeRasterDownloadBundle(outDir);
+      return model;
     }
 
     queue.push(page.url());
@@ -251,7 +262,9 @@ export async function scrapeSeasonModel(
       );
     }
 
-    return await buildSeasonModel(wishes, groups);
+    const model = await buildSeasonModel(wishes, groups);
+    await writeRasterDownloadBundle(outDir);
+    return model;
   } finally {
     await context.close();
     await browser.close();

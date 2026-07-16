@@ -55,16 +55,25 @@ function applyPins(model: SeasonModel, pins: string[]): void {
 async function ingest(argv: minimist.ParsedArgs): Promise<void> {
   const out = String(argv.out ?? "reports/raster/model.json");
   const wishPaths = [...values(argv.wishes), ...values(argv._)];
-  const fixedRows = typeof argv.fixed === "string" ? await readAssignmentTable(argv.fixed) : [];
+  const fixedRows =
+    typeof argv.fixed === "string" ? await readAssignmentTable(argv.fixed) : [];
   const model = argv["from-clicktt"]
-    ? await scrapeSeasonModel(fixedRows, typeof argv["public-league"] === "string" ? argv["public-league"] : undefined)
+    ? await scrapeSeasonModel(
+        fixedRows,
+        typeof argv["public-league"] === "string"
+          ? argv["public-league"]
+          : undefined,
+        rosterExportOptions(argv)
+      )
     : await buildSeasonModel(wishPaths, String(argv.groups ?? ""));
   if (typeof argv.capacity === "string") {
     applyCapacityRows(model, await readCapacityTable(argv.capacity));
   }
   await writeJson(out, model);
   if (typeof argv.current === "string" && argv["from-clicktt"]) {
-    const currentRows = await readAssignmentTable("reports/raster/team-raster-assignment.json").catch(() => []);
+    const currentRows = await readAssignmentTable(
+      "reports/raster/team-raster-assignment.json"
+    ).catch(() => []);
     const current = assignmentFromRows(model, currentRows);
     await writeJson(argv.current, current);
     const review = String(argv.review ?? "reports/raster/review-input.csv");
@@ -161,7 +170,11 @@ async function run(): Promise<void> {
       "review",
       "unmet",
       "capacity",
-      "public-league"
+      "public-league",
+      "roster-meisterschaft",
+      "roster-region",
+      "roster-season",
+      "roster-charset"
     ]
   });
   if (command === "ingest") return ingest(argv);
@@ -178,3 +191,28 @@ run().catch((error) => {
     ? 2
     : 1;
 });
+
+function rosterExportOptions(argv: minimist.ParsedArgs) {
+  const meisterschaft = stringArg(argv["roster-meisterschaft"]);
+  if (!meisterschaft) return undefined;
+  const region = stringArg(argv["roster-region"]);
+  const season = stringArg(argv["roster-season"]);
+  if (!region || !season) {
+    throw new Error(
+      "--roster-meisterschaft requires --roster-region and --roster-season"
+    );
+  }
+  return {
+    meisterschaft,
+    region,
+    season,
+    charset:
+      stringArg(argv["roster-charset"]) === "ISO-8859-15"
+        ? ("ISO-8859-15" as const)
+        : ("UTF-8" as const)
+  };
+}
+
+function stringArg(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}

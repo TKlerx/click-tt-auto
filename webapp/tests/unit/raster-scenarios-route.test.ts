@@ -110,9 +110,7 @@ describe("raster scenarios route", () => {
     prismaMock.scope.findFirst.mockImplementation((async (args: {
       where: { AND: [{ code: string }, unknown] };
     }) =>
-      args.where.AND[0].code === "OWL"
-        ? { id: "scope-owl" }
-        : null) as never);
+      args.where.AND[0].code === "OWL" ? { id: "scope-owl" } : null) as never);
 
     const response = await POST(
       new Request("http://localhost/api/raster/scenarios/compare", {

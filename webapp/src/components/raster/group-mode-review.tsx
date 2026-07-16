@@ -526,10 +526,7 @@ function candidateText(
     : "";
 }
 
-function statusLabel(
-  status: "include" | "exclude" | "",
-  missingTeams: number,
-) {
+function statusLabel(status: "include" | "exclude" | "", missingTeams: number) {
   if (status === "exclude") return "excluded, deferred";
   if (status === "include") return "included";
   return missingTeams > 0 ? "add wishes or exclude" : "undecided";

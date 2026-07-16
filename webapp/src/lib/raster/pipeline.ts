@@ -1,8 +1,11 @@
 import { execFile } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import type { TeamRasterAssignmentRow } from "../../../../src/raster/ingest/clicktt-assignments.js";
+import type { RosterCsvParseResult } from "../../../../src/raster/ingest/roster-csv.js";
 import type { WishParseResult } from "../../../../src/raster/ingest/wishes-pdf.js";
 import type { Assignment, SeasonModel } from "../../../../src/raster/types.js";
 
@@ -16,6 +19,9 @@ const ingestScrapeUrl = pathToFileURL(
 ).href;
 const ingestWishesPdfUrl = pathToFileURL(
   `${repoRoot}/src/raster/ingest/wishes-pdf.ts`,
+).href;
+const ingestRosterCsvUrl = pathToFileURL(
+  `${repoRoot}/src/raster/ingest/roster-csv.ts`,
 ).href;
 const scoreEvaluateUrl = pathToFileURL(
   `${repoRoot}/src/raster/score/evaluate.ts`,
@@ -67,6 +73,15 @@ async function parseWishesPdf(filePath: string): Promise<WishParseResult> {
   return runRasterTs<WishParseResult>(`
     const { parseWishesPdf } = await import(${JSON.stringify(ingestWishesPdfUrl)});
     emit(await parseWishesPdf(${JSON.stringify(filePath)}));
+  `);
+}
+
+async function parseRosterCsvBytes(
+  bytes: Buffer,
+): Promise<RosterCsvParseResult> {
+  return runRasterTs<RosterCsvParseResult>(`
+    const { parseRosterCsvBytes } = await import(${JSON.stringify(ingestRosterCsvUrl)});
+    emit(parseRosterCsvBytes(Uint8Array.from(${JSON.stringify([...bytes])})));
   `);
 }
 
@@ -158,7 +173,7 @@ async function scoreAssignment(
 async function runRasterTs<T>(code: string): Promise<T> {
   const command =
     process.platform === "win32" ? (process.env.ComSpec ?? "cmd.exe") : "pnpm";
-  const dir = await mkdtemp(`${repoRoot}/.tmp-raster-ts-`);
+  const dir = await mkdtemp(path.join(tmpdir(), "raster-ts-"));
   const scriptPath = `${dir}/run.ts`;
   await writeFile(
     scriptPath,
@@ -206,6 +221,7 @@ async function runRasterTs<T>(code: string): Promise<T> {
 
 export const rasterIngest = {
   parseCsvLine,
+  parseRosterCsvBytes,
   parseWishesPdf,
   readAssignmentTable,
   buildSeasonModelFromAssignments,

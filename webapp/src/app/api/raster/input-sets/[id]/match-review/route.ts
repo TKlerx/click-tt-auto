@@ -21,8 +21,9 @@ export async function GET(
   const records = await listMatchReviewState(context.inputSet.id);
   return NextResponse.json({
     records,
-    outstandingCount: records.filter((record) => record.status === "outstanding")
-      .length,
+    outstandingCount: records.filter(
+      (record) => record.status === "outstanding",
+    ).length,
   });
 }
 
@@ -49,7 +50,8 @@ export async function POST(
   );
   return NextResponse.json({
     records,
-    outstandingCount: records.filter((record) => record.status === "outstanding")
-      .length,
+    outstandingCount: records.filter(
+      (record) => record.status === "outstanding",
+    ).length,
   });
 }

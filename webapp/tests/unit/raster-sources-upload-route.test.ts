@@ -1,12 +1,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { zipSync } from "fflate";
 import { prismaMock } from "@/lib/__mocks__/db";
 import { Role, UserStatus } from "../../generated/prisma/enums";
 
-const { requireApiUser, saveFile, upsertRasterSource } = vi.hoisted(() => ({
-  requireApiUser: vi.fn(),
-  saveFile: vi.fn(),
-  upsertRasterSource: vi.fn(),
-}));
+const { requireApiUser, saveFile, importRasterRoster, upsertRasterSource } =
+  vi.hoisted(() => ({
+    requireApiUser: vi.fn(),
+    saveFile: vi.fn(),
+    importRasterRoster: vi.fn(),
+    upsertRasterSource: vi.fn(),
+  }));
 
 vi.mock("@/lib/db", () => ({
   prisma: prismaMock,
@@ -22,6 +25,7 @@ vi.mock("@/lib/file-storage", () => ({
 
 vi.mock("@/services/raster", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/services/raster")>()),
+  importRasterRoster,
   upsertRasterSource,
 }));
 
@@ -40,7 +44,11 @@ describe("raster source upload route", () => {
         status: UserStatus.ACTIVE,
       },
     });
-    prismaMock.scope.findFirst.mockResolvedValue({ id: "wttv" } as never);
+    prismaMock.scope.findFirst.mockResolvedValue({
+      id: "wttv",
+      code: "WTTV",
+      name: "Westdeutscher Tischtennis-Verband",
+    } as never);
     saveFile.mockResolvedValue("uploads/2026/07/source.pdf");
     upsertRasterSource.mockResolvedValue({ id: "source-1" });
 
@@ -76,7 +84,11 @@ describe("raster source upload route", () => {
         status: UserStatus.ACTIVE,
       },
     });
-    prismaMock.scope.findFirst.mockResolvedValue({ id: "owl" } as never);
+    prismaMock.scope.findFirst.mockResolvedValue({
+      id: "owl",
+      code: "OWL",
+      name: "Ostwestfalen/Lippe",
+    } as never);
     saveFile
       .mockResolvedValueOnce("uploads/2026/07/wishes-a.pdf")
       .mockResolvedValueOnce("uploads/2026/07/wishes-b.pdf");
@@ -125,7 +137,11 @@ describe("raster source upload route", () => {
         status: UserStatus.ACTIVE,
       },
     });
-    prismaMock.scope.findFirst.mockResolvedValue({ id: "owl" } as never);
+    prismaMock.scope.findFirst.mockResolvedValue({
+      id: "owl",
+      code: "OWL",
+      name: "Ostwestfalen/Lippe",
+    } as never);
 
     const formData = new FormData();
     formData.set("scopeCode", "OWL");
@@ -140,6 +156,175 @@ describe("raster source upload route", () => {
     );
 
     expect(response.status).toBe(422);
+    expect(saveFile).not.toHaveBeenCalled();
+    expect(upsertRasterSource).not.toHaveBeenCalled();
+  });
+
+  it("imports a roster CSV before recording the source", async () => {
+    requireApiUser.mockResolvedValue({
+      user: {
+        id: "scheduler-1",
+        role: Role.SCOPE_ADMIN,
+        status: UserStatus.ACTIVE,
+      },
+    });
+    prismaMock.scope.findFirst
+      .mockResolvedValueOnce({ id: "owl" } as never)
+      .mockResolvedValueOnce({
+        id: "owl",
+        code: "OWL",
+        name: "Ostwestfalen/Lippe",
+      } as never);
+    importRasterRoster.mockResolvedValue({
+      rosterId: "roster-1",
+      teams: 1,
+      clubs: 1,
+      groups: 1,
+      charset: "utf-8",
+    });
+    saveFile.mockResolvedValue("uploads/2026/07/roster.csv");
+    upsertRasterSource.mockResolvedValue({ id: "source-1" });
+
+    const formData = new FormData();
+    formData.set("scopeCode", "OWL");
+    formData.set("sourceType", "ROSTER_CSV");
+    formData.set(
+      "file",
+      new File(
+        [
+          [
+            "Region;Saison;Liga;Gruppe;VereinNr;VereinName;Altersklasse;MannschaftNr",
+            "Ostwestfalen/Lippe;2026/27;Liga;Gruppe;1;Club;Erwachsene;1",
+          ].join("\n"),
+        ],
+        "roster.csv",
+      ),
+    );
+
+    const response = await POST(
+      new Request("http://localhost/api/raster/sources/upload", {
+        method: "POST",
+        body: formData,
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    expect(importRasterRoster).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scopeId: "owl",
+        scopeCode: "OWL",
+        scopeName: "Ostwestfalen/Lippe",
+        importedById: "scheduler-1",
+      }),
+    );
+    expect(upsertRasterSource).toHaveBeenCalledWith({
+      scopeId: "owl",
+      season: "2026/27",
+      sourceType: "ROSTER_CSV",
+      sourceRef: "uploads/2026/07/roster.csv",
+      displayName: "roster.csv",
+      parsedJson: JSON.stringify({
+        rosterId: "roster-1",
+        teams: 1,
+        clubs: 1,
+        groups: 1,
+        charset: "utf-8",
+      }),
+    });
+  });
+
+  it("imports a complete raster bundle", async () => {
+    requireApiUser.mockResolvedValue({
+      user: {
+        id: "scheduler-1",
+        role: Role.SCOPE_ADMIN,
+        status: UserStatus.ACTIVE,
+      },
+    });
+    prismaMock.scope.findFirst
+      .mockResolvedValueOnce({ id: "owl" } as never)
+      .mockResolvedValueOnce({
+        id: "owl",
+        code: "OWL",
+        name: "Ostwestfalen/Lippe",
+      } as never);
+    importRasterRoster.mockResolvedValue({
+      rosterId: "roster-1",
+      teams: 1,
+      clubs: 1,
+      groups: 1,
+      charset: "utf-8",
+    });
+    saveFile
+      .mockResolvedValueOnce("uploads/roster.csv")
+      .mockResolvedValueOnce("uploads/wishes.pdf");
+    upsertRasterSource
+      .mockResolvedValueOnce({ id: "roster-source" })
+      .mockResolvedValueOnce({ id: "wish-source" });
+    const csv = [
+      "Region;Saison;Liga;Gruppe;VereinNr;VereinName;Altersklasse;MannschaftNr",
+      "Ostwestfalen/Lippe;2026/27;Liga;Gruppe;1;Club;Erwachsene;1",
+    ].join("\n");
+    const bundle = zipSync({
+      "roster.csv": new TextEncoder().encode(csv),
+      "wishes.pdf": new TextEncoder().encode("%PDF-1.4"),
+    });
+
+    const formData = new FormData();
+    formData.set("scopeCode", "OWL");
+    formData.set("sourceType", "RASTER_BUNDLE");
+    formData.set("file", new File([bundle], "bundle.zip"));
+
+    const response = await POST(
+      new Request("http://localhost/api/raster/sources/upload", {
+        method: "POST",
+        body: formData,
+      }),
+    );
+    const body = (await response.json()) as { sources: unknown[] };
+
+    expect(response.status).toBe(201);
+    expect(body.sources).toHaveLength(2);
+    expect(upsertRasterSource).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ sourceType: "WISHES_PDF" }),
+    );
+  });
+
+  it("rejects incomplete raster bundles without saving files", async () => {
+    requireApiUser.mockResolvedValue({
+      user: {
+        id: "scheduler-1",
+        role: Role.SCOPE_ADMIN,
+        status: UserStatus.ACTIVE,
+      },
+    });
+    prismaMock.scope.findFirst
+      .mockResolvedValueOnce({ id: "owl" } as never)
+      .mockResolvedValueOnce({
+        id: "owl",
+        code: "OWL",
+        name: "Ostwestfalen/Lippe",
+      } as never);
+    const bundle = zipSync({
+      "wishes.pdf": new TextEncoder().encode("%PDF-1.4"),
+    });
+
+    const formData = new FormData();
+    formData.set("scopeCode", "OWL");
+    formData.set("sourceType", "RASTER_BUNDLE");
+    formData.set("file", new File([bundle], "bundle.zip"));
+
+    const response = await POST(
+      new Request("http://localhost/api/raster/sources/upload", {
+        method: "POST",
+        body: formData,
+      }),
+    );
+    const body = (await response.json()) as { missing: string[] };
+
+    expect(response.status).toBe(422);
+    expect(body.missing).toContain("roster CSV");
     expect(saveFile).not.toHaveBeenCalled();
     expect(upsertRasterSource).not.toHaveBeenCalled();
   });

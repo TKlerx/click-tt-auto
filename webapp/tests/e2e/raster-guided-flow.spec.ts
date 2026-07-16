@@ -82,7 +82,9 @@ test("guided raster flow keeps exclusions provisional and easy to include", asyn
   await page.goto(
     `${appBasePath}/raster/run?scope=${scopeCode}&season=2026%2F27`,
   );
-  await expect(page.getByText(/provisional because excluded groups/)).toBeVisible();
+  await expect(
+    page.getByText(/provisional because excluded groups/),
+  ).toBeVisible();
   await expect(page.getByText(/exclusions/).first()).toBeVisible();
 
   await page.goto(

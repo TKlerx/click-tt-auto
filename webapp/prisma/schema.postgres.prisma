@@ -194,6 +194,11 @@ enum RasterMatchRecordType {
   TEAM
 }
 
+enum RosterCharset {
+  UTF8
+  ISO_8859_15
+}
+
 model User {
   id                            String                        @id @default(cuid())
   email                         String                        @unique
@@ -225,6 +230,7 @@ model User {
   rasterReviewDecisions         RasterReviewDecision[]        @relation("RasterReviewDecider")
   rasterMatchReviews            RasterMatchReview[]           @relation("RasterMatchReviewer")
   rasterManualAssignmentDrafts  RasterManualAssignmentDraft[] @relation("RasterManualAssignmentDraftCreator")
+  rasterTeamRosters             RasterTeamRoster[]            @relation("RasterTeamRosterImporter")
 }
 
 model Session {
@@ -287,6 +293,7 @@ model Scope {
   rasterInputSets      RasterInputSet[]
   rasterHallCapacities RasterHallCapacity[]
   rasterSnapshots      RasterSnapshot[]
+  rasterTeamRosters    RasterTeamRoster[]
 
   @@index([parentId])
 }
@@ -789,4 +796,36 @@ model RasterManualAssignmentDraft {
 
   @@index([inputSetId, updatedAt])
   @@index([createdById])
+}
+
+model RasterTeamRoster {
+  id           String             @id @default(cuid())
+  scopeId      String
+  season       String
+  sourceRegion String
+  sourceSeason String
+  charset      RosterCharset
+  importedById String
+  importedAt   DateTime           @default(now())
+  scope        Scope              @relation(fields: [scopeId], references: [id], onDelete: Restrict)
+  importedBy   User               @relation("RasterTeamRosterImporter", fields: [importedById], references: [id], onDelete: Restrict)
+  teams        RasterRosterTeam[]
+
+  @@index([scopeId, season, importedAt])
+}
+
+model RasterRosterTeam {
+  id            String           @id @default(cuid())
+  rosterId      String
+  vereinNr      String
+  vereinName    String
+  altersklasse  String
+  mannschaftNr  String
+  liga          String
+  gruppe        String
+  roster        RasterTeamRoster @relation(fields: [rosterId], references: [id], onDelete: Cascade)
+
+  @@unique([rosterId, vereinNr, altersklasse, mannschaftNr])
+  @@index([rosterId, vereinNr])
+  @@index([rosterId, gruppe])
 }

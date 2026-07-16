@@ -2,9 +2,16 @@ import { NextResponse } from "next/server";
 import { requireApiUser } from "@/lib/route-auth";
 import { assertRasterAccess } from "@/lib/raster/access";
 import { normalizeRasterSeason } from "@/lib/raster/season";
+import { rasterIngest } from "@/lib/raster/pipeline";
+import { isZip, readRasterBundle } from "@/lib/raster/bundle";
 import { prisma } from "@/lib/db";
 import { saveFile } from "@/lib/file-storage";
-import { upsertRasterSource } from "@/services/raster";
+import { importRasterRoster, upsertRasterSource } from "@/services/raster";
+
+type UploadScope = { id: string; code: string; name: string };
+type UploadSource = Awaited<ReturnType<typeof upsertRasterSource>>;
+
+const maxUploadBytes = 64 * 1024 * 1024;
 
 export async function POST(request: Request) {
   const auth = await requireApiUser(request);
@@ -25,12 +32,28 @@ export async function POST(request: Request) {
     );
   }
 
-  const access = await assertRasterAccess(auth.user, scopeCode, "admin");
+  const oversized = files.find((file) => file.size > maxUploadBytes);
+  if (oversized) {
+    return NextResponse.json(
+      {
+        error: `${oversized.name || "Uploaded file"} is larger than ${Math.round(maxUploadBytes / (1024 * 1024))} MB.`,
+      },
+      { status: 413 },
+    );
+  }
+
+  const isRosterSource = normalizeSourceType(sourceType) === "ROSTER_CSV";
+  const isBundleSource = normalizeSourceType(sourceType) === "RASTER_BUNDLE";
+  const access = await assertRasterAccess(
+    auth.user,
+    scopeCode,
+    isRosterSource || isBundleSource ? "scheduler" : "admin",
+  );
   if (access !== true) return access.error;
 
   const scope = await prisma.scope.findFirst({
     where: { OR: [{ code: scopeCode }, { name: scopeCode }] },
-    select: { id: true },
+    select: { id: true, code: true, name: true },
   });
   if (!scope) {
     return NextResponse.json({ error: "Scope not found" }, { status: 404 });
@@ -38,24 +61,19 @@ export async function POST(request: Request) {
 
   const sources = [];
   for (const file of files) {
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const expectedPdf = sourceType.toUpperCase().endsWith("_PDF");
-    if (expectedPdf && !isPdf(buffer)) {
-      return NextResponse.json(
-        { error: `${file.name || "Uploaded file"} is not a PDF.` },
-        { status: 422 },
-      );
-    }
-    const sourceRef = await saveFile(buffer, file.name || "source.bin");
-    sources.push(
-      await upsertRasterSource({
-        scopeId: scope.id,
-        season,
-        sourceType,
-        sourceRef,
-        displayName: sourceDisplayName(displayName, file, files.length),
-      }),
-    );
+    const result = await processUploadedFile({
+      file,
+      sourceType,
+      displayName,
+      fileCount: files.length,
+      isBundleSource,
+      isRosterSource,
+      scope,
+      season,
+      userId: auth.user.id,
+    });
+    if (result instanceof NextResponse) return result;
+    sources.push(...result);
   }
 
   return NextResponse.json(
@@ -67,10 +85,203 @@ export async function POST(request: Request) {
   );
 }
 
-function sourceDisplayName(displayName: string, file: File, fileCount: number) {
+function normalizeSourceType(sourceType: string) {
+  return sourceType.trim().toUpperCase();
+}
+
+async function processUploadedFile(params: {
+  file: File;
+  sourceType: string;
+  displayName: string;
+  fileCount: number;
+  isBundleSource: boolean;
+  isRosterSource: boolean;
+  scope: UploadScope;
+  season: string;
+  userId: string;
+}): Promise<UploadSource[] | NextResponse> {
+  const buffer = Buffer.from(await params.file.arrayBuffer());
+  if (params.isBundleSource || isZip(buffer)) {
+    return processBundle(buffer, params);
+  }
+  if (params.sourceType.toUpperCase().endsWith("_PDF") && !isPdf(buffer)) {
+    return NextResponse.json(
+      { error: `${params.file.name || "Uploaded file"} is not a PDF.` },
+      { status: 422 },
+    );
+  }
+  if (params.isRosterSource) {
+    try {
+      return [
+        await importRosterSource(
+          buffer,
+          params.file.name || "source.csv",
+          normalizeSourceType(params.sourceType),
+          params.displayName,
+          params.fileCount,
+          params.scope,
+          params.season,
+          params.userId,
+        ),
+      ];
+    } catch (error) {
+      return rosterError(error);
+    }
+  }
+  return [
+    await saveRasterSource(
+      buffer,
+      params.file.name || "source.bin",
+      params.sourceType,
+      params.displayName,
+      params.fileCount,
+      params.scope.id,
+      params.season,
+    ),
+  ];
+}
+
+async function processBundle(
+  buffer: Buffer,
+  params: {
+    displayName: string;
+    scope: UploadScope;
+    season: string;
+    userId: string;
+  },
+): Promise<UploadSource[] | NextResponse> {
+  const bundle = await readBundleOrError(buffer);
+  if (bundle instanceof NextResponse) return bundle;
+  if (bundle.missing.length || bundle.unrecognized.length) {
+    return NextResponse.json(
+      {
+        error: "Incomplete raster bundle",
+        missing: bundle.missing,
+        unrecognized: bundle.unrecognized,
+      },
+      { status: 422 },
+    );
+  }
+
+  const sources: UploadSource[] = [];
+  for (const entry of bundle.files) {
+    if (entry.kind === "roster") {
+      try {
+        sources.push(
+          await importRosterSource(
+            entry.bytes,
+            entry.name,
+            "ROSTER_CSV",
+            params.displayName,
+            bundle.files.length,
+            params.scope,
+            params.season,
+            params.userId,
+          ),
+        );
+      } catch (error) {
+        return rosterError(error);
+      }
+    } else {
+      sources.push(
+        await saveRasterSource(
+          entry.bytes,
+          entry.name,
+          "WISHES_PDF",
+          params.displayName,
+          bundle.files.length,
+          params.scope.id,
+          params.season,
+        ),
+      );
+    }
+  }
+  return sources;
+}
+
+async function readBundleOrError(buffer: Buffer) {
+  try {
+    return await readRasterBundle(buffer);
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Raster bundle could not be read.",
+      },
+      { status: 422 },
+    );
+  }
+}
+
+async function importRosterSource(
+  buffer: Buffer,
+  fileName: string,
+  sourceType: string,
+  displayName: string,
+  fileCount: number,
+  scope: UploadScope,
+  season: string,
+  userId: string,
+) {
+  const parsed = await rasterIngest.parseRosterCsvBytes(buffer);
+  const summary = await importRasterRoster({
+    scopeId: scope.id,
+    scopeCode: scope.code,
+    scopeName: scope.name,
+    season,
+    importedById: userId,
+    parsed,
+  });
+  const sourceRef = await saveFile(buffer, fileName);
+  return upsertRasterSource({
+    scopeId: scope.id,
+    season,
+    sourceType,
+    sourceRef,
+    displayName: sourceDisplayName(displayName, fileName, fileCount),
+    parsedJson: JSON.stringify(summary),
+  });
+}
+
+async function saveRasterSource(
+  buffer: Buffer,
+  fileName: string,
+  sourceType: string,
+  displayName: string,
+  fileCount: number,
+  scopeId: string,
+  season: string,
+) {
+  const sourceRef = await saveFile(buffer, fileName);
+  return upsertRasterSource({
+    scopeId,
+    season,
+    sourceType,
+    sourceRef,
+    displayName: sourceDisplayName(displayName, fileName, fileCount),
+  });
+}
+
+function rosterError(error: unknown) {
+  return NextResponse.json(
+    {
+      error: error instanceof Error ? error.message : "Roster import failed.",
+    },
+    { status: 422 },
+  );
+}
+
+function sourceDisplayName(
+  displayName: string,
+  file: File | string,
+  fileCount: number,
+) {
+  const fileName = typeof file === "string" ? file : file.name;
   if (displayName && fileCount === 1) return displayName;
-  if (displayName) return `${displayName} - ${file.name || "source"}`;
-  return file.name || "Uploaded source";
+  if (displayName) return `${displayName} - ${fileName || "source"}`;
+  return fileName || "Uploaded source";
 }
 
 function isPdf(buffer: Buffer) {
