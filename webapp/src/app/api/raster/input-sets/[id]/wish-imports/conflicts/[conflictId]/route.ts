@@ -9,10 +9,19 @@ import {
   RasterConflictDecision,
 } from "../../../../../../../../../generated/prisma/enums";
 
-const bodySchema = z.object({
-  decision: z.nativeEnum(RasterConflictDecision),
-  manualValue: wishJsonSchema.partial().optional(),
-});
+const bodySchema = z
+  .object({
+    decision: z.nativeEnum(RasterConflictDecision),
+    manualValue: wishJsonSchema.partial().optional(),
+  })
+  // Without a value, MANUAL would silently keep the existing wish and only
+  // relabel its origin, which is not a decision the reviewer asked for.
+  .refine(
+    (body) =>
+      body.decision !== RasterConflictDecision.MANUAL ||
+      (body.manualValue && Object.keys(body.manualValue).length > 0),
+    { message: "A manual decision requires a manual value", path: ["manualValue"] },
+  );
 
 export async function POST(
   request: Request,

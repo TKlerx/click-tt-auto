@@ -55,6 +55,13 @@ CREATE TABLE "RasterWishConflict" (
 );
 
 CREATE INDEX "RasterWish_reviewedById_idx" ON "RasterWish"("reviewedById");
+
+-- One active wish per (inputSetId, clubId, teamLabel). Split into two partial
+-- indexes because Postgres treats NULLs as distinct, so a plain unique index
+-- would let unlimited teamLabel IS NULL rows through -- exactly the duplicate
+-- the import path must not create. Prisma cannot express partial indexes, so
+-- schema.postgres.prisma declares a plain @@unique and `prisma migrate dev`
+-- will report drift against these; keep them and discard the generated fix.
 CREATE UNIQUE INDEX "RasterWish_inputSetId_clubId_teamLabel_key" ON "RasterWish"("inputSetId", "clubId", "teamLabel") WHERE "teamLabel" IS NOT NULL;
 CREATE UNIQUE INDEX "RasterWish_inputSetId_clubId_noTeamLabel_key" ON "RasterWish"("inputSetId", "clubId") WHERE "teamLabel" IS NULL;
 CREATE INDEX "RasterWishImportBatch_inputSetId_startedAt_idx" ON "RasterWishImportBatch"("inputSetId", "startedAt");
