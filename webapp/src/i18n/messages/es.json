@@ -378,15 +378,21 @@
   },
   "raster": {
     "wishImports": {
-      "conflicts": "Wish conflicts",
-      "decision": "Decision",
-      "keepExisting": "Keep existing",
-      "useImported": "Use imported",
-      "manualValue": "Manual value",
-      "unmatchedRows": "Unmatched rows",
-      "missingFromImport": "Missing from latest import",
-      "reviewImport": "Review import",
-      "noConflicts": "No unresolved wish conflicts"
+      "title": "Revisión de la importación de deseos",
+      "empty": "No hay elementos para revisar de la importación de deseos.",
+      "conflictCount": "{count, plural, one {# conflicto sin resolver} other {# conflictos sin resolver}}",
+      "current": "Actual",
+      "imported": "Importado",
+      "keepCurrent": "Mantener el actual",
+      "useImported": "Usar el importado",
+      "unmatchedCount": "{count, plural, one {# fila importada sin emparejar} other {# filas importadas sin emparejar}}",
+      "existingWishId": "ID del deseo existente",
+      "match": "Emparejar",
+      "missingCount": "{count, plural, one {# deseo activo ausente de las importaciones actuales} other {# deseos activos ausentes de las importaciones actuales}}",
+      "stillValid": "Sigue siendo válido",
+      "saving": "Guardando",
+      "saveFailed": "Error al guardar ({status})",
+      "hallLabel": "Pabellón {hall}"
     },
     "steps": {
       "import": "Import data",

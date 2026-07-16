@@ -5,9 +5,19 @@ const prisma = vi.hoisted(() => ({
   rasterInputSet: { update: vi.fn(), findUnique: vi.fn() },
   rasterTeamRoster: { findFirst: vi.fn() },
   rasterWishImportBatch: { create: vi.fn() },
-  rasterWish: { findMany: vi.fn(), create: vi.fn(), deleteMany: vi.fn() },
-  rasterImportedWishRow: { create: vi.fn() },
-  rasterWishConflict: { findFirst: vi.fn(), create: vi.fn() },
+  rasterWish: {
+    findMany: vi.fn(),
+    create: vi.fn(),
+    createManyAndReturn: vi.fn(),
+    deleteMany: vi.fn(),
+  },
+  rasterImportedWishRow: { create: vi.fn(), createManyAndReturn: vi.fn() },
+  rasterWishConflict: {
+    findFirst: vi.fn(),
+    findMany: vi.fn(),
+    create: vi.fn(),
+    createMany: vi.fn(),
+  },
 }));
 
 vi.mock("@/lib/db", () => ({ prisma }));
@@ -23,8 +33,14 @@ describe("roster matching integration", () => {
     });
     prisma.rasterWishImportBatch.create.mockResolvedValue({ id: "batch-1" });
     prisma.rasterWish.findMany.mockResolvedValue([]);
-    prisma.rasterWish.create.mockResolvedValue({ id: "wish-1" });
-    prisma.rasterImportedWishRow.create.mockResolvedValue({ id: "row-1" });
+    prisma.rasterWishConflict.findMany.mockResolvedValue([]);
+    prisma.rasterWish.createManyAndReturn.mockResolvedValue([
+      { id: "wish-1", clubId: "42706", teamLabel: "Erwachsene" },
+    ]);
+    prisma.rasterImportedWishRow.createManyAndReturn.mockResolvedValue([
+      { id: "row-1" },
+      { id: "row-2" },
+    ]);
   });
 
   it("resolves exact roster names and leaves roster non-matches unmatched", async () => {
@@ -70,8 +86,8 @@ describe("roster matching integration", () => {
 
     expect(result.unmatched).toBe(1);
     expect(prisma.rasterWish.deleteMany).not.toHaveBeenCalled();
-    expect(prisma.rasterWish.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ clubId: "42706" }),
+    expect(prisma.rasterWish.createManyAndReturn).toHaveBeenCalledWith({
+      data: [expect.objectContaining({ clubId: "42706" })],
     });
   });
 });

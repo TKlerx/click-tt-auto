@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { withBasePath } from "@/lib/base-path";
 import { BusyLabel } from "@/components/ui/busy-label";
@@ -39,6 +40,7 @@ export function WishImportReviewPanel({
   review: ReviewState;
   showMissing?: boolean;
 }) {
+  const t = useTranslations("raster.wishImports");
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [matches, setMatches] = useState<Record<string, string>>({});
@@ -57,7 +59,7 @@ export function WishImportReviewPanel({
         const payload = (await response.json().catch(() => ({}))) as {
           error?: string;
         };
-        setMessage(payload.error ?? `Save failed (${response.status})`);
+        setMessage(payload.error ?? t("saveFailed", { status: response.status }));
         return;
       }
       router.refresh();
@@ -74,7 +76,7 @@ export function WishImportReviewPanel({
   ) {
     return (
       <p className="rounded-lg border border-[var(--border)] bg-[var(--panel)] px-4 py-3 text-sm text-[var(--muted-foreground)]">
-        No wish import review items.
+        {t("empty")}
       </p>
     );
   }
@@ -82,13 +84,12 @@ export function WishImportReviewPanel({
   return (
     <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
       <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
-        Wish import review
+        {t("title")}
       </h2>
       {review.conflicts.length ? (
         <div className="mt-3 grid gap-2">
           <p className="text-sm text-[var(--muted-foreground)]">
-            {review.conflicts.length} unresolved conflict
-            {review.conflicts.length === 1 ? "" : "s"}.
+            {t("conflictCount", { count: review.conflicts.length })}
           </p>
           {review.conflicts.map((conflict) => (
             <div
@@ -97,8 +98,8 @@ export function WishImportReviewPanel({
             >
               <div className="font-medium">{label(conflict.wish)}</div>
               <div className="mt-2 grid gap-2 md:grid-cols-2">
-                <ValueBlock title="Current" wish={conflict.wish} />
-                <ValueBlock title="Imported" wish={conflict.importedRow} />
+                <ValueBlock title={t("current")} wish={conflict.wish} />
+                <ValueBlock title={t("imported")} wish={conflict.importedRow} />
               </div>
               {canEdit ? (
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -114,9 +115,9 @@ export function WishImportReviewPanel({
                     type="button"
                   >
                     {busy?.includes(conflict.id) ? (
-                      <BusyLabel label="Saving" />
+                      <BusyLabel label={t("saving")} />
                     ) : (
-                      "Keep current"
+                      t("keepCurrent")
                     )}
                   </button>
                   <button
@@ -130,7 +131,7 @@ export function WishImportReviewPanel({
                     }
                     type="button"
                   >
-                    Use imported
+                    {t("useImported")}
                   </button>
                 </div>
               ) : null}
@@ -141,8 +142,7 @@ export function WishImportReviewPanel({
       {review.unmatchedRows.length ? (
         <div className="mt-4 grid gap-2">
           <p className="text-sm text-[var(--muted-foreground)]">
-            {review.unmatchedRows.length} unmatched imported row
-            {review.unmatchedRows.length === 1 ? "" : "s"}.
+            {t("unmatchedCount", { count: review.unmatchedRows.length })}
           </p>
           {review.unmatchedRows.map((row) => (
             <div
@@ -160,7 +160,7 @@ export function WishImportReviewPanel({
                         [row.id]: event.target.value,
                       }))
                     }
-                    placeholder="Existing wish id"
+                    placeholder={t("existingWishId")}
                     value={matches[row.id] ?? ""}
                   />
                   <button
@@ -174,7 +174,7 @@ export function WishImportReviewPanel({
                     }
                     type="button"
                   >
-                    Match
+                    {t("match")}
                   </button>
                 </div>
               ) : null}
@@ -185,9 +185,7 @@ export function WishImportReviewPanel({
       {visibleMissing.length ? (
         <div className="mt-4 grid gap-2">
           <p className="text-sm text-[var(--muted-foreground)]">
-            {visibleMissing.length} active wish
-            {visibleMissing.length === 1 ? "" : "es"} missing from current
-            imports.
+            {t("missingCount", { count: visibleMissing.length })}
           </p>
           {visibleMissing.map((wish) => (
             <div
@@ -206,7 +204,7 @@ export function WishImportReviewPanel({
                   }
                   type="button"
                 >
-                  Still valid
+                  {t("stillValid")}
                 </button>
               ) : null}
             </div>
@@ -221,29 +219,29 @@ export function WishImportReviewPanel({
 }
 
 function ValueBlock({ title, wish }: { title: string; wish: WishValues }) {
+  const t = useTranslations("raster.wishImports");
   return (
     <div className="rounded-md border border-[var(--border)] p-2">
       <div className="text-xs font-medium uppercase tracking-[0.12em] text-[var(--muted-foreground)]">
         {title}
       </div>
-      <div className="mt-1">{formatWish(wish)}</div>
+      <div className="mt-1">
+        {[
+          wish.homeWeekday,
+          wish.startTime,
+          wish.hall ? t("hallLabel", { hall: wish.hall }) : "",
+          // Spielwoche and Rasterzahl are domain codes, identical in every locale.
+          wish.spielwochePref ? `W${wish.spielwochePref}` : "",
+          wish.requestedRasterzahl ? `RZ ${wish.requestedRasterzahl}` : "",
+          wish.notes,
+        ]
+          .filter(Boolean)
+          .join(", ")}
+      </div>
     </div>
   );
 }
 
 function label(wish: Pick<WishValues, "clubName" | "teamLabel">) {
   return `${wish.clubName}${wish.teamLabel ? ` ${wish.teamLabel}` : ""}`;
-}
-
-function formatWish(wish: WishValues) {
-  return [
-    wish.homeWeekday,
-    wish.startTime,
-    wish.hall ? `Gym ${wish.hall}` : "",
-    wish.spielwochePref ? `W${wish.spielwochePref}` : "",
-    wish.requestedRasterzahl ? `RZ ${wish.requestedRasterzahl}` : "",
-    wish.notes,
-  ]
-    .filter(Boolean)
-    .join(", ");
 }
