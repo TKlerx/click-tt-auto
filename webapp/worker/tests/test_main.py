@@ -139,8 +139,8 @@ class WorkerTests(unittest.TestCase):
         with closing(sqlite3.connect(self.db_path)) as connection:
             connection.execute(
                 """
-                INSERT INTO RasterInputSet (id, district, seasonModelJson)
-                VALUES ('input-1', 'OWL', ?)
+                INSERT INTO RasterInputSet (id, scopeId, seasonModelJson)
+                VALUES ('input-1', 'scope-owl', ?)
                 """,
                 (json.dumps(season_model),),
             )
@@ -210,8 +210,8 @@ class WorkerTests(unittest.TestCase):
         with closing(sqlite3.connect(self.db_path)) as connection:
             connection.execute(
                 """
-                INSERT INTO RasterInputSet (id, district, seasonModelJson)
-                VALUES ('input-1', 'OWL', '{}')
+                INSERT INTO RasterInputSet (id, scopeId, seasonModelJson)
+                VALUES ('input-1', 'scope-owl', '{}')
                 """
             )
             connection.execute(
@@ -941,7 +941,7 @@ class WorkerTests(unittest.TestCase):
                 """
                 CREATE TABLE RasterInputSet (
                     id TEXT PRIMARY KEY,
-                    district TEXT NOT NULL,
+                    scopeId TEXT NOT NULL,
                     seasonModelJson TEXT
                 )
                 """
@@ -950,7 +950,7 @@ class WorkerTests(unittest.TestCase):
                 """
                 CREATE TABLE RasterHallCapacity (
                     id TEXT PRIMARY KEY,
-                    district TEXT NOT NULL,
+                    scopeId TEXT NOT NULL,
                     clubId TEXT NOT NULL,
                     hall TEXT NOT NULL,
                     weekday TEXT NOT NULL,
@@ -963,7 +963,7 @@ class WorkerTests(unittest.TestCase):
                 CREATE TABLE RasterSnapshot (
                     id TEXT PRIMARY KEY,
                     runId TEXT,
-                    district TEXT NOT NULL,
+                    scopeId TEXT NOT NULL,
                     origin TEXT NOT NULL,
                     optimality TEXT NOT NULL,
                     stale INTEGER NOT NULL DEFAULT 0,

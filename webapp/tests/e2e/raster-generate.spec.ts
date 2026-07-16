@@ -182,8 +182,9 @@ test("admin can generate and review a raster snapshot", async ({ page }) => {
   );
   expect(conflictsResponse.status()).toBe(200);
 
-  await page.goto(`${appBasePath}/raster?${rasterQuery}`);
-  await page.getByRole("link", { name: "Results" }).click();
+  // Results moved to their own snapshot page in 005; there is no "Results" nav
+  // link any more, so open the snapshot the run just produced.
+  await page.goto(`${appBasePath}/raster/snapshots/${snapshotId}`);
   await expect(
     page.getByRole("heading", { name: "Raster results" }),
   ).toBeVisible();

@@ -104,7 +104,7 @@ def process_raster_run(store: JobStore, job: BackgroundJob) -> dict[str, object]
         _exclude_unplanned_groups(
             _parse_json_object(context["seasonModelJson"], "seasonModelJson")
         ),
-        store.list_raster_hall_capacities(str(context["district"])),
+        store.list_raster_hall_capacities(str(context["scopeId"])),
     )
     settings = _parse_json_object(context.get("settings") or "{}", "settings")
     solver_output = _solve_raster_model(model, settings)
@@ -116,7 +116,7 @@ def process_raster_run(store: JobStore, job: BackgroundJob) -> dict[str, object]
         }
     snapshot_id = store.persist_raster_run_result(
         run_id=run_id,
-        district=str(context["district"]),
+        scope_id=str(context["scopeId"]),
         model=model,
         solver_output=solver_output,
     )
