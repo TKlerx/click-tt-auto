@@ -2,6 +2,7 @@ import { Role } from "../../../../../generated/prisma/enums";
 import { CapacityTable } from "@/components/raster/capacity/capacity-table";
 import { InferCapacitiesButton } from "@/components/raster/capacity/infer-capacities-button";
 import { MatchReviewPanel } from "@/components/raster/match-review-panel";
+import { WishImportReviewPanel } from "@/components/raster/wish-import-review-panel";
 import { listMatchReviewState } from "@/lib/raster/match-review";
 import { FixedScheduleNumbersForm } from "@/components/raster/input-set-actions";
 import {
@@ -12,6 +13,7 @@ import { ManualAssignmentForm } from "@/components/raster/manual-assignment-form
 import {
   listHallCapacities,
   listInputSets,
+  listWishImportReview,
   reviewHallCapacitiesForInputSet,
 } from "@/services/raster";
 import {
@@ -40,12 +42,13 @@ export default async function RasterReviewPage({
     listHallCapacities(context.scope.id),
   ]);
   const inputSet = inputSets[0] ?? null;
-  const [capacityReview, matchReview] = inputSet
+  const [capacityReview, matchReview, wishImportReview] = inputSet
     ? await Promise.all([
         reviewHallCapacitiesForInputSet(inputSet.id),
         listMatchReviewState(inputSet.id),
+        listWishImportReview(inputSet.id),
       ])
-    : [null, []];
+    : [null, [], null];
   const canEdit = context.user.role === Role.PLATFORM_ADMIN;
 
   if (!inputSet) {
@@ -76,6 +79,16 @@ export default async function RasterReviewPage({
           inputSetId={inputSet.id}
           records={matchReview}
         />
+        {wishImportReview ? (
+          <div className="mt-3">
+            <WishImportReviewPanel
+              canEdit={canEdit}
+              inputSetId={inputSet.id}
+              review={wishImportReview}
+              showMissing
+            />
+          </div>
+        ) : null}
         <GroupPlanningReview
           groups={extractPlanningGroups(
             inputSet.id,

@@ -377,6 +377,17 @@
     }
   },
   "raster": {
+    "wishImports": {
+      "conflicts": "Wish conflicts",
+      "decision": "Decision",
+      "keepExisting": "Keep existing",
+      "useImported": "Use imported",
+      "manualValue": "Manual value",
+      "unmatchedRows": "Unmatched rows",
+      "missingFromImport": "Missing from latest import",
+      "reviewImport": "Review import",
+      "noConflicts": "No unresolved wish conflicts"
+    },
     "steps": {
       "import": "Import data",
       "review": "Review data",

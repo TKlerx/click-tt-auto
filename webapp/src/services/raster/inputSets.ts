@@ -9,7 +9,7 @@ import type { WishParseResult } from "../../../../src/raster/ingest/wishes-pdf.j
 import { extractRelationalWishes } from "../../../../src/raster/ingest/wishes-freetext.js";
 import type { Team } from "../../../../src/raster/types.js";
 import { listRasterSourcesForScope } from "./sources";
-import { replaceParsedWishes } from "./wishes";
+import { importParsedWishes } from "./wishes";
 import { reviewHallCapacitiesForInputSet } from "./capacity";
 
 type SeasonGroup = {
@@ -191,7 +191,13 @@ function validateSeasonModelGroups(model: SeasonModelInput) {
 export async function syncInputSetSourceCaches(inputSetId: string) {
   const inputSet = await prisma.rasterInputSet.findUnique({
     where: { id: inputSetId },
-    select: { id: true, scopeId: true, season: true, seasonModelJson: true },
+    select: {
+      id: true,
+      scopeId: true,
+      season: true,
+      seasonModelJson: true,
+      createdById: true,
+    },
   });
   if (!inputSet) return null;
 
@@ -216,6 +222,24 @@ export async function syncInputSetSourceCaches(inputSetId: string) {
     groupAssignmentJson?: string;
     wishesJson?: string;
   } = {};
+  if (wishSources.length) {
+    data.wishesJson = JSON.stringify({
+      sources: wishSources.map((source, index) => ({
+        sourceId: source.id,
+        sourceRef: source.sourceRef,
+        parsed: parsedWishes[index],
+      })),
+    });
+    await importParsedWishes({
+      inputSetId: inputSet.id,
+      startedById: inputSet.createdById,
+      parsed: {
+        clubs: parsedWishes.flatMap((parsed) => parsed.clubs ?? []),
+        teams: parsedWishes.flatMap((parsed) => parsed.teams ?? []),
+        warnings: parsedWishes.flatMap((parsed) => parsed.warnings ?? []),
+      },
+    });
+  }
   if (groupSource?.parsedJson) {
     data.groupAssignmentJson = groupSource.parsedJson;
     const parsed = JSON.parse(groupSource.parsedJson) as {
@@ -241,7 +265,7 @@ export async function syncInputSetSourceCaches(inputSetId: string) {
           supportedAssignments,
         );
       alignParsedWishClubIds(model, parsedWishes);
-      applyParsedWishDetails(model, parsedWishes);
+      await applyActiveWishDetails(model, inputSet.id, parsedWishes);
       const existingReviews = groupReviewsByKey(inputSet.seasonModelJson);
       model.groups = model.groups.map((group) => ({
         ...group,
@@ -260,20 +284,6 @@ export async function syncInputSetSourceCaches(inputSetId: string) {
       );
       data.seasonModelJson = JSON.stringify(model);
     }
-  }
-  if (wishSources.length) {
-    data.wishesJson = JSON.stringify({
-      sources: wishSources.map((source, index) => ({
-        sourceId: source.id,
-        sourceRef: source.sourceRef,
-        parsed: parsedWishes[index],
-      })),
-    });
-    await replaceParsedWishes(inputSet.id, {
-      clubs: parsedWishes.flatMap((parsed) => parsed.clubs ?? []),
-      teams: parsedWishes.flatMap((parsed) => parsed.teams ?? []),
-      warnings: parsedWishes.flatMap((parsed) => parsed.warnings ?? []),
-    });
   }
   if (!data.groupAssignmentJson && !data.wishesJson && !data.seasonModelJson) {
     return inputSet;
@@ -313,8 +323,9 @@ function alignParsedWishClubIds(
   }
 }
 
-function applyParsedWishDetails(
+async function applyActiveWishDetails(
   model: SeasonModelWithClubs,
+  inputSetId: string,
   parsedWishes: WishParseResult[],
 ) {
   const wishClubById = new Map(
@@ -332,10 +343,14 @@ function applyParsedWishDetails(
     };
   });
 
+  const activeWishes = await prisma.rasterWish.findMany({
+    where: { inputSetId },
+  });
   const wishTeamByClubAndLabel = new Map(
-    parsedWishes
-      .flatMap((parsed) => parsed.teams ?? [])
-      .map((team) => [teamIdentityKey(team.clubId, team.label), team]),
+    activeWishes.map((wish) => [
+      teamIdentityKey(wish.clubId, wish.teamLabel ?? undefined),
+      wish,
+    ]),
   );
   model.teams = (model.teams ?? []).map((team) => {
     const wishTeam = wishTeamByClubAndLabel.get(
@@ -344,17 +359,18 @@ function applyParsedWishDetails(
     if (!wishTeam) return team;
     return {
       ...team,
-      homeWeekday: wishTeam.homeWeekday,
-      hall: wishTeam.hall,
+      homeWeekday: wishTeam.homeWeekday.toLowerCase(),
+      ...(wishTeam.hall ? { hall: wishTeam.hall } : {}),
       ...(wishTeam.startTime ? { startTime: wishTeam.startTime } : {}),
       ...(wishTeam.spielwochePref
         ? { spielwochePref: wishTeam.spielwochePref }
         : {}),
       ...(wishTeam.requestedRasterzahl
-        ? { requestedRasterzahl: wishTeam.requestedRasterzahl }
+        ? { requestedRasterzahl: JSON.parse(wishTeam.requestedRasterzahl) }
         : {}),
+      wishMatchId: wishTeam.id,
       wishMatchSource: team.wishMatchSource ?? "auto",
-      confidence: wishTeam.confidence,
+      confidence: wishTeam.confidence === "OK" ? "ok" : "review",
       capacityRelevant: true,
     };
   });

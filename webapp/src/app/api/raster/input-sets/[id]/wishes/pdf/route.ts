@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 import { logRasterAudit } from "@/lib/raster/audit";
 import { rasterIngest } from "@/lib/raster/pipeline";
 import { requireRasterInputSet } from "@/lib/raster/route-context";
-import { replaceParsedWishes } from "@/services/raster";
+import { importParsedWishes } from "@/services/raster";
 import { AuditAction } from "../../../../../../../../generated/prisma/enums";
 
 export async function POST(
@@ -40,7 +40,12 @@ export async function POST(
         { status: 422 },
       );
     }
-    const result = await replaceParsedWishes(context.inputSet.id, parsed);
+    const result = await importParsedWishes({
+      inputSetId: context.inputSet.id,
+      startedById: context.user.id,
+      parsed,
+      sourceFile: file.name || "wishes.pdf",
+    });
     await logRasterAudit({
       action: AuditAction.RASTER_INPUT_UPLOADED,
       actorId: context.user.id,
@@ -51,11 +56,18 @@ export async function POST(
         inputType: "wishes_pdf",
         fileName: file.name || "wishes.pdf",
         count: result.count,
+        conflicts: result.conflicts,
+        added: result.added,
+        unmatched: result.unmatched,
         warningCount: parsed.warnings.length,
       },
     });
     return NextResponse.json({
       count: result.count,
+      batchId: result.batchId,
+      conflicts: result.conflicts,
+      added: result.added,
+      unmatched: result.unmatched,
       warnings: parsed.warnings,
     });
   } finally {
