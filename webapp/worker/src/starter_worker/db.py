@@ -354,7 +354,7 @@ class JobStore:
                 connection.row_factory = sqlite3.Row
                 row = connection.execute(
                     """
-                    SELECT run.id, run.status, run.settings, input.district, input.seasonModelJson
+                    SELECT run.id, run.status, run.settings, input.scopeId, input.seasonModelJson
                     FROM RasterOptimizationRun run
                     JOIN RasterInputSet input ON input.id = run.inputSetId
                     WHERE run.id = ?
@@ -369,7 +369,7 @@ class JobStore:
             with connection.cursor() as cursor:
                 cursor.execute(
                     """
-                    SELECT run.id, run.status, run.settings, input.district, input."seasonModelJson"
+                    SELECT run.id, run.status, run.settings, input."scopeId", input."seasonModelJson"
                     FROM "RasterOptimizationRun" run
                     JOIN "RasterInputSet" input ON input.id = run."inputSetId"
                     WHERE run.id = %s
@@ -405,7 +405,7 @@ class JobStore:
                 raise ValueError(f"Raster run {run_id} not found")
             return str(row[0])
 
-    def list_raster_hall_capacities(self, district: str) -> list[dict[str, Any]]:
+    def list_raster_hall_capacities(self, scope_id: str) -> list[dict[str, Any]]:
         if self._is_sqlite:
             with closing(self._sqlite_conn()) as connection:
                 connection.row_factory = sqlite3.Row
@@ -413,9 +413,9 @@ class JobStore:
                     """
                     SELECT clubId, hall, weekday, capacity
                     FROM RasterHallCapacity
-                    WHERE district = ?
+                    WHERE scopeId = ?
                     """,
-                    (district,),
+                    (scope_id,),
                 ).fetchall()
                 return [dict(row) for row in rows]
 
@@ -425,9 +425,9 @@ class JobStore:
                     """
                     SELECT "clubId", hall, weekday, capacity
                     FROM "RasterHallCapacity"
-                    WHERE district = %s
+                    WHERE "scopeId" = %s
                     """,
-                    (district,),
+                    (scope_id,),
                 )
                 rows = cursor.fetchall()
             connection.commit()
@@ -437,7 +437,7 @@ class JobStore:
         self,
         *,
         run_id: str,
-        district: str,
+        scope_id: str,
         model: dict[str, Any],
         solver_output: dict[str, Any],
     ) -> str:
@@ -462,14 +462,14 @@ class JobStore:
                 connection.execute(
                     """
                     INSERT INTO RasterSnapshot (
-                        id, runId, district, origin, optimality, stale, totalConflicts,
+                        id, runId, scopeId, origin, optimality, stale, totalConflicts,
                         totalExcess, maxExcess, affectedClubs, objectiveBreakdown, createdAt
                     ) VALUES (?, ?, ?, 'GENERATED', ?, 0, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
                     """,
                     (
                         snapshot_id,
                         run_id,
-                        district,
+                        scope_id,
                         optimality,
                         len(overages),
                         total_excess,
@@ -519,14 +519,14 @@ class JobStore:
                 cursor.execute(
                     """
                     INSERT INTO "RasterSnapshot" (
-                        id, "runId", district, origin, optimality, stale, "totalConflicts",
+                        id, "runId", "scopeId", origin, optimality, stale, "totalConflicts",
                         "totalExcess", "maxExcess", "affectedClubs", "objectiveBreakdown", "createdAt"
                     ) VALUES (%s, %s, %s, 'GENERATED', %s, false, %s, %s, %s, %s, %s, NOW())
                     """,
                     (
                         snapshot_id,
                         run_id,
-                        district,
+                        scope_id,
                         optimality,
                         len(overages),
                         total_excess,

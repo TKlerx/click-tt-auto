@@ -83,6 +83,7 @@ ENV APP_BUILD_ID=$APP_BUILD_ID
 ENV APP_BUILT_AT=$APP_BUILT_AT
 COPY --from=builder /repo/webapp/.next/standalone ./
 COPY --from=builder /repo/webapp/.next/static ./.next/static
+COPY --from=builder /repo/src/raster /src/raster
 COPY --from=builder /repo/webapp/generated ./generated
 COPY --from=builder /repo/webapp/package.json ./package.json
 RUN rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/pnpm /usr/local/bin/pnpx \

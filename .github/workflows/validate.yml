@@ -42,6 +42,9 @@ jobs:
     env:
       BASE_PATH: /app-starter
       E2E_BASE_PATH: /app-starter
+      # Must match the port in AUTH_BASE_URL: playwright.config.ts otherwise
+      # serves on its own default while auth expects this one.
+      E2E_PORT: "3290"
       AUTH_BASE_URL: http://localhost:3290/app-starter
       BETTERAUTH_SECRET: ci-betterauth-secret-for-playwright-tests-only
       DATABASE_URL: postgresql://starter:starter_e2e_password@localhost:45432/business_app_starter_e2e_test
@@ -117,3 +120,21 @@ jobs:
       - name: Test
         working-directory: webapp
         run: pnpm test
+
+      - name: Install Playwright browsers
+        working-directory: webapp
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: E2E
+        working-directory: webapp
+        run: pnpm run test:e2e
+
+      - name: Upload E2E traces
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: playwright-traces
+          # trace: "retain-on-failure" in playwright.config.ts writes traces here.
+          path: webapp/test-results
+          if-no-files-found: ignore
+          retention-days: 7
