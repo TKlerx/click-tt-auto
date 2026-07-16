@@ -106,7 +106,7 @@ Guidelines:
 ```
 
 Playwright E2E defaults to a local PostgreSQL container named
-`click-tt-e2e-postgres` on host port `55432`. The E2E setup script
+`click-tt-e2e-postgres` on host port `45432`. The E2E setup script
 creates or starts that container, ensures the `business_app_starter_e2e_test`
 database exists, resets that database, seeds the initial admin, and runs the app
 with the Postgres Prisma schema. Use a separate database such as

@@ -5,7 +5,7 @@ const normalizedBasePath = process.env.E2E_BASE_PATH ?? "/app-starter";
 const authBaseUrl = `http://localhost:${port}${normalizedBasePath}`;
 const databaseUrl =
   process.env.DATABASE_URL ??
-  "postgresql://starter:starter_e2e_password@localhost:55432/business_app_starter_e2e_test";
+  "postgresql://starter:starter_e2e_password@localhost:45432/business_app_starter_e2e_test";
 const reuseExistingServer = process.env.E2E_REUSE_SERVER === "1";
 
 process.env.E2E_PORT = String(port);
