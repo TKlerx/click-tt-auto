@@ -1,5 +1,7 @@
+name: click-tt
+
 x-app-image: &app-image
-  image: ${APP_IMAGE_NAME:-business-app-starter}:latest
+  image: ${APP_IMAGE_NAME:-click-tt-app}:latest
   build:
     context: ..
     dockerfile: webapp/Dockerfile.app
@@ -12,7 +14,7 @@ x-app-image: &app-image
       APP_BUILT_AT: ${APP_BUILT_AT:-unknown}
 
 x-migrate-image: &migrate-image
-  image: ${MIGRATE_IMAGE_NAME:-business-app-starter-migrate}:latest
+  image: ${MIGRATE_IMAGE_NAME:-click-tt-migrate}:latest
   build:
     context: ..
     dockerfile: webapp/Dockerfile.app
@@ -25,7 +27,7 @@ x-migrate-image: &migrate-image
       APP_BUILT_AT: ${APP_BUILT_AT:-unknown}
 
 x-common-env: &common-env
-  AUTH_BASE_URL: ${AUTH_BASE_URL:-http://localhost:3270}
+  AUTH_BASE_URL: ${AUTH_BASE_URL:-http://localhost:3287}
   APP_BUILD_ID: ${APP_BUILD_ID:-docker-compose}
   APP_BUILT_AT: ${APP_BUILT_AT:-unknown}
   APP_ENVIRONMENT: ${APP_ENVIRONMENT:-local}
@@ -103,7 +105,7 @@ services:
     environment:
       <<: *migration-env
       NODE_ENV: "production"
-      PORT: "3270"
+      PORT: "3287"
     networks: [internal]
     volumes:
       - uploads_data:/app/uploads
@@ -129,12 +131,12 @@ services:
     environment:
       <<: *app-env
       NODE_ENV: "production"
-      PORT: "3270"
+      PORT: "3287"
     networks: [internal]
     volumes:
       - uploads_data:/app/uploads
     ports:
-      - "${PORT:-3270}:3270"
+      - "${PORT:-3287}:3287"
     restart: unless-stopped
     depends_on:
       postgres:
@@ -146,10 +148,10 @@ services:
       file:*) echo 'Docker Compose requires a PostgreSQL APP_DATABASE_URL in .env.docker or .env. SQLite file URLs are not allowed here.' >&2; exit 1 ;;
       '') echo 'Docker Compose requires APP_DATABASE_URL to be set in .env.docker or .env.' >&2; exit 1 ;;
       esac
-      && node server.js"
+      && node webapp/server.js"
 
   worker:
-    image: ${WORKER_IMAGE_NAME:-business-app-starter-worker}:latest
+    image: ${WORKER_IMAGE_NAME:-click-tt-worker}:latest
     build:
       context: ..
       dockerfile: webapp/Dockerfile.worker
@@ -180,4 +182,6 @@ networks:
 
 volumes:
   postgres_data:
+    name: webapp_postgres_data
   uploads_data:
+    name: webapp_uploads_data

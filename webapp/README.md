@@ -168,7 +168,7 @@ That guide covers:
 
 - building `starterctl`
 - local PAT-based configuration
-- smoke testing against `http://localhost:3270`
+- smoke testing against `http://localhost:3287`
 - manual cross-platform builds
 - GoReleaser snapshot packaging
 

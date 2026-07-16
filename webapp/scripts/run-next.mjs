@@ -10,7 +10,7 @@ if (!command || !["dev", "start"].includes(command)) {
   process.exit(1);
 }
 
-const port = process.env.PORT ?? "3270";
+const port = process.env.PORT ?? "3287";
 const basePath = normalizeBasePath(process.env.BASE_PATH ?? "");
 
 if (command === "dev") {

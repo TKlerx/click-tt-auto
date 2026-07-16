@@ -36,7 +36,7 @@ ENV APP_VERSION=$APP_VERSION
 ENV APP_REVISION=$APP_REVISION
 ENV APP_BUILD_ID=$APP_BUILD_ID
 ENV APP_BUILT_AT=$APP_BUILT_AT
-ENV AUTH_BASE_URL=http://localhost:3270
+ENV AUTH_BASE_URL=http://localhost:3287
 ENV BETTER_AUTH_SECRET=docker-build-secret-change-me-at-least-32-characters
 ENV APP_DATABASE_URL=postgresql://starter:starter@localhost:5432/business_app_starter
 ENV DATABASE_URL=postgresql://starter:starter@localhost:5432/business_app_starter
@@ -75,7 +75,7 @@ LABEL org.opencontainers.image.revision=$APP_REVISION
 LABEL org.opencontainers.image.created=$APP_BUILT_AT
 LABEL org.opencontainers.image.source="https://github.com/TKlerx/webapp-template"
 ENV NODE_ENV=production
-ENV PORT=3270
+ENV PORT=3287
 ENV HOSTNAME=0.0.0.0
 ENV APP_VERSION=$APP_VERSION
 ENV APP_REVISION=$APP_REVISION
@@ -93,5 +93,5 @@ RUN rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/pnpm /usr/local/b
     && mkdir -p /app/uploads /data \
     && chown -R nextjs:nodejs /app /data
 USER nextjs
-EXPOSE 3270
-CMD ["node", "server.js"]
+EXPOSE 3287
+CMD ["node", "webapp/server.js"]
