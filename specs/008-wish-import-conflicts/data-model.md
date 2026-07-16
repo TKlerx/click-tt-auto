@@ -57,6 +57,7 @@ One parsed candidate from a batch. Never active on its own.
 | `matchedWishId` | `String?` | The active wish it pairs with (FR-003a). **Null = unmatched** — manual matching, not a new wish |
 | parsed fields | | `clubId`, `clubName`, `teamLabel`, `homeWeekday`, `hall`, `startTime`, `spielwochePref`, `requestedRasterzahl`, `notes` — the shape being proposed |
 | `valueFingerprint` | `String` | Normalised hash of the proposed values. What a decision is remembered against (R-403) |
+| `createdWish` | `Boolean @default(false)` | This row is the one that brought `matchedWish` into existence. What "added by the latest import" means (FR-011) — scoping it to the batch is why that filter empties instead of standing at the whole roster forever |
 
 **Indexes**: `@@index([batchId])`, `@@index([matchedWishId])`.
 
@@ -74,7 +75,8 @@ One difference between an active wish and an imported row (FR-003).
 | `importedRowId` | `String` | FK to `RasterImportedWishRow`, `onDelete: Cascade` |
 | `differingFields` | `String` | Which fields differ. Display, not logic |
 | `decision` | `RasterConflictDecision?` | `KEEP_EXISTING`, `USE_IMPORTED`, `MANUAL` — null while unresolved |
-| `decidedValueJson` | `String?` | The chosen values when `MANUAL` |
+| `previousValueJson` | `String?` | The wish as it stood when the decision was taken. FR-010 asks for the *previous* value, and `USE_IMPORTED` overwrites the wish in place, so without this snapshot the value the decision replaced is gone |
+| `decidedValueJson` | `String?` | The chosen values |
 | `decidedById` / `decidedAt` | nullable | |
 
 **Uniqueness**: `@@unique([wishId, importedRowId])`.  

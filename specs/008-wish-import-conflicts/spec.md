@@ -7,6 +7,11 @@
 
 ## Clarifications
 
+### Session 2026-07-16
+
+- Q: FR-011 names four filter categories, but the spec defines only two of them. What is an "added wish", and what is an "accepted/no-op match"? → A: **Added** is what the *latest import batch* brought into existence, recorded per imported row. The rejected reading — every imported wish with no review timestamp — is the entire roster on a fresh input set (404 teams for OWL 2026/27), and nothing in the review can mark such a wish reviewed, so the count would never fall. **Accepted/no-op** is a single filter holding both conflicts already decided and rows of the latest import that paired with a wish and raised no conflict: neither asks the reviewer for anything, so neither earns its own place.
+- Q: A wish nobody edited by hand differs from a re-parsed source — the club moved its own start time. Is that the same kind of conflict as one that would undo an admin's correction? → A: It still raises a conflict, because an active wish is protected regardless of whether it was previously reviewed (FR-001a). But it is **not the same thing to look at**. Presenting both identically hides the case this feature exists for among routine ones: the reviewer cannot see which conflicts threaten their own work. The review separates them by the wish's origin — a value an admin set by hand, versus a value that came from the source and has nothing manual at stake.
+
 ### Session 2026-07-15
 
 - Q: Today wishes are rebuilt from all registered sources on every sync — do they stop being derived state? → A: Yes. Wishes become **owned**: a source's first parse seeds them, and after that nothing automated ever rewrites an active wish. Every difference is proposed for review, whether or not anyone previously edited the row. This matches the existing Assumption that "existing wish" means the active wish "regardless of whether it was previously reviewed", and it removes the need for an "was this edited?" flag.
@@ -124,7 +129,11 @@ As a district admin, I want wishes already in the system but missing from the la
 - **FR-009**: Unresolved import conflicts MUST NOT block validation or optimizer runs. The active wish is well-defined at all times, so a run with unresolved conflicts uses exactly the values "keep existing" would have chosen — its inputs are valid, not broken.
 - **FR-009a**: A run started with unresolved conflicts MUST record that fact on the run, consistent with feature 006's coverage record (its FR-030 to FR-038), so the result states what was outstanding when it ran.
 - **FR-010**: The system MUST preserve an audit trail of import decisions, including source, previous value, imported value, chosen value, actor, and time.
-- **FR-011**: The conflict review UI MUST support filtering to unresolved conflicts, added wishes, missing-from-import wishes, and accepted/no-op matches.
+- **FR-011**: The conflict review UI MUST support filtering to unresolved conflicts, added wishes, missing-from-import wishes, and accepted/no-op matches, where:
+  - **added wishes** are the wishes the latest import batch brought into existence (FR-005) — not every imported wish nobody has reviewed, which on a fresh input set is the whole roster and never shrinks;
+  - **accepted/no-op matches** are conflicts already decided (FR-004) together with rows of the latest import that paired with a wish and raised no conflict; they share one filter because neither wants a decision;
+  - **unresolved conflicts** are as defined by FR-003/FR-004, and **missing-from-import wishes** by FR-007a/b.
+- **FR-011a**: The review MUST distinguish a conflict that would undo a manual correction from one where the source value itself changed, and MUST allow filtering to each. Both still require a decision — FR-001a protects the active wish regardless of whether it was previously reviewed — but only the first puts the reviewer's own work at risk, and it is the case FR-002 exists to stop. Presenting them identically leaves it hidden among routine ones.
 - **FR-012**: The system MUST leave existing active wishes unchanged if an import fails parsing or matching.
 
 ### Key Entities *(include if feature involves data)*
