@@ -222,23 +222,9 @@ export async function syncInputSetSourceCaches(inputSetId: string) {
     groupAssignmentJson?: string;
     wishesJson?: string;
   } = {};
+  let importedWishes = false;
   if (wishSources.length) {
-    data.wishesJson = JSON.stringify({
-      sources: wishSources.map((source, index) => ({
-        sourceId: source.id,
-        sourceRef: source.sourceRef,
-        parsed: parsedWishes[index],
-      })),
-    });
-    await importParsedWishes({
-      inputSetId: inputSet.id,
-      startedById: inputSet.createdById,
-      parsed: {
-        clubs: parsedWishes.flatMap((parsed) => parsed.clubs ?? []),
-        teams: parsedWishes.flatMap((parsed) => parsed.teams ?? []),
-        warnings: parsedWishes.flatMap((parsed) => parsed.warnings ?? []),
-      },
-    });
+    data.wishesJson = stringifyWishSources(wishSources, parsedWishes);
   }
   if (groupSource?.parsedJson) {
     data.groupAssignmentJson = groupSource.parsedJson;
@@ -265,6 +251,15 @@ export async function syncInputSetSourceCaches(inputSetId: string) {
           supportedAssignments,
         );
       alignParsedWishClubIds(model, parsedWishes);
+      if (wishSources.length) {
+        data.wishesJson = stringifyWishSources(wishSources, parsedWishes);
+        await importParsedWishes({
+          inputSetId: inputSet.id,
+          startedById: inputSet.createdById,
+          parsed: mergeParsedWishes(parsedWishes),
+        });
+        importedWishes = true;
+      }
       await applyActiveWishDetails(model, inputSet.id, parsedWishes);
       const existingReviews = groupReviewsByKey(inputSet.seasonModelJson);
       model.groups = model.groups.map((group) => ({
@@ -285,6 +280,13 @@ export async function syncInputSetSourceCaches(inputSetId: string) {
       data.seasonModelJson = JSON.stringify(model);
     }
   }
+  if (wishSources.length && !importedWishes) {
+    await importParsedWishes({
+      inputSetId: inputSet.id,
+      startedById: inputSet.createdById,
+      parsed: mergeParsedWishes(parsedWishes),
+    });
+  }
   if (!data.groupAssignmentJson && !data.wishesJson && !data.seasonModelJson) {
     return inputSet;
   }
@@ -292,6 +294,27 @@ export async function syncInputSetSourceCaches(inputSetId: string) {
   return prisma.rasterInputSet.update({
     where: { id: inputSet.id },
     data,
+  });
+}
+
+function mergeParsedWishes(parsedWishes: WishParseResult[]): WishParseResult {
+  return {
+    clubs: parsedWishes.flatMap((parsed) => parsed.clubs ?? []),
+    teams: parsedWishes.flatMap((parsed) => parsed.teams ?? []),
+    warnings: parsedWishes.flatMap((parsed) => parsed.warnings ?? []),
+  };
+}
+
+function stringifyWishSources(
+  wishSources: { id: string; sourceRef: string; parsedJson?: string | null }[],
+  parsedWishes: WishParseResult[],
+) {
+  return JSON.stringify({
+    sources: wishSources.map((source, index) => ({
+      sourceId: source.id,
+      sourceRef: source.sourceRef,
+      parsed: parsedWishes[index],
+    })),
   });
 }
 
