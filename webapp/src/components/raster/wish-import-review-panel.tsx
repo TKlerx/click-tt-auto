@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { withBasePath } from "@/lib/base-path";
+import { partitionConflicts } from "@/lib/raster/wish-conflicts";
 import { BusyLabel } from "@/components/ui/busy-label";
 
 type WishValues = {
@@ -18,13 +19,17 @@ type WishValues = {
   notes: string | null;
 };
 
+type Conflict = {
+  id: string;
+  // MANUAL means an admin set this value by hand, so the import is proposing to
+  // undo their work. IMPORTED means the source itself moved.
+  wish: WishValues & { origin: string };
+  importedRow: WishValues;
+  differingFields: string;
+};
+
 type ReviewState = {
-  conflicts: {
-    id: string;
-    wish: WishValues;
-    importedRow: WishValues;
-    differingFields: string;
-  }[];
+  conflicts: Conflict[];
   unmatchedRows: (WishValues & { id: string })[];
   addedWishes: (WishValues & { id: string })[];
   settledMatches: {
@@ -39,7 +44,8 @@ type ReviewState = {
 
 const FILTERS = [
   "all",
-  "conflicts",
+  "overwrites",
+  "sourceChanged",
   "added",
   "unmatched",
   "missing",
@@ -89,6 +95,8 @@ export function WishImportReviewPanel({
   }
 
   const visibleMissing = showMissing ? review.missingWishes : [];
+  const { overwrites: overwriteConflicts, sourceChanged: sourceConflicts } =
+    partitionConflicts(review.conflicts);
   const counts: Record<Filter, number> = {
     all:
       review.conflicts.length +
@@ -96,7 +104,8 @@ export function WishImportReviewPanel({
       review.unmatchedRows.length +
       review.settledMatches.length +
       visibleMissing.length,
-    conflicts: review.conflicts.length,
+    overwrites: overwriteConflicts.length,
+    sourceChanged: sourceConflicts.length,
     added: review.addedWishes.length,
     unmatched: review.unmatchedRows.length,
     missing: visibleMissing.length,
@@ -134,58 +143,25 @@ export function WishImportReviewPanel({
           </button>
         ))}
       </div>
-      {shows("conflicts") && review.conflicts.length ? (
-        <div className="mt-3 grid gap-2">
-          <p className="text-sm text-[var(--muted-foreground)]">
-            {t("conflictCount", { count: review.conflicts.length })}
-          </p>
-          {review.conflicts.map((conflict) => (
-            <div
-              className="rounded-md border border-[var(--border)] px-3 py-2 text-sm"
-              key={conflict.id}
-            >
-              <div className="font-medium">{label(conflict.wish)}</div>
-              <div className="mt-2 grid gap-2 md:grid-cols-2">
-                <ValueBlock title={t("current")} wish={conflict.wish} />
-                <ValueBlock title={t("imported")} wish={conflict.importedRow} />
-              </div>
-              {canEdit ? (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button
-                    className="h-8 rounded-md border border-[var(--border)] px-2 text-xs font-medium"
-                    disabled={busy !== null}
-                    onClick={() =>
-                      void post(
-                        `/api/raster/input-sets/${inputSetId}/wish-imports/conflicts/${conflict.id}`,
-                        { decision: "KEEP_EXISTING" },
-                      )
-                    }
-                    type="button"
-                  >
-                    {busy?.includes(conflict.id) ? (
-                      <BusyLabel label={t("saving")} />
-                    ) : (
-                      t("keepCurrent")
-                    )}
-                  </button>
-                  <button
-                    className="h-8 rounded-md border border-[var(--border)] px-2 text-xs font-medium"
-                    disabled={busy !== null}
-                    onClick={() =>
-                      void post(
-                        `/api/raster/input-sets/${inputSetId}/wish-imports/conflicts/${conflict.id}`,
-                        { decision: "USE_IMPORTED" },
-                      )
-                    }
-                    type="button"
-                  >
-                    {t("useImported")}
-                  </button>
-                </div>
-              ) : null}
-            </div>
-          ))}
-        </div>
+      {shows("overwrites") && overwriteConflicts.length ? (
+        <ConflictList
+          busy={busy}
+          canEdit={canEdit}
+          conflicts={overwriteConflicts}
+          heading={t("overwritesCount", { count: overwriteConflicts.length })}
+          inputSetId={inputSetId}
+          post={post}
+        />
+      ) : null}
+      {shows("sourceChanged") && sourceConflicts.length ? (
+        <ConflictList
+          busy={busy}
+          canEdit={canEdit}
+          conflicts={sourceConflicts}
+          heading={t("sourceChangedCount", { count: sourceConflicts.length })}
+          inputSetId={inputSetId}
+          post={post}
+        />
       ) : null}
       {shows("added") && review.addedWishes.length ? (
         <div className="mt-4 grid gap-2">
@@ -298,6 +274,70 @@ export function WishImportReviewPanel({
         <p className="mt-2 text-sm text-[var(--muted-foreground)]">{message}</p>
       ) : null}
     </section>
+  );
+}
+
+function ConflictList({
+  busy,
+  canEdit,
+  conflicts,
+  heading,
+  inputSetId,
+  post,
+}: {
+  busy: string | null;
+  canEdit: boolean;
+  conflicts: Conflict[];
+  heading: string;
+  inputSetId: string;
+  post: (path: string, body?: unknown) => Promise<void>;
+}) {
+  const t = useTranslations("raster.wishImports");
+  const decide = (conflictId: string, decision: string) =>
+    void post(
+      `/api/raster/input-sets/${inputSetId}/wish-imports/conflicts/${conflictId}`,
+      { decision },
+    );
+  return (
+    <div className="mt-3 grid gap-2">
+      <p className="text-sm text-[var(--muted-foreground)]">{heading}</p>
+      {conflicts.map((conflict) => (
+        <div
+          className="rounded-md border border-[var(--border)] px-3 py-2 text-sm"
+          key={conflict.id}
+        >
+          <div className="font-medium">{label(conflict.wish)}</div>
+          <div className="mt-2 grid gap-2 md:grid-cols-2">
+            <ValueBlock title={t("current")} wish={conflict.wish} />
+            <ValueBlock title={t("imported")} wish={conflict.importedRow} />
+          </div>
+          {canEdit ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                className="h-8 rounded-md border border-[var(--border)] px-2 text-xs font-medium"
+                disabled={busy !== null}
+                onClick={() => decide(conflict.id, "KEEP_EXISTING")}
+                type="button"
+              >
+                {busy?.includes(conflict.id) ? (
+                  <BusyLabel label={t("saving")} />
+                ) : (
+                  t("keepCurrent")
+                )}
+              </button>
+              <button
+                className="h-8 rounded-md border border-[var(--border)] px-2 text-xs font-medium"
+                disabled={busy !== null}
+                onClick={() => decide(conflict.id, "USE_IMPORTED")}
+                type="button"
+              >
+                {t("useImported")}
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ))}
+    </div>
   );
 }
 

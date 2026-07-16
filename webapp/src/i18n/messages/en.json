@@ -380,7 +380,6 @@
     "wishImports": {
       "title": "Wish import review",
       "empty": "No wish import review items.",
-      "conflictCount": "{count, plural, one {# unresolved conflict} other {# unresolved conflicts}}",
       "current": "Current",
       "imported": "Imported",
       "keepCurrent": "Keep current",
@@ -396,16 +395,19 @@
       "filterLabel": "Filter review items",
       "filter": {
         "all": "All",
-        "conflicts": "Conflicts",
         "added": "Added",
         "unmatched": "Unmatched",
         "missing": "Missing",
-        "settled": "Settled"
+        "settled": "Settled",
+        "overwrites": "Overwrites your edit",
+        "sourceChanged": "Source changed"
       },
       "addedCount": "{count, plural, one {# added wish, not yet reviewed} other {# added wishes, not yet reviewed}}",
       "settledCount": "{count, plural, one {# settled match} other {# settled matches}}",
       "noopMatch": "No change",
-      "acceptedMatch": "Decided: {decision}"
+      "acceptedMatch": "Decided: {decision}",
+      "overwritesCount": "{count, plural, one {# import would undo your edit} other {# imports would undo your edits}}",
+      "sourceChangedCount": "{count, plural, one {# wish changed at the source} other {# wishes changed at the source}}"
     },
     "steps": {
       "import": "Import data",

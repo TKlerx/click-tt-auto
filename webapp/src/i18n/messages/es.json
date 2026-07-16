@@ -380,7 +380,6 @@
     "wishImports": {
       "title": "Revisión de la importación de deseos",
       "empty": "No hay elementos para revisar de la importación de deseos.",
-      "conflictCount": "{count, plural, one {# conflicto sin resolver} other {# conflictos sin resolver}}",
       "current": "Actual",
       "imported": "Importado",
       "keepCurrent": "Mantener el actual",
@@ -396,16 +395,19 @@
       "filterLabel": "Filtrar elementos de revisión",
       "filter": {
         "all": "Todos",
-        "conflicts": "Conflictos",
         "added": "Añadidos",
         "unmatched": "Sin emparejar",
         "missing": "Ausentes",
-        "settled": "Resueltos"
+        "settled": "Resueltos",
+        "overwrites": "Sobrescribe tu cambio",
+        "sourceChanged": "La fuente cambió"
       },
       "addedCount": "{count, plural, one {# deseo añadido, aún sin revisar} other {# deseos añadidos, aún sin revisar}}",
       "settledCount": "{count, plural, one {# emparejamiento resuelto} other {# emparejamientos resueltos}}",
       "noopMatch": "Sin cambios",
-      "acceptedMatch": "Decidido: {decision}"
+      "acceptedMatch": "Decidido: {decision}",
+      "overwritesCount": "{count, plural, one {# importación desharía tu cambio} other {# importaciones desharían tus cambios}}",
+      "sourceChangedCount": "{count, plural, one {# deseo cambió en la fuente} other {# deseos cambiaron en la fuente}}"
     },
     "steps": {
       "import": "Import data",
