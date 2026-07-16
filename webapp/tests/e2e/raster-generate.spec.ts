@@ -15,8 +15,10 @@ import {
   seedRasterSource,
 } from "./helpers/db";
 
-const district = "OWL";
-const scope = { code: district, name: "Ostwestfalen-Lippe" };
+const scopeCode = "OWL";
+const season = "2026/27";
+const scope = { code: scopeCode, name: "Ostwestfalen-Lippe" };
+const rasterQuery = `scope=${scopeCode}&season=${encodeURIComponent(season)}`;
 
 test("OWL raster page shows inherited WTTV sources without refreshing them on reload", async ({
   page,
@@ -55,7 +57,7 @@ test("OWL raster page shows inherited WTTV sources without refreshing them on re
   await loginWithPassword(page, email, password);
   await expectOnDashboard(page);
 
-  await page.goto(`${appBasePath}/raster?district=${district}`);
+  await page.goto(`${appBasePath}/raster?${rasterQuery}`);
   await expect(page.getByText(sourceName)).toBeVisible();
   expect(refreshRequests).toEqual([]);
 
@@ -84,7 +86,7 @@ test("admin can generate and review a raster snapshot", async ({ page }) => {
   const inputSetResponse = await page.request.post(
     `${appBasePath}/api/raster/input-sets`,
     {
-      data: { district, name: `E2E generated ${suffix}` },
+      data: { scope: scopeCode, season, name: `E2E generated ${suffix}` },
     },
   );
   expect(inputSetResponse.status()).toBe(201);
@@ -119,9 +121,13 @@ test("admin can generate and review a raster snapshot", async ({ page }) => {
   );
   expect(wishesResponse.status()).toBe(200);
 
-  await page.goto(`${appBasePath}/raster?district=${district}`);
+  // Address the step directly: /raster redirects to whatever step readiness
+  // picks, which depends on state other tests leave behind.
+  await page.goto(`${appBasePath}/raster/run?${rasterQuery}`);
+  // The run step shows the scope's input set without naming it, so assert the
+  // step rather than the name the pre-005 single page used to render.
   await expect(
-    page.getByText(`E2E generated ${suffix}`, { exact: true }),
+    page.getByRole("heading", { name: "Run optimizer" }),
   ).toBeVisible();
   await page
     .getByRole("button", { name: "Infer missing capacities" })
@@ -134,7 +140,7 @@ test("admin can generate and review a raster snapshot", async ({ page }) => {
   await expect(page.getByText(/Run queued/)).toBeVisible();
 
   const runListResponse = await page.request.get(
-    `${appBasePath}/api/raster/input-sets?district=${district}`,
+    `${appBasePath}/api/raster/input-sets?${rasterQuery}`,
   );
   expect(runListResponse.status()).toBe(200);
   const runList = (await runListResponse.json()) as {
@@ -176,7 +182,7 @@ test("admin can generate and review a raster snapshot", async ({ page }) => {
   );
   expect(conflictsResponse.status()).toBe(200);
 
-  await page.goto(`${appBasePath}/raster?district=${district}`);
+  await page.goto(`${appBasePath}/raster?${rasterQuery}`);
   await page.getByRole("link", { name: "Results" }).click();
   await expect(
     page.getByRole("heading", { name: "Raster results" }),
@@ -202,9 +208,7 @@ test("admin can use the guided source workflow", async ({ page }) => {
 
   await loginWithPassword(page, email, password);
   await expectOnDashboard(page);
-  await page.goto(
-    `${appBasePath}/raster?district=${district}&season=2026%2F27`,
-  );
+  await page.goto(`${appBasePath}/raster/import?${rasterQuery}`);
 
   await page.getByText("Advanced: register external source").click();
   await page
@@ -281,7 +285,7 @@ test("admin can score and compare manual raster scenarios", async ({
   const inputSetResponse = await page.request.post(
     `${appBasePath}/api/raster/input-sets`,
     {
-      data: { district, name: `E2E manual ${suffix}` },
+      data: { scope: scopeCode, season, name: `E2E manual ${suffix}` },
     },
   );
   expect(inputSetResponse.status()).toBe(201);
