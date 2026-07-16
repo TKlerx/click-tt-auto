@@ -703,15 +703,18 @@ model RasterImportedWishRow {
 }
 
 model RasterWishConflict {
-  id               String                  @id @default(cuid())
-  inputSetId       String
-  wishId           String
-  importedRowId    String
-  differingFields  String
-  decision         RasterConflictDecision?
-  decidedValueJson String?
-  decidedById      String?
-  decidedAt        DateTime?
+  id                String                 @id @default(cuid())
+  inputSetId        String
+  wishId            String
+  importedRowId     String
+  differingFields   String
+  decision          RasterConflictDecision?
+  // The wish as it stood when the decision was taken, so the audit trail keeps
+  // the value the decision replaced (FR-010), not just the one it chose.
+  previousValueJson String?
+  decidedValueJson  String?
+  decidedById       String?
+  decidedAt         DateTime?
   inputSet         RasterInputSet          @relation(fields: [inputSetId], references: [id], onDelete: Cascade)
   wish             RasterWish              @relation(fields: [wishId], references: [id], onDelete: Cascade)
   importedRow      RasterImportedWishRow   @relation(fields: [importedRowId], references: [id], onDelete: Cascade)

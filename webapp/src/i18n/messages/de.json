@@ -392,7 +392,20 @@
       "stillValid": "Weiterhin gültig",
       "saving": "Wird gespeichert",
       "saveFailed": "Speichern fehlgeschlagen ({status})",
-      "hallLabel": "Halle {hall}"
+      "hallLabel": "Halle {hall}",
+      "filterLabel": "Einträge filtern",
+      "filter": {
+        "all": "Alle",
+        "conflicts": "Konflikte",
+        "added": "Hinzugefügt",
+        "unmatched": "Nicht zugeordnet",
+        "missing": "Fehlend",
+        "settled": "Erledigt"
+      },
+      "addedCount": "{count, plural, one {# hinzugefügter Wunsch, noch nicht geprüft} other {# hinzugefügte Wünsche, noch nicht geprüft}}",
+      "settledCount": "{count, plural, one {# erledigte Zuordnung} other {# erledigte Zuordnungen}}",
+      "noopMatch": "Keine Änderung",
+      "acceptedMatch": "Entschieden: {decision}"
     },
     "steps": {
       "import": "Import data",

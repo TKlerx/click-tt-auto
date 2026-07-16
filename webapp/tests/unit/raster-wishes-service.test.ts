@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { prismaMock } from "@/lib/__mocks__/db";
-import { importParsedWishes } from "@/services/raster";
+import {
+  importParsedWishes,
+  listWishImportReview,
+  matchImportedWishRow,
+  resolveWishConflict,
+} from "@/services/raster";
 
 vi.mock("@/lib/db", () => ({
   prisma: prismaMock,
@@ -176,5 +181,122 @@ describe("raster wishes import service", () => {
     expect(second.conflicts).toBe(0);
     expect(second.noops).toBe(1);
     expect(prismaMock.rasterWishConflict.createMany).not.toHaveBeenCalled();
+  });
+
+  it("records the value a decision replaced, not just the one it chose", async () => {
+    prismaMock.$transaction.mockImplementation(async (callback) =>
+      callback(prismaMock),
+    );
+    prismaMock.rasterWishConflict.findFirst.mockResolvedValue({
+      id: "conflict-1",
+      wishId: "wish-1",
+      wish: {
+        id: "wish-1",
+        clubId: "club-a",
+        clubName: "Club A",
+        teamLabel: "I",
+        homeWeekday: "MONDAY",
+        hall: "1",
+        startTime: "19:30",
+        spielwochePref: null,
+        requestedRasterzahl: null,
+        notes: null,
+      },
+      importedRow: {
+        clubId: "club-a",
+        clubName: "Club A",
+        teamLabel: "I",
+        homeWeekday: "MONDAY",
+        hall: "1",
+        startTime: "19:00",
+        spielwochePref: null,
+        requestedRasterzahl: null,
+        notes: null,
+      },
+    } as never);
+    prismaMock.rasterWish.update.mockResolvedValue({ id: "wish-1" } as never);
+    prismaMock.rasterWishConflict.update.mockResolvedValue({
+      id: "conflict-1",
+    } as never);
+
+    await resolveWishConflict({
+      inputSetId: "input-1",
+      conflictId: "conflict-1",
+      actorId: "user-1",
+      decision: "USE_IMPORTED" as never,
+    });
+
+    const update = prismaMock.rasterWishConflict.update.mock.calls[0]?.[0] as {
+      data: { previousValueJson: string; decidedValueJson: string };
+    };
+    // The admin's 19:30 is what USE_IMPORTED overwrote; it must survive.
+    expect(JSON.parse(update.data.previousValueJson).startTime).toBe("19:30");
+    expect(JSON.parse(update.data.decidedValueJson).startTime).toBe("19:00");
+  });
+
+  it("pairs an unmatched row with an existing wish instead of duplicating it", async () => {
+    prismaMock.$transaction.mockImplementation(async (callback) =>
+      callback(prismaMock),
+    );
+    const importedRow = {
+      id: "row-1",
+      inputSetId: "input-1",
+      batch: { sourceKind: "PDF" },
+      clubId: "42706",
+      clubName: "SC GW Paderborn",
+      teamLabel: "I",
+      homeWeekday: "FRIDAY",
+      hall: "2",
+      startTime: "20:00",
+      spielwochePref: null,
+      requestedRasterzahl: null,
+      notes: null,
+      valueFingerprint: "fp-1",
+    };
+    prismaMock.rasterImportedWishRow.findFirst.mockResolvedValue(
+      importedRow as never,
+    );
+    // A wish for this team appeared after the row was flagged unmatched.
+    prismaMock.rasterWish.findFirst.mockResolvedValue({
+      id: "wish-existing",
+      clubId: "42706",
+      teamLabel: "I",
+      homeWeekday: "FRIDAY",
+      hall: "2",
+      startTime: "20:00",
+      spielwochePref: null,
+      requestedRasterzahl: null,
+      notes: null,
+    } as never);
+    prismaMock.rasterImportedWishRow.update.mockResolvedValue({
+      ...importedRow,
+      matchedWishId: "wish-existing",
+    } as never);
+
+    const row = await matchImportedWishRow({
+      inputSetId: "input-1",
+      rowId: "row-1",
+      actorId: "user-1",
+    });
+
+    expect(prismaMock.rasterWish.create).not.toHaveBeenCalled();
+    expect(row?.matchedWishId).toBe("wish-existing");
+  });
+
+  it("collapses repeated unmatched rows for the same team into one item", async () => {
+    prismaMock.rasterWishImportBatch.findMany.mockResolvedValue([] as never);
+    prismaMock.rasterWishConflict.findMany.mockResolvedValue([] as never);
+    prismaMock.rasterWish.findMany.mockResolvedValue([] as never);
+    prismaMock.rasterInputSet.findUnique.mockResolvedValue(null);
+    // The same ghost club re-imported on three separate runs.
+    prismaMock.rasterImportedWishRow.findMany.mockResolvedValue([
+      { id: "row-3", clubId: "ghost", teamLabel: "Erwachsene" },
+      { id: "row-2", clubId: "ghost", teamLabel: "Erwachsene" },
+      { id: "row-1", clubId: "ghost", teamLabel: " erwachsene " },
+    ] as never);
+
+    const review = await listWishImportReview("input-1");
+
+    expect(review.unmatchedRows.map((row) => row.id)).toEqual(["row-3"]);
   });
 });

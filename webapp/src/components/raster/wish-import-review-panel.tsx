@@ -26,8 +26,26 @@ type ReviewState = {
     differingFields: string;
   }[];
   unmatchedRows: (WishValues & { id: string })[];
+  addedWishes: (WishValues & { id: string })[];
+  settledMatches: {
+    id: string;
+    kind: "accepted" | "noop";
+    decision: string | null;
+    wish: WishValues;
+    importedRow: WishValues;
+  }[];
   missingWishes: (WishValues & { id: string })[];
 };
+
+const FILTERS = [
+  "all",
+  "conflicts",
+  "added",
+  "unmatched",
+  "missing",
+  "settled",
+] as const;
+type Filter = (typeof FILTERS)[number];
 
 export function WishImportReviewPanel({
   canEdit,
@@ -45,6 +63,8 @@ export function WishImportReviewPanel({
   const [busy, setBusy] = useState<string | null>(null);
   const [matches, setMatches] = useState<Record<string, string>>({});
   const [message, setMessage] = useState<string | null>(null);
+  const [filter, setFilter] = useState<Filter>("all");
+  const shows = (section: Filter) => filter === "all" || filter === section;
 
   async function post(path: string, body?: unknown) {
     setBusy(path);
@@ -69,11 +89,20 @@ export function WishImportReviewPanel({
   }
 
   const visibleMissing = showMissing ? review.missingWishes : [];
-  if (
-    !review.conflicts.length &&
-    !review.unmatchedRows.length &&
-    !visibleMissing.length
-  ) {
+  const counts: Record<Filter, number> = {
+    all:
+      review.conflicts.length +
+      review.addedWishes.length +
+      review.unmatchedRows.length +
+      review.settledMatches.length +
+      visibleMissing.length,
+    conflicts: review.conflicts.length,
+    added: review.addedWishes.length,
+    unmatched: review.unmatchedRows.length,
+    missing: visibleMissing.length,
+    settled: review.settledMatches.length,
+  };
+  if (!counts.all) {
     return (
       <p className="rounded-lg border border-[var(--border)] bg-[var(--panel)] px-4 py-3 text-sm text-[var(--muted-foreground)]">
         {t("empty")}
@@ -86,7 +115,26 @@ export function WishImportReviewPanel({
       <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
         {t("title")}
       </h2>
-      {review.conflicts.length ? (
+      <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label={t("filterLabel")}>
+        {FILTERS.filter(
+          (option) => option === "all" || option !== "missing" || showMissing,
+        ).map((option) => (
+          <button
+            aria-pressed={filter === option}
+            className={`h-8 rounded-md border px-2 text-xs font-medium ${
+              filter === option
+                ? "border-[var(--foreground)] text-[var(--foreground)]"
+                : "border-[var(--border)] text-[var(--muted-foreground)]"
+            }`}
+            key={option}
+            onClick={() => setFilter(option)}
+            type="button"
+          >
+            {t(`filter.${option}`)} ({counts[option]})
+          </button>
+        ))}
+      </div>
+      {shows("conflicts") && review.conflicts.length ? (
         <div className="mt-3 grid gap-2">
           <p className="text-sm text-[var(--muted-foreground)]">
             {t("conflictCount", { count: review.conflicts.length })}
@@ -139,7 +187,22 @@ export function WishImportReviewPanel({
           ))}
         </div>
       ) : null}
-      {review.unmatchedRows.length ? (
+      {shows("added") && review.addedWishes.length ? (
+        <div className="mt-4 grid gap-2">
+          <p className="text-sm text-[var(--muted-foreground)]">
+            {t("addedCount", { count: review.addedWishes.length })}
+          </p>
+          {review.addedWishes.map((wish) => (
+            <div
+              className="rounded-md border border-[var(--border)] px-3 py-2 text-sm"
+              key={wish.id}
+            >
+              <span className="font-medium">{label(wish)}</span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {shows("unmatched") && review.unmatchedRows.length ? (
         <div className="mt-4 grid gap-2">
           <p className="text-sm text-[var(--muted-foreground)]">
             {t("unmatchedCount", { count: review.unmatchedRows.length })}
@@ -182,7 +245,7 @@ export function WishImportReviewPanel({
           ))}
         </div>
       ) : null}
-      {visibleMissing.length ? (
+      {shows("missing") && visibleMissing.length ? (
         <div className="mt-4 grid gap-2">
           <p className="text-sm text-[var(--muted-foreground)]">
             {t("missingCount", { count: visibleMissing.length })}
@@ -207,6 +270,26 @@ export function WishImportReviewPanel({
                   {t("stillValid")}
                 </button>
               ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {shows("settled") && review.settledMatches.length ? (
+        <div className="mt-4 grid gap-2">
+          <p className="text-sm text-[var(--muted-foreground)]">
+            {t("settledCount", { count: review.settledMatches.length })}
+          </p>
+          {review.settledMatches.map((match) => (
+            <div
+              className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-[var(--border)] px-3 py-2 text-sm"
+              key={`${match.kind}-${match.id}`}
+            >
+              <span>{label(match.wish)}</span>
+              <span className="text-xs text-[var(--muted-foreground)]">
+                {match.kind === "noop"
+                  ? t("noopMatch")
+                  : t("acceptedMatch", { decision: match.decision ?? "" })}
+              </span>
             </div>
           ))}
         </div>

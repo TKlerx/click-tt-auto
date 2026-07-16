@@ -392,7 +392,20 @@
       "stillValid": "Sigue siendo válido",
       "saving": "Guardando",
       "saveFailed": "Error al guardar ({status})",
-      "hallLabel": "Pabellón {hall}"
+      "hallLabel": "Pabellón {hall}",
+      "filterLabel": "Filtrar elementos de revisión",
+      "filter": {
+        "all": "Todos",
+        "conflicts": "Conflictos",
+        "added": "Añadidos",
+        "unmatched": "Sin emparejar",
+        "missing": "Ausentes",
+        "settled": "Resueltos"
+      },
+      "addedCount": "{count, plural, one {# deseo añadido, aún sin revisar} other {# deseos añadidos, aún sin revisar}}",
+      "settledCount": "{count, plural, one {# emparejamiento resuelto} other {# emparejamientos resueltos}}",
+      "noopMatch": "Sin cambios",
+      "acceptedMatch": "Decidido: {decision}"
     },
     "steps": {
       "import": "Import data",

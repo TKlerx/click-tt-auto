@@ -244,25 +244,93 @@ async function importWishRows(params: {
 }
 
 export async function listWishImportReview(inputSetId: string) {
-  const [batches, conflicts, unmatchedRows, missingWishes] = await Promise.all([
-    prisma.rasterWishImportBatch.findMany({
-      where: { inputSetId },
-      orderBy: { startedAt: "desc" },
-      take: 10,
-      include: { _count: { select: { rows: true } } },
-    }),
-    prisma.rasterWishConflict.findMany({
-      where: { inputSetId, decision: null },
-      orderBy: { id: "asc" },
-      include: { wish: true, importedRow: true },
-    }),
-    prisma.rasterImportedWishRow.findMany({
-      where: { inputSetId, matchedWishId: null },
-      orderBy: { id: "asc" },
-    }),
-    listMissingWishes(inputSetId),
-  ]);
-  return { batches, conflicts, unmatchedRows, missingWishes };
+  const [batches, conflicts, allUnmatchedRows, addedWishes, decided, missingWishes] =
+    await Promise.all([
+      prisma.rasterWishImportBatch.findMany({
+        where: { inputSetId },
+        orderBy: { startedAt: "desc" },
+        take: 10,
+        include: { _count: { select: { rows: true } } },
+      }),
+      prisma.rasterWishConflict.findMany({
+        where: { inputSetId, decision: null },
+        orderBy: { id: "asc" },
+        include: { wish: true, importedRow: true },
+      }),
+      prisma.rasterImportedWishRow.findMany({
+        where: { inputSetId, matchedWishId: null },
+        orderBy: { batch: { startedAt: "desc" } },
+      }),
+      // Added: created by an import and not yet looked at (FR-005).
+      prisma.rasterWish.findMany({
+        where: { inputSetId, origin: RasterWishOrigin.IMPORTED, reviewedAt: null },
+        orderBy: [{ clubName: "asc" }, { teamLabel: "asc" }],
+      }),
+      // Accepted: a conflict the reviewer has already ruled on.
+      prisma.rasterWishConflict.findMany({
+        where: { inputSetId, decision: { not: null } },
+        orderBy: { decidedAt: "desc" },
+        take: 50,
+        include: { wish: true, importedRow: true },
+      }),
+      listMissingWishes(inputSetId),
+    ]);
+
+  // Re-importing a still-unpaired team writes another row each time. They are
+  // one item to review, not several, so keep only the most recent per team.
+  const seen = new Set<string>();
+  const unmatchedRows = allUnmatchedRows.filter((row) => {
+    const key = wishIdentityKey(row.clubId, row.teamLabel);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  // No-op: the latest import agreed with the wish we already held, so it
+  // raised no conflict and needs no decision.
+  const noopRows = batches.length
+    ? await prisma.rasterImportedWishRow.findMany({
+        where: {
+          batchId: batches[0].id,
+          matchedWishId: { not: null },
+          conflicts: { none: {} },
+        },
+        take: 50,
+        include: { matchedWish: true },
+      })
+    : [];
+
+  const settledMatches = [
+    ...decided.map((conflict) => ({
+      id: conflict.id,
+      kind: "accepted" as const,
+      decision: conflict.decision,
+      wish: conflict.wish,
+      importedRow: conflict.importedRow,
+    })),
+    ...noopRows.flatMap((row) =>
+      row.matchedWish
+        ? [
+            {
+              id: row.id,
+              kind: "noop" as const,
+              decision: null,
+              wish: row.matchedWish,
+              importedRow: row,
+            },
+          ]
+        : [],
+    ),
+  ];
+
+  return {
+    batches,
+    conflicts,
+    unmatchedRows,
+    addedWishes,
+    settledMatches,
+    missingWishes,
+  };
 }
 
 export async function resolveWishConflict(params: {
@@ -303,6 +371,9 @@ export async function resolveWishConflict(params: {
       where: { id: conflict.id },
       data: {
         decision: params.decision,
+        // Captured before the update above lands, so it records the value the
+        // decision replaced rather than the one it chose.
+        previousValueJson: JSON.stringify(rowData(conflict.wish)),
         decidedValueJson: chosen ? JSON.stringify(rowData(chosen)) : null,
         decidedAt: new Date(),
         decidedById: params.actorId,
@@ -324,11 +395,22 @@ export async function matchImportedWishRow(params: {
     });
     if (!importedRow) return null;
 
+    // A wish for this team can have appeared since the row was flagged
+    // unmatched -- another import, or another admin matching a sibling row.
+    // Pair with it rather than creating the duplicate the unique index would
+    // reject anyway; avoiding silent duplicates is the point of this review.
     const wish = params.wishId
       ? await tx.rasterWish.findFirst({
           where: { id: params.wishId, inputSetId: params.inputSetId },
         })
-      : await tx.rasterWish.create({
+      : ((await tx.rasterWish.findFirst({
+          where: {
+            inputSetId: params.inputSetId,
+            clubId: importedRow.clubId,
+            teamLabel: importedRow.teamLabel,
+          },
+        })) ??
+        (await tx.rasterWish.create({
           data: {
             inputSetId: params.inputSetId,
             ...rowData(importedRow),
@@ -341,7 +423,7 @@ export async function matchImportedWishRow(params: {
             reviewedAt: new Date(),
             reviewedById: params.actorId,
           },
-        });
+        })));
     if (!wish) return null;
 
     const updatedRow = await tx.rasterImportedWishRow.update({

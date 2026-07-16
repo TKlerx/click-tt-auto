@@ -47,6 +47,7 @@ CREATE TABLE "RasterWishConflict" (
     "importedRowId" TEXT NOT NULL,
     "differingFields" TEXT NOT NULL,
     "decision" "RasterConflictDecision",
+    "previousValueJson" TEXT,
     "decidedValueJson" TEXT,
     "decidedById" TEXT,
     "decidedAt" TIMESTAMP(3),

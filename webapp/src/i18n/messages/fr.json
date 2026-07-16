@@ -392,7 +392,20 @@
       "stillValid": "Toujours valable",
       "saving": "Enregistrement",
       "saveFailed": "Échec de l'enregistrement ({status})",
-      "hallLabel": "Salle {hall}"
+      "hallLabel": "Salle {hall}",
+      "filterLabel": "Filtrer les éléments à réviser",
+      "filter": {
+        "all": "Tous",
+        "conflicts": "Conflits",
+        "added": "Ajoutés",
+        "unmatched": "Non appariés",
+        "missing": "Absents",
+        "settled": "Réglés"
+      },
+      "addedCount": "{count, plural, one {# souhait ajouté, pas encore révisé} other {# souhaits ajoutés, pas encore révisés}}",
+      "settledCount": "{count, plural, one {# appariement réglé} other {# appariements réglés}}",
+      "noopMatch": "Aucun changement",
+      "acceptedMatch": "Décidé : {decision}"
     },
     "steps": {
       "import": "Import data",

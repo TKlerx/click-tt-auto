@@ -392,7 +392,20 @@
       "stillValid": "Still valid",
       "saving": "Saving",
       "saveFailed": "Save failed ({status})",
-      "hallLabel": "Gym {hall}"
+      "hallLabel": "Gym {hall}",
+      "filterLabel": "Filter review items",
+      "filter": {
+        "all": "All",
+        "conflicts": "Conflicts",
+        "added": "Added",
+        "unmatched": "Unmatched",
+        "missing": "Missing",
+        "settled": "Settled"
+      },
+      "addedCount": "{count, plural, one {# added wish, not yet reviewed} other {# added wishes, not yet reviewed}}",
+      "settledCount": "{count, plural, one {# settled match} other {# settled matches}}",
+      "noopMatch": "No change",
+      "acceptedMatch": "Decided: {decision}"
     },
     "steps": {
       "import": "Import data",

@@ -47,6 +47,7 @@ describe("raster runs service", () => {
         season: true,
         seasonModelJson: true,
         createdById: true,
+        wishesJson: true,
       },
     });
     expect(

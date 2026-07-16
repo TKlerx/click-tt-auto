@@ -9,6 +9,15 @@ const bodySchema = z.object({
   wishId: z.string().trim().min(1).optional(),
 });
 
+function isUniqueViolation(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: string }).code === "P2002"
+  );
+}
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string; rowId: string }> },
@@ -22,12 +31,25 @@ export async function POST(
     return NextResponse.json({ error: "Invalid row match" }, { status: 422 });
   }
 
-  const row = await matchImportedWishRow({
-    inputSetId: context.inputSet.id,
-    rowId,
-    actorId: context.user.id,
-    wishId: parsed.data.wishId,
-  });
+  let row;
+  try {
+    row = await matchImportedWishRow({
+      inputSetId: context.inputSet.id,
+      rowId,
+      actorId: context.user.id,
+      wishId: parsed.data.wishId,
+    });
+  } catch (error) {
+    // A concurrent match created the wish for this team between our lookup and
+    // our insert. The caller should reload and pair with the existing wish.
+    if (isUniqueViolation(error)) {
+      return NextResponse.json(
+        { error: "A wish for this team already exists" },
+        { status: 409 },
+      );
+    }
+    throw error;
+  }
   if (!row) {
     return NextResponse.json(
       { error: "Row or wish not found" },

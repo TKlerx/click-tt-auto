@@ -271,6 +271,51 @@ describe("raster input set service", () => {
     });
   });
 
+  it("does not open an import batch when the parsed wish union is unchanged", async () => {
+    const wishesJson = JSON.stringify({
+      sources: [
+        {
+          sourceId: "wish-source",
+          sourceRef: "uploads/wishes.pdf",
+          parsed: { teams: [] },
+        },
+      ],
+    });
+    // syncInputSetSourceCaches runs on every optimizer start; re-importing
+    // there would add an unmatched row per unpaired team on each run.
+    prismaMock.rasterInputSet.findUnique.mockResolvedValue({
+      id: "input-1",
+      scopeId: "owl",
+      season: "2026/27",
+      seasonModelJson: null,
+      createdById: "user-1",
+      wishesJson,
+    } as never);
+    prismaMock.scope.findUnique.mockResolvedValue({
+      id: "owl",
+      parent: { id: "wttv", parent: { id: "de" } },
+    } as never);
+    prismaMock.$transaction.mockImplementation(async (callback) =>
+      callback(prismaMock),
+    );
+    prismaMock.rasterSource.findMany.mockResolvedValue([
+      {
+        id: "wish-source",
+        sourceType: "WISHES_PDF",
+        sourceRef: "uploads/wishes.pdf",
+        parsedJson: '{"teams":[]}',
+      },
+    ] as never);
+    prismaMock.rasterInputSet.update.mockResolvedValue({} as never);
+    prismaMock.rasterWishImportBatch.create.mockResolvedValue({
+      id: "batch-1",
+    } as never);
+
+    await syncInputSetSourceCaches("input-1");
+
+    expect(prismaMock.rasterWishImportBatch.create).not.toHaveBeenCalled();
+  });
+
   it("matches wish clubs with e.V. suffixes to click-TT club names", async () => {
     prismaMock.rasterInputSet.findUnique.mockResolvedValue({
       id: "input-1",
@@ -285,6 +330,29 @@ describe("raster input set service", () => {
     prismaMock.$transaction.mockImplementation(async (callback) =>
       callback(prismaMock),
     );
+    // The active wish this sync projects into the season model.
+    prismaMock.rasterWish.findMany.mockResolvedValue([
+      {
+        id: "wish-1",
+        clubId: "ttv-lage",
+        clubName: "TTV Lage",
+        teamLabel: "Erwachsene IV",
+        homeWeekday: "FRIDAY",
+        hall: "1",
+        startTime: "20:00",
+        spielwochePref: "B",
+        requestedRasterzahl: null,
+        notes: null,
+        confidence: "REVIEW",
+      },
+    ] as never);
+    prismaMock.rasterWishConflict.findMany.mockResolvedValue([] as never);
+    prismaMock.rasterWishImportBatch.create.mockResolvedValue({
+      id: "batch-1",
+    } as never);
+    prismaMock.rasterImportedWishRow.createManyAndReturn.mockResolvedValue([
+      { id: "row-1" },
+    ] as never);
     prismaMock.rasterSource.findMany.mockResolvedValue([
       {
         id: "group-source",

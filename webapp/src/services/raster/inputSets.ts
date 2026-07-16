@@ -197,6 +197,7 @@ export async function syncInputSetSourceCaches(inputSetId: string) {
       season: true,
       seasonModelJson: true,
       createdById: true,
+      wishesJson: true,
     },
   });
   if (!inputSet) return null;
@@ -253,11 +254,7 @@ export async function syncInputSetSourceCaches(inputSetId: string) {
       alignParsedWishClubIds(model, parsedWishes);
       if (wishSources.length) {
         data.wishesJson = stringifyWishSources(wishSources, parsedWishes);
-        await importParsedWishes({
-          inputSetId: inputSet.id,
-          startedById: inputSet.createdById,
-          parsed: mergeParsedWishes(parsedWishes),
-        });
+        await importWishesIfChanged(inputSet, parsedWishes, data.wishesJson);
         importedWishes = true;
       }
       await applyActiveWishDetails(model, inputSet.id, parsedWishes);
@@ -280,12 +277,8 @@ export async function syncInputSetSourceCaches(inputSetId: string) {
       data.seasonModelJson = JSON.stringify(model);
     }
   }
-  if (wishSources.length && !importedWishes) {
-    await importParsedWishes({
-      inputSetId: inputSet.id,
-      startedById: inputSet.createdById,
-      parsed: mergeParsedWishes(parsedWishes),
-    });
+  if (wishSources.length && !importedWishes && data.wishesJson) {
+    await importWishesIfChanged(inputSet, parsedWishes, data.wishesJson);
   }
   if (!data.groupAssignmentJson && !data.wishesJson && !data.seasonModelJson) {
     return inputSet;
@@ -294,6 +287,24 @@ export async function syncInputSetSourceCaches(inputSetId: string) {
   return prisma.rasterInputSet.update({
     where: { id: inputSet.id },
     data,
+  });
+}
+
+// syncInputSetSourceCaches runs on every optimizer start. Importing
+// unconditionally opened an import batch -- and a fresh unmatched row per
+// unpaired team -- on every run, so the review listed the same team once per
+// run. The stored wishesJson is the parsed union, so comparing against it
+// tells us whether there is anything new to import.
+async function importWishesIfChanged(
+  inputSet: { id: string; createdById: string; wishesJson: string | null },
+  parsedWishes: WishParseResult[],
+  nextWishesJson: string,
+) {
+  if (nextWishesJson === inputSet.wishesJson) return;
+  await importParsedWishes({
+    inputSetId: inputSet.id,
+    startedById: inputSet.createdById,
+    parsed: mergeParsedWishes(parsedWishes),
   });
 }
 
