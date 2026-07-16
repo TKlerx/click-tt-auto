@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { cpSync, existsSync } from "node:fs";
+import { dirname, join } from "node:path";
 
 const command = process.argv[2];
 
@@ -21,6 +22,14 @@ const standaloneServer = [
   ".next/standalone/server.js",
   ".next/standalone/webapp/server.js",
 ].find((path) => existsSync(path));
+
+if (command === "start" && standaloneServer && process.platform !== "win32") {
+  const staticSource = ".next/static";
+  const staticTarget = join(dirname(standaloneServer), ".next", "static");
+  if (existsSync(staticSource)) {
+    cpSync(staticSource, staticTarget, { recursive: true, force: true });
+  }
+}
 
 const args =
   command === "start" && standaloneServer && process.platform !== "win32"
