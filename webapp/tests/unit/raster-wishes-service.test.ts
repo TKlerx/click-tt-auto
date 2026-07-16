@@ -283,6 +283,67 @@ describe("raster wishes import service", () => {
     expect(row?.matchedWishId).toBe("wish-existing");
   });
 
+  it("marks only the row that created a wish as having added it", async () => {
+    prismaMock.$transaction.mockImplementation(async (callback) =>
+      callback(prismaMock),
+    );
+    prismaMock.rasterInputSet.findUnique.mockResolvedValue(null);
+    prismaMock.rasterWishImportBatch.create.mockResolvedValue({
+      id: "batch-1",
+    } as never);
+    prismaMock.rasterWishConflict.findMany.mockResolvedValue([] as never);
+    // club-b already has a wish; club-a does not.
+    prismaMock.rasterWish.findMany.mockResolvedValue([
+      {
+        id: "wish-b",
+        clubId: "club-b",
+        clubName: "Club B",
+        teamLabel: "I",
+        homeWeekday: "MONDAY",
+        hall: "1",
+        startTime: "19:00",
+        spielwochePref: null,
+        requestedRasterzahl: null,
+        notes: null,
+      },
+    ] as never);
+    prismaMock.rasterWish.createManyAndReturn.mockResolvedValue([
+      { id: "wish-a", clubId: "club-a", teamLabel: "I" },
+    ] as never);
+    prismaMock.rasterImportedWishRow.createManyAndReturn.mockResolvedValue([
+      { id: "row-a" },
+      { id: "row-b" },
+    ] as never);
+
+    const team = (clubId: string) => ({
+      id: `${clubId}-1`,
+      clubId,
+      label: "I",
+      homeWeekday: "monday" as const,
+      hall: "1",
+      startTime: "19:00",
+      rasterzahl: { kind: "assignable" as const },
+      confidence: "ok" as const,
+    });
+
+    await importParsedWishes({
+      inputSetId: "input-1",
+      startedById: "user-1",
+      parsed: {
+        clubs: [
+          { id: "club-a", name: "Club A", venues: [], notes: "" },
+          { id: "club-b", name: "Club B", venues: [], notes: "" },
+        ],
+        teams: [team("club-a"), team("club-b")],
+        warnings: [],
+      },
+    });
+
+    const rows = firstCallData(prismaMock.rasterImportedWishRow.createManyAndReturn);
+    // club-a's row brought its wish into existence; club-b's only matched one.
+    expect(rows.map((row) => row.createdWish)).toEqual([true, false]);
+  });
+
   it("collapses repeated unmatched rows for the same team into one item", async () => {
     prismaMock.rasterWishImportBatch.findMany.mockResolvedValue([] as never);
     prismaMock.rasterWishConflict.findMany.mockResolvedValue([] as never);

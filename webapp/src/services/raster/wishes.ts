@@ -181,13 +181,14 @@ async function importWishRows(params: {
 
     const importedRows = plans.length
       ? await tx.rasterImportedWishRow.createManyAndReturn({
-          data: plans.map((plan) => ({
+          data: plans.map((plan, index) => ({
             batchId: batch.id,
             inputSetId: params.inputSetId,
             sourceFile: params.sourceFile,
             matchedWishId: wishByIdentity.get(plan.identity)?.id ?? null,
             ...rowData(plan.row),
             valueFingerprint: plan.fingerprint,
+            createdWish: creatorIndex.get(plan.identity) === index,
           })),
         })
       : [];
@@ -244,7 +245,7 @@ async function importWishRows(params: {
 }
 
 export async function listWishImportReview(inputSetId: string) {
-  const [batches, conflicts, allUnmatchedRows, addedWishes, decided, missingWishes] =
+  const [batches, conflicts, allUnmatchedRows, decided, missingWishes] =
     await Promise.all([
       prisma.rasterWishImportBatch.findMany({
         where: { inputSetId },
@@ -260,11 +261,6 @@ export async function listWishImportReview(inputSetId: string) {
       prisma.rasterImportedWishRow.findMany({
         where: { inputSetId, matchedWishId: null },
         orderBy: { batch: { startedAt: "desc" } },
-      }),
-      // Added: created by an import and not yet looked at (FR-005).
-      prisma.rasterWish.findMany({
-        where: { inputSetId, origin: RasterWishOrigin.IMPORTED, reviewedAt: null },
-        orderBy: [{ clubName: "asc" }, { teamLabel: "asc" }],
       }),
       // Accepted: a conflict the reviewer has already ruled on.
       prisma.rasterWishConflict.findMany({
@@ -286,19 +282,33 @@ export async function listWishImportReview(inputSetId: string) {
     return true;
   });
 
-  // No-op: the latest import agreed with the wish we already held, so it
-  // raised no conflict and needs no decision.
-  const noopRows = batches.length
-    ? await prisma.rasterImportedWishRow.findMany({
-        where: {
-          batchId: batches[0].id,
-          matchedWishId: { not: null },
-          conflicts: { none: {} },
-        },
-        take: 50,
-        include: { matchedWish: true },
-      })
-    : [];
+  // Both categories describe what the latest import did, so both are scoped to
+  // its batch rather than to all history.
+  const [addedRows, noopRows] = batches.length
+    ? await Promise.all([
+        // Added: the rows that brought a wish into existence (FR-005).
+        prisma.rasterImportedWishRow.findMany({
+          where: { batchId: batches[0].id, createdWish: true },
+          include: { matchedWish: true },
+        }),
+        // No-op: the import agreed with the wish we already held, so it raised
+        // no conflict and needs no decision.
+        prisma.rasterImportedWishRow.findMany({
+          where: {
+            batchId: batches[0].id,
+            matchedWishId: { not: null },
+            createdWish: false,
+            conflicts: { none: {} },
+          },
+          take: 50,
+          include: { matchedWish: true },
+        }),
+      ])
+    : [[], []];
+
+  const addedWishes = addedRows.flatMap((row) =>
+    row.matchedWish ? [row.matchedWish] : [],
+  );
 
   const settledMatches = [
     ...decided.map((conflict) => ({

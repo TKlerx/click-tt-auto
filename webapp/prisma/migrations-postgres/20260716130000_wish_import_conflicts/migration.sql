@@ -36,6 +36,7 @@ CREATE TABLE "RasterImportedWishRow" (
     "requestedRasterzahl" TEXT,
     "notes" TEXT,
     "valueFingerprint" TEXT NOT NULL,
+    "createdWish" BOOLEAN NOT NULL DEFAULT false,
 
     CONSTRAINT "RasterImportedWishRow_pkey" PRIMARY KEY ("id")
 );

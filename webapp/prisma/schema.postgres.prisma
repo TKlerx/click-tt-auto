@@ -692,6 +692,9 @@ model RasterImportedWishRow {
   requestedRasterzahl String?
   notes               String?
   valueFingerprint    String
+  // This row is the one that brought the wish into existence, which is what
+  // "added by this import" means (FR-011).
+  createdWish         Boolean               @default(false)
   batch               RasterWishImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
   inputSet            RasterInputSet        @relation(fields: [inputSetId], references: [id], onDelete: Cascade)
   matchedWish         RasterWish?           @relation(fields: [matchedWishId], references: [id], onDelete: SetNull)
