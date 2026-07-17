@@ -18,8 +18,7 @@ that new feature specs should build on.
 
 - Next.js 16 App Router frontend and API routes
 - Prisma data layer
-- SQLite for local development
-- PostgreSQL for Docker and production-style deployment
+- PostgreSQL for local development, Docker, and production-style deployment
 - Python worker skeleton managed with `uv`
 - Better Auth with local login plus Azure SSO
 - RBAC, user management, audit trail, and background jobs

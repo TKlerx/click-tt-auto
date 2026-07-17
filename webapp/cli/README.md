@@ -95,7 +95,7 @@ This is the fastest local verification path on Windows PowerShell.
 1. Create a local `.env` if you do not already have one.
 
 ```dotenv
-DATABASE_URL="file:./dev.db"
+DATABASE_URL="postgresql://starter:starter_e2e_password@localhost:45432/business_app_starter_e2e_test"
 PORT=3270
 AUTH_BASE_URL=http://localhost:3270
 BETTER_AUTH_SECRET=dev-secret-change-me-in-production
@@ -104,10 +104,10 @@ INITIAL_ADMIN_PASSWORD=ChangeMe123!
 PAT_TOKEN_PREFIX=starter_pat
 ```
 
-2. Bootstrap the local SQLite database and seed the admin user.
+2. Start the PostgreSQL container, apply migrations, and seed the admin user.
 
 ```powershell
-node scripts/ensure-local-db.mjs
+node scripts/ensure-e2e-db.mjs
 ```
 
 3. Start the app.

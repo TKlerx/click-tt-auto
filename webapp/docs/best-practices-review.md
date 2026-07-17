@@ -744,6 +744,7 @@ Double cast (`as unknown as`) bypasses all type safety. If the model is renamed,
 ### PR6: Dual schema files must be kept in sync manually
 
 **Severity:** Medium
+**Status:** Resolved 2026-07-17
 **Files:** `prisma/schema.prisma`, `prisma/schema.postgres.prisma`
 
 Two schema files are identical except for `datasource.provider` (`sqlite` vs `postgresql`). Any model, enum, or index change must be applied to both files manually. No CI check or script validates they stay in sync.
@@ -753,6 +754,8 @@ Options:
 1. Script that generates one from the other (swap the datasource line)
 2. CI step that diffs the two files (ignoring the datasource block)
 3. Single schema with environment-driven provider selection (Prisma 7 may support this via config)
+
+**Resolution:** Taken further than any of the three options — the second schema is gone. `schema.prisma` was deleted when the webapp became PostgreSQL-only (2026-07-10), leaving `schema.postgres.prisma` as the single source. The drift this finding predicted did happen before then, in the worker's hand-written SQLite test schema, which fell to 13 tables against the real migrations' 37; the worker was moved onto PostgreSQL and that fixture deleted (2026-07-17).
 
 ### PR7: AuditEntry `details` stored as String instead of Json
 
@@ -765,7 +768,9 @@ Options:
 - Cannot use Prisma's JSON filtering (`path`, `array_contains`, etc.) on PostgreSQL
 - Query code must parse manually
 
-SQLite doesn't support `Json` type, which explains the choice. But `schema.postgres.prisma` could use `Json` for the PostgreSQL deployment while keeping `String` in the SQLite schema.
+SQLite doesn't support `Json` type, which explained the choice at the time.
+
+**Update 2026-07-17:** SQLite is gone, so nothing forces `String` any more. `Json` is now available for the audit `details` column without a second schema to keep in step. Still open — the change needs a migration and a pass over the query code that parses `details` by hand.
 
 ### PR8: Hard deletes cascade — no soft delete pattern
 
@@ -1125,7 +1130,7 @@ Works functionally, but `opacity-35` on the entire container dims the text and l
 - **Cascade design**: Thoughtful `onDelete` choices — Cascade for owned data, Restrict for audit integrity, SetNull for optional references
 - **Enum usage**: All status/type fields use Prisma enums, no magic strings
 - **cuid() IDs**: URL-safe, sortable, no sequential enumeration risk
-- **Dual-database support**: Clean separation of SQLite (local dev) and PostgreSQL (production)
+- **Single database everywhere**: One PostgreSQL schema for local, Docker, and production, so tests exercise the engine production runs. (This bullet previously praised the SQLite/PostgreSQL split as clean separation; see PR6 — the split was the drift risk, not a strength, and was removed on 2026-07-10 and 2026-07-17.)
 - **Transaction usage**: Notification creation and password changes correctly use `$transaction`
 - **No raw SQL in app code**: Single `$queryRaw` for health check only; all queries use typed client
 - **Select scoping in services**: Service layer (`user-admin.ts`, `admin.ts`) maps query results to safe subsets before returning

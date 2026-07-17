@@ -19,7 +19,7 @@ This document maps sensitive runtime settings to the process that should receive
 | `APP_DATABASE_URL`              | app               | Runtime app database access                                 | Docker/prod app runtime                           |           |
 | `WORKER_DATABASE_URL`           | worker            | Worker job queue and background integration database access | Docker/prod worker runtime                        |           |
 | `MIGRATION_DATABASE_URL`        | migration         | Prisma migration and initial-admin seed database access     | Docker/prod migration runtime                     |           |
-| `DATABASE_URL`                  | local-development | SQLite local fallback and legacy Prisma compatibility       | Local development, internal service compatibility |           |
+| `DATABASE_URL`                  | local-development | PostgreSQL access for local development and Prisma tooling   | Local development, internal service compatibility |           |
 | `BETTER_AUTH_SECRET`            | app               | Session signing and Better Auth runtime secret              | App runtime                                       |           |
 | `AUTH_BASE_URL`                 | app               | Public origin for auth callbacks and cookie behavior        | App runtime                                       |           |
 | `AZURE_AD_CLIENT_ID`            | shared-exception  | Microsoft Entra SSO and current Teams Graph flows           | App and worker runtimes                           | EX-001    |

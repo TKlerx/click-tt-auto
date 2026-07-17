@@ -4,10 +4,10 @@
 
 ### Local Development
 
-- `DATABASE_URL="file:./dev.db"`
-- app runs with SQLite
-- `pnpm run dev` prepares the local database before startup
-- Prisma uses the SQLite schema by default
+- `DATABASE_URL="postgresql://..."` pointing at the local PostgreSQL container
+- app runs with PostgreSQL, the same engine as every other environment
+- `node scripts/ensure-e2e-db.mjs` starts the container, applies migrations, and seeds
+- Prisma uses `prisma/schema.postgres.prisma`, the only schema
 
 ### Docker / Production-Style Deployment
 
@@ -17,8 +17,8 @@
   - `WORKER_DATABASE_URL`
   - `MIGRATION_DATABASE_URL`
 - each service maps its runtime-specific URL into `DATABASE_URL` for Prisma or compatibility paths
-- Prisma migrations run through `prisma.config.postgres.ts`
-- local development can continue using `DATABASE_URL="file:./dev.db"` without defining every runtime-specific URL
+- Prisma migrations run through `prisma.config.ts`
+- local development can point `DATABASE_URL` at the local PostgreSQL container without defining every runtime-specific URL
 
 ## Database Behavior
 
@@ -26,13 +26,13 @@
 sequenceDiagram
     participant Dev as Developer
     participant App as Next.js
-    participant DB as SQLite dev.db
+    participant DB as Local PostgreSQL
 
-    Dev->>App: pnpm run dev
-    App->>DB: ensure local DB exists
-    App->>DB: db push if empty
-    App->>DB: migrate dev if non-empty
+    Dev->>App: node scripts/ensure-e2e-db.mjs
+    App->>DB: ensure container and database exist
+    App->>DB: prisma migrate
     App->>DB: seed initial admin if needed
+    Dev->>App: pnpm run dev
 ```
 
 ```mermaid

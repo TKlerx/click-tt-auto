@@ -48,7 +48,8 @@ Tooling:
 Coverage focus:
 
 - worker job processing
-- SQLite claim / complete / fail transitions
+- PostgreSQL claim / complete / fail transitions, run against a real database
+  built from the Prisma migrations (`WORKER_TEST_DATABASE_URL`)
 
 ## Validation Pipeline
 

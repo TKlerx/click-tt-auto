@@ -8,7 +8,7 @@ This starter provides a reusable internal business app foundation with:
 - role-based access control
 - operational auditability
 - background job processing
-- local SQLite development and Docker/PostgreSQL deployment
+- PostgreSQL in every environment, local through deployment
 
 ## System Overview
 
@@ -59,13 +59,9 @@ flowchart LR
 ### Data Layer
 
 - ORM/client: Prisma
-- Local mode:
-  - SQLite
-  - `prisma/schema.prisma`
-- Docker / production-style mode:
-  - PostgreSQL
-  - `prisma/schema.postgres.prisma`
-- Runtime DB adapter selection happens from `DATABASE_URL`
+- PostgreSQL in every mode -- local, Docker, and production-style
+- Single schema: `prisma/schema.postgres.prisma`
+- `DATABASE_URL` selects the instance, not the engine
 
 ### Background Jobs
 

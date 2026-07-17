@@ -50,6 +50,9 @@ jobs:
       DATABASE_URL: postgresql://starter:starter_e2e_password@localhost:45432/business_app_starter_e2e_test
       MIGRATION_DATABASE_URL: postgresql://starter:starter_e2e_password@localhost:45432/business_app_starter_e2e_test
       WORKER_DATABASE_URL: postgresql://starter:starter_e2e_password@localhost:45432/business_app_starter_e2e_test
+      # The worker suite gets its own database on the same container so a pytest
+      # run and a Playwright run cannot truncate each other's rows.
+      WORKER_TEST_DATABASE_URL: postgresql://starter:starter_e2e_password@localhost:45432/business_app_starter_worker_test
       E2E_POSTGRES_CONTAINER: click-tt-e2e-postgres
 
     steps:
@@ -120,6 +123,14 @@ jobs:
       - name: Test
         working-directory: webapp
         run: pnpm test
+
+      - name: Provision PostgreSQL
+        working-directory: webapp
+        run: node scripts/ensure-e2e-db.mjs
+
+      - name: Worker tests
+        working-directory: webapp/worker
+        run: uv run pytest -q
 
       - name: Install Playwright browsers
         working-directory: webapp

@@ -1210,6 +1210,14 @@ if ($Phase -in "all", "full", "quality", "commit") {
 if ($Phase -in "all", "full", "test", "commit") {
     Write-Step "Tests - Python (pytest)"
     try {
+        # The worker runs on PostgreSQL everywhere, so its tests need the E2E
+        # container up before they can create their own database on it.
+        $provisionResult = Invoke-NativeCommandCaptured "node scripts/ensure-e2e-db.mjs"
+        if ($provisionResult.ExitCode -ne 0) {
+            $provisionResult.Output | Out-Host
+            throw "could not provision PostgreSQL for the worker tests"
+        }
+
         Push-Location "worker"
         try {
             $pytestVersion = Invoke-NativeCommandCaptured "uv run pytest --version"

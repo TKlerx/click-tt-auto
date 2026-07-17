@@ -1,7 +1,8 @@
 # Business App Starter Constitution
 
 > Project constitution for the Business App Starter web application.
-> Last updated: 2026-03-19
+> Version: 2.0.0
+> Last updated: 2026-07-17
 
 ## Core Principles
 
@@ -123,8 +124,10 @@ visually before merge.
   (user-selectable, persisted per user). Dark mode via
   `[data-theme="dark"]` selector and Tailwind `dark:` variants.
 - **ORM**: Prisma 7 for database access and schema management.
-- **Database**: SQLite for local development. Docker and shared
-  deployments use PostgreSQL.
+- **Database**: PostgreSQL everywhere -- local development, Docker,
+  and shared deployments. Local development runs it in a container.
+  SQLite is not supported: a database that only runs locally means
+  local tests exercise a code path production never takes.
 - **Authentication**: Dual auth support -- Azure SSO and local
   username/password. Email is the unique user identifier across
   both methods. Azure SSO via BetterAuth (with Admin + SSO plugins).
@@ -188,3 +191,28 @@ semantic versioning:
 **Compliance**: All PRs and code reviews MUST verify adherence to
 these principles. Deviations MUST be justified in writing and
 approved before merge.
+
+## Amendment History
+
+### 2.0.0 -- 2026-07-17
+
+**Changed**: Technology Constraints / Database. SQLite is no longer
+an accepted local-development database; PostgreSQL is required in
+every environment.
+
+**Why MAJOR**: This is an incompatible redefinition, not a
+clarification. The previous constraint permitted SQLite locally; this
+one forbids it, and any environment or contributor depending on the
+old rule must change. Per the Amendments rule above, that is MAJOR.
+
+**Rationale**: The webapp became PostgreSQL-only on 2026-07-10, but
+the worker kept a parallel SQLite implementation that survived only
+as its test fixture, with a hand-maintained schema of 13 tables
+against the real migrations' 37. Its tests passed while exercising a
+branch production never ran, and missed at least one defect in the
+PostgreSQL path as a result. The constraint is amended to match both
+the deployed reality and the reason it went wrong.
+
+> Versions before 2.0.0 were unnumbered. The text as it stood on
+> 2026-03-19 is treated as 1.0.0 so this amendment has a baseline to
+> bump from.
