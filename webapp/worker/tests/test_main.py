@@ -11,6 +11,8 @@ from pathlib import Path
 from typing import Any, cast
 from unittest.mock import patch
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
 import psycopg
 from psycopg.rows import dict_row
 from worker_db import ensure_worker_database, truncate_all
