@@ -7,16 +7,19 @@ import sqlite3
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from contextlib import closing
 from pathlib import Path
 from typing import Any, cast
 from unittest.mock import patch
 
 from starter_worker.config import WorkerConfig, load_config
-from starter_worker.db import JobStore, _find_overage_rows, normalize_postgres_database_url
+from starter_worker.db import BackgroundJob, JobStore, _find_overage_rows, normalize_postgres_database_url
 from starter_worker.main import (
+    RasterInputInvalid,
     RasterSolverInfeasible,
     _exclude_unplanned_groups,
+    _process_claimed_job,
     _log_job_claimed,
     _log_job_completed,
     _log_job_failed,
@@ -395,6 +398,82 @@ class WorkerTests(unittest.TestCase):
 
         # Both are "Kreisliga / Gruppe 1"; only the scope tells them apart.
         self.assertEqual([group["scopeId"] for group in groups], ["scope-a", "scope-b"])
+
+    def test_combined_raster_model_refuses_a_team_id_claimed_by_two_scopes(self) -> None:
+        # Two different clubs sharing a name, in identically named groups, in
+        # different Bezirke: both slug to one team id.
+        def scope(scope_id: str) -> dict[str, object]:
+            return {
+                "scopeId": scope_id,
+                "seasonModelJson": json.dumps(
+                    {
+                        "clubs": [{"id": "tus-germania", "name": "TuS Germania"}],
+                        "teams": [
+                            {
+                                "id": "gruppe-1-tus-germania-i",
+                                "clubId": "tus-germania",
+                                "label": "I",
+                            }
+                        ],
+                        "groups": [
+                            {
+                                "ref": {"league": "Kreisliga", "name": "Gruppe 1"},
+                                "size": 10,
+                                "teamIds": ["gruppe-1-tus-germania-i"],
+                            }
+                        ],
+                    }
+                ),
+            }
+
+        with self.assertRaises(RasterInputInvalid) as caught:
+            _raster_run_model({"seasonModels": [scope("bezirk-a"), scope("bezirk-b")]})
+
+        self.assertIn("gruppe-1-tus-germania-i", str(caught.exception))
+        self.assertIn("bezirk-a", str(caught.exception))
+        self.assertIn("bezirk-b", str(caught.exception))
+
+    def test_invalid_combined_input_fails_the_run_without_retrying(self) -> None:
+        # The id collision is decided by the inputs, so all a retry buys is the
+        # same failure twice more.
+        store = unittest.mock.MagicMock()
+        job = BackgroundJob(
+            id="job-1",
+            job_type="raster_run",
+            payload={"runId": "run-1"},
+            attempt_count=1,
+        )
+        config = WorkerConfig(
+            database_url="postgresql://ignored/db",
+            poll_interval_seconds=0.1,
+            worker_id="worker-test",
+            max_attempts=3,
+            retry_backoff_seconds=15,
+            stale_lock_seconds=300,
+            teams_poll_interval_seconds=60,
+        )
+
+        with patch(
+            "starter_worker.main.process_raster_run",
+            side_effect=RasterInputInvalid("two teams share an id"),
+        ):
+            _process_claimed_job(store, config, job)
+
+        store.fail_job.assert_called_once_with(
+            "job-1", "two teams share an id", retry=False
+        )
+        # Not an infeasible plan; the inputs never described one.
+        store.mark_raster_run_failed.assert_called_once()
+        store.mark_raster_run_infeasible.assert_not_called()
+
+    def test_combined_raster_model_allows_one_club_across_verband_and_bezirk(self) -> None:
+        # The legitimate case the guard must not catch: one club, two teams, two
+        # scopes, different team ids. This is what combined planning is for.
+        model = _raster_run_model(self._combined_context())
+        teams = cast(list[dict[str, object]], model["teams"])
+
+        self.assertEqual(len(teams), 2)
+        self.assertEqual({str(team["clubId"]) for team in teams}, {"ttc-muster"})
 
     def test_worker_runtime_has_ortools(self) -> None:
         result = subprocess.run(

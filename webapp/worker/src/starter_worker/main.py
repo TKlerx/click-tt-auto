@@ -40,6 +40,15 @@ class RasterSolverInfeasible(ValueError):
     """Raised when the optimizer proves that no assignment satisfies hard constraints."""
 
 
+class RasterInputInvalid(ValueError):
+    """Raised when the inputs cannot produce a correct model, so solving would mislead.
+
+    Distinct from incompleteness, which is recorded and allowed (FR-012): this is
+    input the run cannot interpret without silently planning the wrong thing.
+    Deterministic, so retrying the job cannot help.
+    """
+
+
 def process_job(job: BackgroundJob) -> dict[str, object]:
     if job.job_type == "noop":
         return {
@@ -149,13 +158,18 @@ def _raster_run_model(context: dict[str, Any]) -> dict[str, object]:
     """Build the solver model, merging every spanned scope for a combined run.
 
     Model ids are derived from names, not rows: a club's id is a slug of its
-    name and a team's id embeds its club and group. They are therefore already
-    stable across scopes, and a club fielding both a Verband and a Bezirk team
-    carries the same id in both models -- which is exactly what a combined run
-    needs, since hall capacity and same-club spacing key off clubId. So the
-    models are merged as-is. Rewriting ids per scope would not resolve a
-    collision; it would invent one, and silently detach wishes, capacities, and
+    name, a team's id embeds its club and group. So a club fielding both a
+    Verband and a Bezirk team carries one id in both models -- which is what a
+    combined run needs, since hall capacity and same-club spacing key off
+    clubId. The models therefore merge as-is. Rewriting ids per scope would not
+    resolve a collision; it would invent one, detaching wishes, capacities, and
     the two halves of that club from each other.
+
+    Name-derived ids are not a real identity, though. Two clubs sharing a name
+    in different Bezirke slug to one id. Where that also collapses two teams
+    onto one id, _reject_team_id_collision refuses the run. Where their groups
+    differ it stays undetectable, and only a genuine WTTV club number would fix
+    it -- the ingest does not capture one today.
     """
     season_models = context.get("seasonModels")
     if not isinstance(season_models, list) or not season_models:
@@ -164,6 +178,7 @@ def _raster_run_model(context: dict[str, Any]) -> dict[str, object]:
         return _parse_json_object(season_models[0].get("seasonModelJson"), "seasonModelJson")
 
     clubs: dict[str, dict[str, object]] = {}
+    team_scopes: dict[str, str] = {}
     merged: dict[str, list[object]] = {
         "teams": [],
         "groups": [],
@@ -185,6 +200,7 @@ def _raster_run_model(context: dict[str, Any]) -> dict[str, object]:
 
         for team in _json_list(model, "teams"):
             if isinstance(team, dict):
+                _reject_team_id_collision(team_scopes, team, scope_id)
                 merged["teams"].append(_combined_team(team))
 
         for group in _json_list(model, "groups"):
@@ -237,6 +253,40 @@ def _with_supplied_fixed_numbers(
         else:
             applied.append({**team, "rasterzahl": {"kind": "fixed", "value": value}})
     return applied
+
+
+def _reject_team_id_collision(
+    team_scopes: dict[str, str], team: dict[str, object], scope_id: str
+) -> None:
+    """Refuse a run whose spanned scopes disagree about who a team id names.
+
+    Team ids are derived from names -- slug(group)-slug(team) -- and the
+    uniqueness counter behind them runs per scope, so no scope can see another's
+    ids. A Verband league and a Bezirk league never share a team, so the same id
+    arriving from two scopes means two different teams collapsed onto one id:
+    two same-named clubs in the same-named group, in different Bezirke.
+
+    Merging them would plan one team where there are two and pool hall capacity
+    between clubs that share no hall. That is a wrong plan rather than an
+    incomplete one, and the coverage record cannot redeem it -- so refuse.
+
+    This does not catch every case. Two same-named clubs whose groups differ
+    still merge into one club, silently, and no name-derived id can tell them
+    apart. A real WTTV club number would; the ingest does not capture one.
+    """
+    team_id = str(team.get("id") or "")
+    if not team_id:
+        return
+    seen = team_scopes.get(team_id)
+    if seen is not None and seen != scope_id:
+        raise RasterInputInvalid(
+            f"Team id {team_id!r} arrives from both scope {seen!r} and scope "
+            f"{scope_id!r}. Ids are derived from club and group names, so this "
+            "means two different teams share a name in identically named groups. "
+            "Planning them as one team would be wrong; rename the group or the "
+            "club in the source data, or run these scopes separately."
+        )
+    team_scopes[team_id] = scope_id
 
 
 def _merge_club(clubs: dict[str, dict[str, object]], club: dict[str, object]) -> None:
@@ -956,12 +1006,15 @@ def _process_claimed_job(store: JobStore, config: WorkerConfig, job: BackgroundJ
             )
         raster_run_id = str(job.payload.get("runId") or "").strip()
         is_infeasible = isinstance(error, RasterSolverInfeasible)
+        # Both are decided by the inputs, so a retry would reach the same end.
+        # Only the infeasible one is an outcome rather than a failure.
+        is_terminal = is_infeasible or isinstance(error, RasterInputInvalid)
         if job.job_type == RASTER_RUN_JOB_TYPE and raster_run_id:
             if is_infeasible:
                 store.mark_raster_run_infeasible(raster_run_id, str(error))
             else:
                 store.mark_raster_run_failed(raster_run_id, str(error))
-        store.fail_job(job.id, str(error), retry=not is_infeasible)
+        store.fail_job(job.id, str(error), retry=not is_terminal)
         _log_job_failed(job, error)
 
 
