@@ -22,6 +22,8 @@ export type CoverageRecord = {
   complete: boolean;
   spannedScopes: string[];
   spannedAll: boolean;
+  /** Spanned scopes with no input set for the season: the run saw nothing there. */
+  scopesWithoutInputSet: string[];
   excludedGroups: string[];
   wishGaps: Array<{
     teamId: string;
@@ -43,6 +45,7 @@ export function computeCoverageRecord(input: {
   seasonModelJson?: string | null;
   spannedScopeIds: string[];
   allScopeIds: string[];
+  scopesWithoutInputSet?: string[];
   capacityReview?: {
     rows: Array<{
       clubId: string;
@@ -81,8 +84,12 @@ export function computeCoverageRecord(input: {
       weekday: row.weekday,
       status: row.status,
     }));
+  const scopesWithoutInputSet = [
+    ...new Set(input.scopesWithoutInputSet ?? []),
+  ].sort();
   const complete =
     spannedAll &&
+    scopesWithoutInputSet.length === 0 &&
     excludedGroups.length === 0 &&
     wishGaps.length === 0 &&
     capacityGaps.length === 0;
@@ -91,6 +98,7 @@ export function computeCoverageRecord(input: {
     complete,
     spannedScopes,
     spannedAll,
+    scopesWithoutInputSet,
     excludedGroups,
     wishGaps,
     capacityGaps,
@@ -106,11 +114,23 @@ export async function buildCoverageRecordForInputSet(inputSetId: string) {
     where: { id: inputSetId },
     select: {
       scopeId: true,
+      season: true,
       seasonModelJson: true,
       spannedScopes: { select: { scopeId: true } },
     },
   });
   if (!inputSet) throw new Error("Input set not found");
+
+  // A combined input set has no sources of its own, so its seasonModelJson is
+  // never populated. Reading it here would record every combined run as having
+  // no gaps at all -- and mark an all-scope run complete (FR-034). The gaps live
+  // in the spanned scopes' own input sets.
+  if (inputSet.spannedScopes.length > 1) {
+    return buildCoverageRecordForScopes(
+      inputSet.spannedScopes.map((scope) => scope.scopeId),
+      inputSet.season,
+    );
+  }
 
   const allScopes = await prisma.scope.findMany({
     select: {
@@ -187,6 +207,11 @@ export async function buildCoverageRecordForScopes(
     allScopeIds: allScopes
       .filter(isSelectableRasterScope)
       .map((scope) => scope.id),
+    // A scope with no input set yields no groups and no teams, so it would
+    // otherwise contribute no gaps and read as fully covered.
+    scopesWithoutInputSet: scopeIds.filter(
+      (scopeId) => !latestByScope.has(scopeId),
+    ),
     capacityReview: {
       rows: records.flatMap(({ capacityReview }) => capacityReview.rows),
     },

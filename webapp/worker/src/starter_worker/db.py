@@ -403,6 +403,19 @@ class JobStore:
                         (row["scopeIds"], row["season"], row["inputSetId"]),
                     )
                     row["seasonModels"] = list(cursor.fetchall())
+                    # Numbers supplied for the combined set itself are the
+                    # admin's own hard constraints and must be honoured (FR-014).
+                    # They are not in any spanned scope's model, so load them
+                    # from the combined input set directly.
+                    cursor.execute(
+                        """
+                        SELECT "clubId", "teamLabel", rasterzahl
+                        FROM "RasterFixedRasterzahl"
+                        WHERE "inputSetId" = %s
+                        """,
+                        (row["inputSetId"],),
+                    )
+                    row["fixedRasterzahlen"] = list(cursor.fetchall())
                 elif row is not None:
                     row["scopeIds"] = [row["scopeId"]]
                     row["seasonModels"] = [
@@ -1685,7 +1698,9 @@ def _inferred_capacities(teams: list[dict[str, Any]]) -> dict[tuple[str, str, st
 def _group_key(group: dict[str, Any]) -> str:
     raw_ref = group.get("ref")
     ref: dict[str, Any] = raw_ref if isinstance(raw_ref, dict) else {}
-    return f"{ref.get('league') or ''}::{ref.get('name') or ''}"
+    base = f"{ref.get('league') or ''}::{ref.get('name') or ''}"
+    scope_id = str(group.get("scopeId") or "")
+    return f"{scope_id}::{base}" if scope_id else base
 
 
 def _unused_rasterzahl(group: dict[str, Any], assignment: dict[str, Any]) -> int | None:

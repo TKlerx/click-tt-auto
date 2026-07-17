@@ -11,9 +11,14 @@ vi.mock("@/lib/db", () => ({ prisma: prismaMock }));
 vi.mock("@/lib/route-auth", () => ({ requireApiUser }));
 vi.mock("@/lib/raster/access", () => ({
   canUseRasterLevel: () => true,
+  assertRasterAccess: vi.fn().mockResolvedValue(true),
   listAccessibleRasterScopes: vi
     .fn()
     .mockResolvedValue([{ id: "scope-a" }, { id: "scope-b" }]),
+}));
+
+vi.mock("@/lib/raster/audit", () => ({
+  logRasterAudit: vi.fn(),
 }));
 vi.mock("@/services/raster", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/services/raster")>()),
@@ -45,7 +50,10 @@ describe("combined raster runs", () => {
     prismaMock.rasterInputSet.findUnique.mockResolvedValue({
       id: "input-1",
       status: "DRAFT",
-      spannedScopes: [{ scopeId: "scope-a" }, { scopeId: "scope-b" }],
+      spannedScopes: [
+        { scope: { code: "scope-a" } },
+        { scope: { code: "scope-b" } },
+      ],
     } as never);
     startOptimizationRun.mockResolvedValue({ id: "run-1" });
 
