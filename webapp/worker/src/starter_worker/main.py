@@ -146,14 +146,25 @@ def _json_list(model: dict[str, object], key: str) -> list[object]:
 
 
 def _raster_run_model(context: dict[str, Any]) -> dict[str, object]:
+    """Build the solver model, merging every spanned scope for a combined run.
+
+    Model ids are derived from names, not rows: a club's id is a slug of its
+    name and a team's id embeds its club and group. They are therefore already
+    stable across scopes, and a club fielding both a Verband and a Bezirk team
+    carries the same id in both models -- which is exactly what a combined run
+    needs, since hall capacity and same-club spacing key off clubId. So the
+    models are merged as-is. Rewriting ids per scope would not resolve a
+    collision; it would invent one, and silently detach wishes, capacities, and
+    the two halves of that club from each other.
+    """
     season_models = context.get("seasonModels")
     if not isinstance(season_models, list) or not season_models:
         return _parse_json_object(context["seasonModelJson"], "seasonModelJson")
     if len(season_models) == 1:
         return _parse_json_object(season_models[0].get("seasonModelJson"), "seasonModelJson")
 
+    clubs: dict[str, dict[str, object]] = {}
     merged: dict[str, list[object]] = {
-        "clubs": [],
         "teams": [],
         "groups": [],
         "wishes": [],
@@ -166,69 +177,106 @@ def _raster_run_model(context: dict[str, Any]) -> dict[str, object]:
         scope_id = str(row.get("scopeId") or "").strip()
         if not scope_id:
             continue
-        scoped = _scope_prefixed_model(
-            _parse_json_object(row.get("seasonModelJson"), "seasonModelJson"),
-            scope_id,
-        )
-        for key in ("clubs", "teams", "groups", "wishes", "absoluteConstraints", "warnings"):
-            value = scoped.get(key)
+        model = _parse_json_object(row.get("seasonModelJson"), "seasonModelJson")
+
+        for club in _json_list(model, "clubs"):
+            if isinstance(club, dict):
+                _merge_club(clubs, club)
+
+        for team in _json_list(model, "teams"):
+            if isinstance(team, dict):
+                merged["teams"].append(_combined_team(team))
+
+        for group in _json_list(model, "groups"):
+            if isinstance(group, dict):
+                # League + name repeats across Bezirke; the solver needs the
+                # scope to tell two "Gruppe 1"s apart. See group_key() there.
+                merged["groups"].append({**group, "scopeId": scope_id})
+
+        for key in ("wishes", "absoluteConstraints", "warnings"):
+            value = model.get(key)
             if isinstance(value, list):
                 merged[key].extend(value)
-    return cast(dict[str, object], merged)
+
+    merged["teams"] = _with_supplied_fixed_numbers(
+        merged["teams"], context.get("fixedRasterzahlen")
+    )
+    return cast(dict[str, object], {"clubs": list(clubs.values()), **merged})
 
 
-def _scope_prefixed_model(model: dict[str, object], scope_id: str) -> dict[str, object]:
-    def prefixed(value: object) -> str:
-        return f"{scope_id}:{value}"
+def _with_supplied_fixed_numbers(
+    teams: list[object], fixed_rows: object
+) -> list[object]:
+    """Apply Rasterzahlen supplied for the combined input set itself (FR-014).
 
-    team_ids: dict[str, str] = {}
-    club_ids: dict[str, str] = {}
-    clubs: list[object] = []
-    for club in _json_list(model, "clubs"):
-        if not isinstance(club, dict):
+    _combined_team() unfixes the numbers inherited from each scope, since the
+    run decides those. Numbers the admin supplied against the combined set are
+    the opposite case: they are deliberate hard constraints for this run.
+    """
+    if not isinstance(fixed_rows, list) or not fixed_rows:
+        return teams
+    supplied: dict[tuple[str, str], int] = {}
+    for fixed in fixed_rows:
+        if not isinstance(fixed, dict):
             continue
-        old_id = str(club.get("id") or "")
-        next_club = {**club, "id": prefixed(old_id)}
-        club_ids[old_id] = str(next_club["id"])
-        clubs.append(next_club)
+        club_id = str(fixed.get("clubId") or "")
+        label = str(fixed.get("teamLabel") or "")
+        value = fixed.get("rasterzahl")
+        if club_id and label and isinstance(value, int):
+            supplied[(club_id, label)] = value
 
-    teams: list[object] = []
-    for team in _json_list(model, "teams"):
+    applied: list[object] = []
+    for team in teams:
         if not isinstance(team, dict):
+            applied.append(team)
             continue
-        old_id = str(team.get("id") or "")
-        next_team = {
-            **team,
-            "id": prefixed(old_id),
-            "clubId": club_ids.get(str(team.get("clubId") or ""), prefixed(team.get("clubId") or "")),
-            "rasterzahl": {"kind": "assignable"},
-        }
-        team_ids[old_id] = str(next_team["id"])
-        teams.append(next_team)
+        key = (str(team.get("clubId") or ""), str(team.get("label") or ""))
+        value = supplied.get(key)
+        if value is None:
+            applied.append(team)
+        else:
+            applied.append({**team, "rasterzahl": {"kind": "fixed", "value": value}})
+    return applied
 
-    groups: list[object] = []
-    for group in _json_list(model, "groups"):
-        if not isinstance(group, dict):
-            continue
-        team_ids_value = group.get("teamIds")
-        team_ids_list = team_ids_value if isinstance(team_ids_value, list) else []
-        groups.append(
-            {
-                **group,
-                "id": prefixed(group.get("id") or len(groups)),
-                "teamIds": [
-                    team_ids.get(str(team_id), prefixed(team_id))
-                    for team_id in team_ids_list
-                ],
-            }
-        )
 
-    return {
-        **model,
-        "clubs": clubs,
-        "teams": teams,
-        "groups": groups,
+def _merge_club(clubs: dict[str, dict[str, object]], club: dict[str, object]) -> None:
+    """Fold one scope's view of a club into the merged set, keeping every venue.
+
+    The same club can appear in several spanned scopes, each model carrying only
+    the venues its own teams play at. Taking the first would drop the others, and
+    capacity_for() resolves a team's venue through its club.
+    """
+    club_id = str(club.get("id") or "")
+    if not club_id:
+        return
+    existing = clubs.get(club_id)
+    if existing is None:
+        clubs[club_id] = dict(club)
+        return
+    venues = list(_json_list(existing, "venues"))
+    known = {
+        str(venue.get("hall")) for venue in venues if isinstance(venue, dict)
     }
+    for venue in _json_list(club, "venues"):
+        if isinstance(venue, dict) and str(venue.get("hall")) not in known:
+            venues.append(venue)
+    existing["venues"] = venues
+
+
+def _combined_team(team: dict[str, object]) -> dict[str, object]:
+    """Free the upper-league numbers a combined run exists to decide (FR-013).
+
+    A scope's model carries the upper-league Rasterzahlen it was handed as fixed
+    input, decided by an earlier Verband run without knowledge of their cost
+    here. A combined run makes those its own decision, so 'fixed' becomes
+    assignable. A 'pinned' number is different: someone chose it deliberately for
+    this plan, so it stays.
+    """
+    rasterzahl = team.get("rasterzahl")
+    kind = rasterzahl.get("kind") if isinstance(rasterzahl, dict) else None
+    if kind == "fixed":
+        return {**team, "rasterzahl": {"kind": "assignable"}}
+    return dict(team)
 
 
 def _exclude_unplanned_groups(model: dict[str, object]) -> dict[str, object]:

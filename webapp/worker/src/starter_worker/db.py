@@ -403,6 +403,19 @@ class JobStore:
                         (row["scopeIds"], row["season"], row["inputSetId"]),
                     )
                     row["seasonModels"] = list(cursor.fetchall())
+                    # Numbers supplied for the combined set itself are the
+                    # admin's own hard constraints and must be honoured (FR-014).
+                    # They are not in any spanned scope's model, so load them
+                    # from the combined input set directly.
+                    cursor.execute(
+                        """
+                        SELECT "clubId", "teamLabel", rasterzahl
+                        FROM "RasterFixedRasterzahl"
+                        WHERE "inputSetId" = %s
+                        """,
+                        (row["inputSetId"],),
+                    )
+                    row["fixedRasterzahlen"] = list(cursor.fetchall())
                 elif row is not None:
                     row["scopeIds"] = [row["scopeId"]]
                     row["seasonModels"] = [

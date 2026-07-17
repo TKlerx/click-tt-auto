@@ -18,6 +18,12 @@ export function CoverageDetail({
           Scopes: {coverage.spannedScopes.join(", ")}
           {coverage.spannedAll ? "" : " (subset)"}
         </p>
+        {coverage.scopesWithoutInputSet?.length ? (
+          <p>
+            Scopes with no inputs at all:{" "}
+            {coverage.scopesWithoutInputSet.join(", ")}
+          </p>
+        ) : null}
         {coverage.excludedGroups.length ? (
           <p>Excluded groups: {coverage.excludedGroups.join(", ")}</p>
         ) : null}

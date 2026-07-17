@@ -9,7 +9,7 @@ import tempfile
 import unittest
 from contextlib import closing
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 from unittest.mock import patch
 
 from starter_worker.config import WorkerConfig, load_config
@@ -251,23 +251,53 @@ class WorkerTests(unittest.TestCase):
         self.assertEqual(row, ("CANCELLED", "CANCELLED", None))
         self.assertEqual(snapshots, 0)
 
-    def test_combined_raster_model_prefixes_scopes_and_drops_inherited_fixed_numbers(self) -> None:
-        context = {
+    @staticmethod
+    def _combined_context(
+        *,
+        fixed_rasterzahlen: list[dict[str, object]] | None = None,
+    ) -> dict[str, Any]:
+        """Two scopes sharing one real club, which is the case combined runs exist for.
+
+        Club ids are slugs of club names, so a club fielding a Verband team and a
+        Bezirk team carries the same id in both models.
+        """
+        context: dict[str, Any] = {
             "seasonModels": [
                 {
                     "scopeId": "scope-a",
                     "seasonModelJson": json.dumps(
                         {
-                            "clubs": [{"id": "club", "name": "Club A"}],
+                            "clubs": [
+                                {
+                                    "id": "ttc-muster",
+                                    "name": "TTC Muster",
+                                    "venues": [{"hall": "1", "capacity": 2}],
+                                }
+                            ],
                             "teams": [
                                 {
-                                    "id": "team",
-                                    "clubId": "club",
+                                    "id": "oberliga-ttc-muster-i",
+                                    "clubId": "ttc-muster",
                                     "label": "I",
+                                    "hall": "1",
                                     "rasterzahl": {"kind": "fixed", "value": 3},
                                 }
                             ],
-                            "groups": [{"id": "group", "teamIds": ["team"]}],
+                            "groups": [
+                                {
+                                    "ref": {"league": "Kreisliga", "name": "Gruppe 1"},
+                                    "size": 10,
+                                    "teamIds": ["oberliga-ttc-muster-i"],
+                                }
+                            ],
+                            "wishes": [
+                                {
+                                    "clubId": "ttc-muster",
+                                    "teamA": "oberliga-ttc-muster-i",
+                                    "teamB": "kreisliga-ttc-muster-ii",
+                                    "relation": "wechsel",
+                                }
+                            ],
                         }
                     ),
                 },
@@ -275,35 +305,96 @@ class WorkerTests(unittest.TestCase):
                     "scopeId": "scope-b",
                     "seasonModelJson": json.dumps(
                         {
-                            "clubs": [{"id": "club", "name": "Club B"}],
-                            "teams": [
+                            "clubs": [
                                 {
-                                    "id": "team",
-                                    "clubId": "club",
-                                    "label": "I",
-                                    "rasterzahl": {"kind": "fixed", "value": 4},
+                                    "id": "ttc-muster",
+                                    "name": "TTC Muster",
+                                    "venues": [{"hall": "2", "capacity": 1}],
                                 }
                             ],
-                            "groups": [{"id": "group", "teamIds": ["team"]}],
+                            "teams": [
+                                {
+                                    "id": "kreisliga-ttc-muster-ii",
+                                    "clubId": "ttc-muster",
+                                    "label": "II",
+                                    "hall": "2",
+                                    "rasterzahl": {"kind": "pinned", "value": 5},
+                                }
+                            ],
+                            "groups": [
+                                {
+                                    "ref": {"league": "Kreisliga", "name": "Gruppe 1"},
+                                    "size": 10,
+                                    "teamIds": ["kreisliga-ttc-muster-ii"],
+                                }
+                            ],
                         }
                     ),
                 },
             ]
         }
+        if fixed_rasterzahlen is not None:
+            context["fixedRasterzahlen"] = fixed_rasterzahlen
+        return context
 
-        model = _raster_run_model(context)
+    def test_combined_raster_model_keeps_ids_so_wishes_and_clubs_still_resolve(self) -> None:
+        model = _raster_run_model(self._combined_context())
         teams = cast(list[dict[str, object]], model["teams"])
+        clubs = cast(list[dict[str, object]], model["clubs"])
+        wishes = cast(list[dict[str, object]], model["wishes"])
+
+        team_ids = {str(team["id"]) for team in teams}
+        # A wish naming a team in the other spanned scope must still find it.
+        self.assertIn(str(wishes[0]["teamA"]), team_ids)
+        self.assertIn(str(wishes[0]["teamB"]), team_ids)
+        # One real club stays one club, so hall capacity and same-club spacing
+        # see both of its teams.
+        self.assertEqual([club["id"] for club in clubs], ["ttc-muster"])
+        self.assertEqual({str(team["clubId"]) for team in teams}, {"ttc-muster"})
+
+    def test_combined_raster_model_keeps_every_venue_of_a_shared_club(self) -> None:
+        model = _raster_run_model(self._combined_context())
+        clubs = cast(list[dict[str, object]], model["clubs"])
+        venues = cast(list[dict[str, object]], clubs[0]["venues"])
+
+        self.assertEqual([venue["hall"] for venue in venues], ["1", "2"])
+
+    def test_combined_raster_model_unfixes_inherited_but_keeps_pins(self) -> None:
+        model = _raster_run_model(self._combined_context())
+        teams = cast(list[dict[str, object]], model["teams"])
+        by_id = {str(team["id"]): team for team in teams}
+
+        # Inherited upper-league number: the combined run decides it (FR-013).
+        self.assertEqual(
+            by_id["oberliga-ttc-muster-i"]["rasterzahl"], {"kind": "assignable"}
+        )
+        # A deliberate pin is not an inherited constraint and survives.
+        self.assertEqual(
+            by_id["kreisliga-ttc-muster-ii"]["rasterzahl"], {"kind": "pinned", "value": 5}
+        )
+
+    def test_combined_raster_model_honours_numbers_supplied_for_the_combined_set(self) -> None:
+        model = _raster_run_model(
+            self._combined_context(
+                fixed_rasterzahlen=[
+                    {"clubId": "ttc-muster", "teamLabel": "I", "rasterzahl": 7}
+                ]
+            )
+        )
+        teams = cast(list[dict[str, object]], model["teams"])
+        by_id = {str(team["id"]): team for team in teams}
+
+        # FR-014: supplied against the combined set, so a hard constraint here.
+        self.assertEqual(
+            by_id["oberliga-ttc-muster-i"]["rasterzahl"], {"kind": "fixed", "value": 7}
+        )
+
+    def test_combined_raster_model_tags_groups_with_scope_to_keep_them_distinct(self) -> None:
+        model = _raster_run_model(self._combined_context())
         groups = cast(list[dict[str, object]], model["groups"])
 
-        self.assertEqual([team["id"] for team in teams], ["scope-a:team", "scope-b:team"])
-        self.assertEqual(
-            [team["rasterzahl"] for team in teams],
-            [{"kind": "assignable"}, {"kind": "assignable"}],
-        )
-        self.assertEqual(
-            [group["teamIds"] for group in groups],
-            [["scope-a:team"], ["scope-b:team"]],
-        )
+        # Both are "Kreisliga / Gruppe 1"; only the scope tells them apart.
+        self.assertEqual([group["scopeId"] for group in groups], ["scope-a", "scope-b"])
 
     def test_worker_runtime_has_ortools(self) -> None:
         result = subprocess.run(
