@@ -41,6 +41,8 @@ from starter_worker.main import (
 class WorkerTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory()
+        if self._testMethodName.startswith("test_combined_raster_model_"):
+            return
         self.database_url = ensure_worker_database()
         truncate_all(self.database_url)
 
