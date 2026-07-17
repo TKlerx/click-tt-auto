@@ -1,7 +1,7 @@
 # Business App Starter Constitution
 
 > Project constitution for the Business App Starter web application.
-> Version: 1.1.0
+> Version: 2.0.0
 > Last updated: 2026-07-17
 
 ## Core Principles
@@ -194,11 +194,16 @@ approved before merge.
 
 ## Amendment History
 
-### 1.1.0 -- 2026-07-17
+### 2.0.0 -- 2026-07-17
 
 **Changed**: Technology Constraints / Database. SQLite is no longer
 an accepted local-development database; PostgreSQL is required in
 every environment.
+
+**Why MAJOR**: This is an incompatible redefinition, not a
+clarification. The previous constraint permitted SQLite locally; this
+one forbids it, and any environment or contributor depending on the
+old rule must change. Per the Amendments rule above, that is MAJOR.
 
 **Rationale**: The webapp became PostgreSQL-only on 2026-07-10, but
 the worker kept a parallel SQLite implementation that survived only
@@ -208,6 +213,6 @@ branch production never ran, and missed at least one defect in the
 PostgreSQL path as a result. The constraint is amended to match both
 the deployed reality and the reason it went wrong.
 
-> Versions before 1.1.0 were unnumbered. The text as it stood on
+> Versions before 2.0.0 were unnumbered. The text as it stood on
 > 2026-03-19 is treated as 1.0.0 so this amendment has a baseline to
 > bump from.
