@@ -1698,7 +1698,9 @@ def _inferred_capacities(teams: list[dict[str, Any]]) -> dict[tuple[str, str, st
 def _group_key(group: dict[str, Any]) -> str:
     raw_ref = group.get("ref")
     ref: dict[str, Any] = raw_ref if isinstance(raw_ref, dict) else {}
-    return f"{ref.get('league') or ''}::{ref.get('name') or ''}"
+    base = f"{ref.get('league') or ''}::{ref.get('name') or ''}"
+    scope_id = str(group.get("scopeId") or "")
+    return f"{scope_id}::{base}" if scope_id else base
 
 
 def _unused_rasterzahl(group: dict[str, Any], assignment: dict[str, Any]) -> int | None:

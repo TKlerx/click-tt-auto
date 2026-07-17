@@ -608,6 +608,48 @@ class WorkerTests(unittest.TestCase):
         self.assertEqual(week_11["actualCount"], 2)
         self.assertEqual(week_11["excess"], 1)
 
+    def test_persisted_overages_keep_same_named_odd_groups_distinct_by_scope(self) -> None:
+        model = {
+            "clubs": [{"id": "club", "name": "Club", "venues": [{"hall": "1", "capacity": 1}]}],
+            "teams": [
+                {
+                    "id": "team-a",
+                    "clubId": "club",
+                    "hall": "1",
+                    "homeWeekday": "friday",
+                    "rasterzahl": {"kind": "assignable"},
+                },
+                {
+                    "id": "team-b",
+                    "clubId": "club",
+                    "hall": "1",
+                    "homeWeekday": "friday",
+                    "rasterzahl": {"kind": "assignable"},
+                },
+            ],
+            "groups": [
+                {
+                    "scopeId": "scope-a",
+                    "ref": {"league": "Kreisliga", "name": "Gruppe 1"},
+                    "size": 5,
+                    "teamIds": ["team-a"],
+                },
+                {
+                    "scopeId": "scope-b",
+                    "ref": {"league": "Kreisliga", "name": "Gruppe 1"},
+                    "size": 5,
+                    "teamIds": ["team-b"],
+                },
+            ],
+        }
+
+        rows = _find_overage_rows(model, {"team-a": 1, "team-b": 2})
+
+        week_1 = next(row for row in rows if row["week"] == 1)
+        self.assertEqual([team["id"] for team in week_1["teams"]], ["team-a", "team-b"])
+        self.assertEqual(week_1["actualCount"], 2)
+        self.assertEqual(week_1["excess"], 1)
+
     def test_persisted_overages_ignore_capacity_irrelevant_teams(self) -> None:
         model = {
             "clubs": [{"id": "club", "name": "Club", "venues": [{"hall": "1", "capacity": 1}]}],
