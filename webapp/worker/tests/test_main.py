@@ -3,15 +3,17 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-import sqlite3
 import sys
 import tempfile
 import unittest
 import unittest.mock
-from contextlib import closing
 from pathlib import Path
 from typing import Any, cast
 from unittest.mock import patch
+
+import psycopg
+from psycopg.rows import dict_row
+from worker_db import ensure_worker_database, truncate_all
 
 from starter_worker.config import WorkerConfig, load_config
 from starter_worker.db import BackgroundJob, JobStore, _find_overage_rows, normalize_postgres_database_url
@@ -37,8 +39,8 @@ from starter_worker.main import (
 class WorkerTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory()
-        self.db_path = Path(self.temp_dir.name) / "worker-test.db"
-        self._create_schema()
+        self.database_url = ensure_worker_database()
+        truncate_all(self.database_url)
 
     def tearDown(self) -> None:
         self.temp_dir.cleanup()
@@ -141,21 +143,8 @@ class WorkerTests(unittest.TestCase):
             "absoluteConstraints": [],
             "warnings": [],
         }
-        with closing(sqlite3.connect(self.db_path)) as connection:
-            connection.execute(
-                """
-                INSERT INTO RasterInputSet (id, scopeId, seasonModelJson)
-                VALUES ('input-1', 'scope-owl', ?)
-                """,
-                (json.dumps(season_model),),
-            )
-            connection.execute(
-                """
-                INSERT INTO RasterOptimizationRun (id, inputSetId, status, settings)
-                VALUES ('run-1', 'input-1', 'PENDING', '{"timeLimitSeconds": 60}')
-                """
-            )
-            connection.commit()
+        self._seed_input_set("input-1", season_model=season_model)
+        self._seed_run("run-1", input_set_id="input-1", settings='{"timeLimitSeconds": 60}')
 
         with patch(
             "starter_worker.main._solve_raster_model",
@@ -182,20 +171,20 @@ class WorkerTests(unittest.TestCase):
                 )(),
             )
 
-        with closing(sqlite3.connect(self.db_path)) as connection:
-            connection.row_factory = sqlite3.Row
+        with self._connect() as connection:
             row = connection.execute(
                 """
-                SELECT status, jobId, outcome, solverStatus, finishedAt
-                FROM RasterOptimizationRun
+                SELECT status, "jobId", outcome, "solverStatus", "finishedAt"
+                FROM "RasterOptimizationRun"
                 WHERE id = 'run-1'
                 """,
             ).fetchone()
             snapshot = connection.execute(
-                "SELECT id, optimality, totalConflicts FROM RasterSnapshot WHERE runId = 'run-1'",
+                'SELECT id, optimality, "totalConflicts" FROM "RasterSnapshot" '
+                "WHERE \"runId\" = 'run-1'",
             ).fetchone()
             assignments = connection.execute(
-                "SELECT team, rasterzahl FROM RasterAssignment ORDER BY team",
+                'SELECT team, rasterzahl FROM "RasterAssignment" ORDER BY team',
             ).fetchall()
 
         assert row is not None
@@ -208,24 +197,16 @@ class WorkerTests(unittest.TestCase):
         self.assertIsNotNone(row["finishedAt"])
         self.assertEqual(snapshot["optimality"], "PROVEN_OPTIMAL")
         self.assertEqual(snapshot["totalConflicts"], 0)
-        self.assertEqual([tuple(row) for row in assignments], [("I", 1), ("II", 2)])
+        self.assertEqual(
+            [(row["team"], row["rasterzahl"]) for row in assignments], [("I", 1), ("II", 2)]
+        )
 
     def test_process_raster_run_skips_cancelled_run(self) -> None:
         store = self._make_store()
-        with closing(sqlite3.connect(self.db_path)) as connection:
-            connection.execute(
-                """
-                INSERT INTO RasterInputSet (id, scopeId, seasonModelJson)
-                VALUES ('input-1', 'scope-owl', '{}')
-                """
-            )
-            connection.execute(
-                """
-                INSERT INTO RasterOptimizationRun (id, inputSetId, status, outcome, settings)
-                VALUES ('run-1', 'input-1', 'CANCELLED', 'CANCELLED', '{}')
-                """
-            )
-            connection.commit()
+        self._seed_input_set("input-1", season_model="{}")
+        self._seed_run(
+            "run-1", input_set_id="input-1", status="CANCELLED", outcome="CANCELLED"
+        )
 
         with patch("starter_worker.main._solve_raster_model") as solve:
             result = process_raster_run(
@@ -241,17 +222,20 @@ class WorkerTests(unittest.TestCase):
                 )(),
             )
 
-        with closing(sqlite3.connect(self.db_path)) as connection:
+        with self._connect() as connection:
             row = connection.execute(
-                "SELECT status, outcome, jobId FROM RasterOptimizationRun WHERE id = 'run-1'",
+                'SELECT status, outcome, "jobId" FROM "RasterOptimizationRun" '
+                "WHERE id = 'run-1'",
             ).fetchone()
-            snapshots = connection.execute(
-                "SELECT COUNT(*) FROM RasterSnapshot WHERE runId = 'run-1'",
-            ).fetchone()[0]
+            snapshot_count = connection.execute(
+                'SELECT COUNT(*) AS count FROM "RasterSnapshot" WHERE "runId" = \'run-1\'',
+            ).fetchone()
+            assert snapshot_count is not None
+            snapshots = snapshot_count["count"]
 
         solve.assert_not_called()
         self.assertEqual(result["status"], "CANCELLED")
-        self.assertEqual(row, ("CANCELLED", "CANCELLED", None))
+        self.assertEqual(row, {"status": "CANCELLED", "outcome": "CANCELLED", "jobId": None})
         self.assertEqual(snapshots, 0)
 
     @staticmethod
@@ -822,7 +806,7 @@ class WorkerTests(unittest.TestCase):
         self.assertEqual(inbound_bounce["processingStatus"], "IGNORED")
         self.assertEqual(notification["status"], "SENT")
 
-    def test_sqlite_job_store_claims_and_completes_job(self) -> None:
+    def test_job_store_claims_and_completes_job(self) -> None:
         self._insert_job(job_id="job-1", job_type="noop", payload={"message": "hello"})
         store = self._make_store()
 
@@ -844,7 +828,7 @@ class WorkerTests(unittest.TestCase):
         self.assertIsNotNone(row["finishedAt"])
         self.assertIsNone(row["lockedAt"])
 
-    def test_sqlite_job_store_retries_failure_before_max_attempts(self) -> None:
+    def test_job_store_retries_failure_before_max_attempts(self) -> None:
         self._insert_job(job_id="job-2", job_type="echo", payload={"message": "x"})
         store = self._make_store(max_attempts=3, retry_backoff_seconds=15)
 
@@ -861,7 +845,7 @@ class WorkerTests(unittest.TestCase):
         self.assertIsNone(row["finishedAt"])
         self.assertIsNone(row["lockedAt"])
 
-    def test_sqlite_job_store_marks_terminal_failure_after_max_attempts(self) -> None:
+    def test_job_store_marks_terminal_failure_after_max_attempts(self) -> None:
         self._insert_job(job_id="job-3", job_type="echo", payload={"message": "x"})
         store = self._make_store(max_attempts=1)
 
@@ -878,7 +862,7 @@ class WorkerTests(unittest.TestCase):
         self.assertIsNotNone(row["finishedAt"])
         self.assertIsNone(row["lockedAt"])
 
-    def test_sqlite_job_store_can_skip_retries_for_terminal_failure(self) -> None:
+    def test_job_store_can_skip_retries_for_terminal_failure(self) -> None:
         self._insert_job(job_id="job-terminal", job_type="echo", payload={"message": "x"})
         store = self._make_store(max_attempts=3)
 
@@ -894,22 +878,21 @@ class WorkerTests(unittest.TestCase):
         self.assertIsNotNone(row["finishedAt"])
         self.assertIsNone(row["lockedAt"])
 
-    def test_sqlite_job_store_requeues_stale_in_progress_job(self) -> None:
-        with closing(sqlite3.connect(self.db_path)) as connection:
+    def test_job_store_requeues_stale_in_progress_job(self) -> None:
+        with self._connect() as connection:
             connection.execute(
                 """
-                INSERT INTO BackgroundJob (
-                    id, jobType, status, payload, attemptCount, availableAt, startedAt,
-                    lockedAt, workerId, createdAt, updatedAt
+                INSERT INTO "BackgroundJob" (
+                    id, "jobType", status, payload, "attemptCount", "availableAt", "startedAt",
+                    "lockedAt", "workerId", "createdAt", "updatedAt"
                 ) VALUES (
-                    ?, ?, 'IN_PROGRESS', ?, 1, datetime('now', '-10 minutes'),
-                    datetime('now', '-10 minutes'), datetime('now', '-10 minutes'),
-                    'worker-old', datetime('now', '-10 minutes'), datetime('now', '-10 minutes')
+                    %s, %s, 'IN_PROGRESS', %s, 1, now() - interval '10 minutes',
+                    now() - interval '10 minutes', now() - interval '10 minutes',
+                    'worker-old', now() - interval '10 minutes', now() - interval '10 minutes'
                 )
                 """,
                 ("job-4", "noop", json.dumps({"message": "hello"})),
             )
-            connection.commit()
 
         store = self._make_store(stale_lock_seconds=60)
 
@@ -923,17 +906,18 @@ class WorkerTests(unittest.TestCase):
         self.assertIsNone(row["workerId"])
 
     def test_process_teams_intake_poll_stores_messages_and_updates_delta(self) -> None:
-        with closing(sqlite3.connect(self.db_path)) as connection:
+        self._seed_actor()
+        with self._connect() as connection:
             connection.execute(
                 """
-                INSERT INTO TeamsIntakeSubscription (
-                    id, teamId, channelId, active, deltaToken, createdByUserId, createdAt, updatedAt
+                INSERT INTO "TeamsIntakeSubscription" (
+                    id, "teamId", "channelId", active, "deltaToken", "createdByUserId",
+                    "createdAt", "updatedAt"
                 ) VALUES (
-                    'sub-1', 'team-1', 'channel-1', 1, NULL, 'admin-1', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                    'sub-1', 'team-1', 'channel-1', true, NULL, 'admin-1', now(), now()
                 )
                 """
             )
-            connection.commit()
 
         with patch(
             "starter_worker.main.list_teams_channel_messages",
@@ -953,16 +937,17 @@ class WorkerTests(unittest.TestCase):
             result = process_teams_intake_poll(store)
 
         self.assertEqual(result["created"], 1)
-        with closing(sqlite3.connect(self.db_path)) as connection:
-            connection.row_factory = sqlite3.Row
+        with self._connect() as connection:
             row = connection.execute(
-                "SELECT providerMessageId FROM TeamsInboundMessage WHERE providerMessageId = ?",
+                'SELECT "providerMessageId" FROM "TeamsInboundMessage" '
+                'WHERE "providerMessageId" = %s',
                 ("teams-msg-1",),
             ).fetchone()
             self.assertIsNotNone(row)
             sub = connection.execute(
-                "SELECT deltaToken FROM TeamsIntakeSubscription WHERE id = 'sub-1'",
+                'SELECT "deltaToken" FROM "TeamsIntakeSubscription" WHERE id = \'sub-1\'',
             ).fetchone()
+            assert sub is not None
             self.assertEqual(sub["deltaToken"], "/delta-token-1")
 
     def test_load_config_reads_repo_env_file(self) -> None:
@@ -1050,6 +1035,24 @@ class WorkerTests(unittest.TestCase):
             "postgresql://worker:test@localhost:5432/app?sslmode=require",
         )
 
+    def test_worker_rejects_non_postgres_database_url(self) -> None:
+        # SQLite support was removed; a file: URL must fail loudly rather than
+        # silently running the worker against a database production never uses.
+        with self.assertRaises(ValueError) as caught:
+            normalize_postgres_database_url("file:./dev.db")
+
+        self.assertIn("PostgreSQL", str(caught.exception))
+
+    def test_load_config_requires_a_database_url(self) -> None:
+        env_path = Path(self.temp_dir.name) / ".env"
+        env_path.write_text("WORKER_ID=\"worker-1\"\n", encoding="utf-8")
+
+        with patch.dict(os.environ, {}, clear=True):
+            with self.assertRaises(RuntimeError) as caught:
+                load_config(env_path=env_path)
+
+        self.assertIn("WORKER_DATABASE_URL", str(caught.exception))
+
     def _make_store(
         self,
         *,
@@ -1059,7 +1062,7 @@ class WorkerTests(unittest.TestCase):
     ) -> JobStore:
         return JobStore(
             WorkerConfig(
-                database_url=f"file:{self.db_path}",
+                database_url=self.database_url,
                 poll_interval_seconds=0.1,
                 worker_id="worker-test",
                 max_attempts=max_attempts,
@@ -1069,238 +1072,89 @@ class WorkerTests(unittest.TestCase):
             )
         )
 
-    def _create_schema(self) -> None:
-        with closing(sqlite3.connect(self.db_path)) as connection:
+    def _connect(self) -> psycopg.Connection[dict[str, Any]]:
+        return psycopg.connect(self.database_url, row_factory=dict_row, autocommit=True)
+
+    def _seed_actor(self, user_id: str = "admin-1") -> str:
+        """Insert the User row that most raster and Teams rows reference."""
+        with self._connect() as connection:
             connection.execute(
                 """
-                CREATE TABLE BackgroundJob (
-                    id TEXT PRIMARY KEY,
-                    jobType TEXT NOT NULL,
-                    status TEXT NOT NULL DEFAULT 'PENDING',
-                    payload TEXT,
-                    result TEXT,
-                    error TEXT,
-                    attemptCount INTEGER NOT NULL DEFAULT 0,
-                    availableAt TEXT NOT NULL,
-                    startedAt TEXT,
-                    lockedAt TEXT,
-                    finishedAt TEXT,
-                    workerId TEXT,
-                    createdByUserId TEXT,
-                    createdAt TEXT NOT NULL,
-                    updatedAt TEXT NOT NULL
-                )
-                """
+                INSERT INTO "User" (id, email, name, "authMethod", "updatedAt")
+                VALUES (%s, %s, 'Admin', 'LOCAL', now())
+                ON CONFLICT (id) DO NOTHING
+                """,
+                (user_id, f"{user_id}@example.com"),
             )
+        return user_id
+
+    def _seed_scope(self, scope_id: str = "scope-owl", code: str = "owl") -> str:
+        with self._connect() as connection:
             connection.execute(
                 """
-                CREATE TABLE Notification (
-                    id TEXT PRIMARY KEY,
-                    providerMessageId TEXT,
-                    status TEXT NOT NULL DEFAULT 'QUEUED',
-                    lastError TEXT,
-                    updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-                )
-                """
+                INSERT INTO "Scope" (id, name, code, "updatedAt")
+                VALUES (%s, %s, %s, now())
+                ON CONFLICT (id) DO NOTHING
+                """,
+                (scope_id, code.upper(), code),
             )
+        return scope_id
+
+    def _seed_input_set(
+        self,
+        input_set_id: str,
+        *,
+        season_model: dict[str, object] | str,
+        scope_id: str = "scope-owl",
+    ) -> None:
+        self._seed_actor()
+        self._seed_scope(scope_id)
+        payload = season_model if isinstance(season_model, str) else json.dumps(season_model)
+        with self._connect() as connection:
             connection.execute(
                 """
-                CREATE TABLE InboundEmail (
-                    id TEXT PRIMARY KEY,
-                    providerMessageId TEXT NOT NULL UNIQUE,
-                    mailbox TEXT NOT NULL,
-                    internetMessageId TEXT,
-                    conversationId TEXT,
-                    senderEmail TEXT,
-                    senderName TEXT,
-                    subject TEXT NOT NULL,
-                    bodyPreview TEXT,
-                    bodyText TEXT,
-                    bodyHtml TEXT,
-                    inReplyTo TEXT,
-                    referenceIds TEXT NOT NULL DEFAULT '[]',
-                    receivedAt TEXT NOT NULL,
-                    processingStatus TEXT NOT NULL DEFAULT 'RECEIVED',
-                    processingNotes TEXT,
-                    correlatedNotificationId TEXT,
-                    linkedEntityType TEXT,
-                    linkedEntityId TEXT,
-                    createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-                )
-                """
+                INSERT INTO "RasterInputSet" (id, name, "createdById", "scopeId", "seasonModelJson")
+                VALUES (%s, %s, 'admin-1', %s, %s)
+                """,
+                (input_set_id, f"Input {input_set_id}", scope_id, payload),
             )
+
+    def _seed_run(
+        self,
+        run_id: str,
+        *,
+        input_set_id: str,
+        status: str = "PENDING",
+        outcome: str | None = None,
+        settings: str = "{}",
+    ) -> None:
+        with self._connect() as connection:
             connection.execute(
                 """
-                CREATE TABLE TeamsOutboundMessage (
-                    id TEXT PRIMARY KEY,
-                    status TEXT NOT NULL DEFAULT 'QUEUED',
-                    graphMessageId TEXT,
-                    attemptCount INTEGER NOT NULL DEFAULT 0,
-                    lastError TEXT,
-                    sentAt TEXT,
-                    updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-                )
-                """
+                INSERT INTO "RasterOptimizationRun" (
+                    id, "inputSetId", "startedById", status, outcome, settings
+                ) VALUES (%s, %s, 'admin-1', %s::"OptimizationRunStatus",
+                          %s::"OptimizationRunOutcome", %s)
+                """,
+                (run_id, input_set_id, status, outcome, settings),
             )
-            connection.execute(
-                """
-                CREATE TABLE TeamsIntegrationConfig (
-                    id TEXT PRIMARY KEY,
-                    sendEnabled INTEGER NOT NULL DEFAULT 0,
-                    intakeEnabled INTEGER NOT NULL DEFAULT 0,
-                    createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-                )
-                """
-            )
-            connection.execute(
-                """
-                CREATE TABLE TeamsIntakeSubscription (
-                    id TEXT PRIMARY KEY,
-                    teamId TEXT NOT NULL,
-                    channelId TEXT NOT NULL,
-                    active INTEGER NOT NULL DEFAULT 1,
-                    deltaToken TEXT,
-                    lastPolledAt TEXT,
-                    createdByUserId TEXT NOT NULL,
-                    createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-                )
-                """
-            )
-            connection.execute(
-                """
-                CREATE TABLE TeamsInboundMessage (
-                    id TEXT PRIMARY KEY,
-                    subscriptionId TEXT NOT NULL,
-                    providerMessageId TEXT NOT NULL UNIQUE,
-                    teamId TEXT NOT NULL,
-                    channelId TEXT NOT NULL,
-                    senderDisplayName TEXT,
-                    senderUserId TEXT,
-                    content TEXT,
-                    contentType TEXT,
-                    truncated INTEGER NOT NULL DEFAULT 0,
-                    processingStatus TEXT NOT NULL DEFAULT 'RECEIVED',
-                    processingNotes TEXT,
-                    messageCreatedAt TEXT NOT NULL,
-                    createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-                )
-                """
-            )
-            connection.execute(
-                """
-                CREATE TABLE RasterOptimizationRun (
-                    id TEXT PRIMARY KEY,
-                    inputSetId TEXT,
-                    jobId TEXT,
-                    status TEXT NOT NULL DEFAULT 'PENDING',
-                    outcome TEXT,
-                    objectiveValue REAL,
-                    objectiveBreakdown TEXT,
-                    solverStatus TEXT,
-                    settings TEXT NOT NULL DEFAULT '{}',
-                    finishedAt TEXT
-                )
-                """
-            )
-            connection.execute(
-                """
-                CREATE TABLE RasterInputSet (
-                    id TEXT PRIMARY KEY,
-                    scopeId TEXT NOT NULL,
-                    seasonModelJson TEXT
-                )
-                """
-            )
-            connection.execute(
-                """
-                CREATE TABLE RasterHallCapacity (
-                    id TEXT PRIMARY KEY,
-                    scopeId TEXT NOT NULL,
-                    clubId TEXT NOT NULL,
-                    hall TEXT NOT NULL,
-                    weekday TEXT NOT NULL,
-                    capacity INTEGER NOT NULL
-                )
-                """
-            )
-            connection.execute(
-                """
-                CREATE TABLE RasterSnapshot (
-                    id TEXT PRIMARY KEY,
-                    runId TEXT,
-                    scopeId TEXT NOT NULL,
-                    origin TEXT NOT NULL,
-                    optimality TEXT NOT NULL,
-                    stale INTEGER NOT NULL DEFAULT 0,
-                    totalConflicts INTEGER NOT NULL DEFAULT 0,
-                    totalExcess INTEGER NOT NULL DEFAULT 0,
-                    maxExcess INTEGER NOT NULL DEFAULT 0,
-                    affectedClubs INTEGER NOT NULL DEFAULT 0,
-                    objectiveBreakdown TEXT NOT NULL DEFAULT '{}',
-                    createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-                )
-                """
-            )
-            connection.execute(
-                """
-                CREATE TABLE RasterAssignment (
-                    id TEXT PRIMARY KEY,
-                    snapshotId TEXT NOT NULL,
-                    league TEXT NOT NULL,
-                    "group" TEXT NOT NULL,
-                    clubId TEXT NOT NULL,
-                    clubName TEXT NOT NULL,
-                    team TEXT NOT NULL,
-                    rasterzahl INTEGER NOT NULL,
-                    status TEXT NOT NULL,
-                    weekday TEXT NOT NULL,
-                    hall TEXT NOT NULL,
-                    startTime TEXT,
-                    weekSlot TEXT
-                )
-                """
-            )
-            connection.execute(
-                """
-                CREATE TABLE RasterConflict (
-                    id TEXT PRIMARY KEY,
-                    snapshotId TEXT NOT NULL,
-                    matchWeek INTEGER NOT NULL,
-                    clubId TEXT NOT NULL,
-                    clubName TEXT NOT NULL,
-                    weekday TEXT NOT NULL,
-                    hall TEXT NOT NULL,
-                    capacity INTEGER NOT NULL,
-                    actualCount INTEGER NOT NULL,
-                    excess INTEGER NOT NULL,
-                    teams TEXT NOT NULL
-                )
-                """
-            )
-            connection.commit()
 
     def _insert_job(self, job_id: str, job_type: str, payload: dict[str, object]) -> None:
-        with closing(sqlite3.connect(self.db_path)) as connection:
+        with self._connect() as connection:
             connection.execute(
                 """
-                INSERT INTO BackgroundJob (
-                    id, jobType, status, payload, attemptCount,
-                    availableAt, createdAt, updatedAt
-                ) VALUES (?, ?, 'PENDING', ?, 0, datetime('now', '-1 minute'), datetime('now'), datetime('now'))
+                INSERT INTO "BackgroundJob" (
+                    id, "jobType", status, payload, "attemptCount",
+                    "availableAt", "createdAt", "updatedAt"
+                ) VALUES (%s, %s, 'PENDING', %s, 0, now() - interval '1 minute', now(), now())
                 """,
                 (job_id, job_type, json.dumps(payload)),
             )
-            connection.commit()
 
-    def _fetch_job(self, job_id: str) -> sqlite3.Row:
-        with closing(sqlite3.connect(self.db_path)) as connection:
-            connection.row_factory = sqlite3.Row
-            row: sqlite3.Row | None = connection.execute(
-                "SELECT * FROM BackgroundJob WHERE id = ?",
-                (job_id,),
+    def _fetch_job(self, job_id: str) -> dict[str, Any]:
+        with self._connect() as connection:
+            row = connection.execute(
+                'SELECT * FROM "BackgroundJob" WHERE id = %s', (job_id,)
             ).fetchone()
 
         assert row is not None
@@ -1312,36 +1166,42 @@ class WorkerTests(unittest.TestCase):
         *,
         provider_message_id: str | None = None,
     ) -> None:
-        with closing(sqlite3.connect(self.db_path)) as connection:
+        with self._connect() as connection:
             connection.execute(
                 """
-                INSERT INTO Notification (id, providerMessageId, status, lastError, updatedAt)
-                VALUES (?, ?, 'SENT', NULL, CURRENT_TIMESTAMP)
+                INSERT INTO "NotificationEvent" (id, "eventType")
+                VALUES (%s, 'USER_CREATED')
+                ON CONFLICT (id) DO NOTHING
+                """,
+                (f"event-{notification_id}",),
+            )
+            connection.execute(
+                """
+                INSERT INTO "Notification" (
+                    id, "eventId", "recipientEmail", subject, "bodyText",
+                    "providerMessageId", status, "lastError", "updatedAt"
+                ) VALUES (%s, %s, 'person@example.com', 'Subject', 'Body', %s, 'SENT', NULL, now())
                 """,
                 (
                     notification_id,
+                    f"event-{notification_id}",
                     provider_message_id or f"<provider-{notification_id}@example.com>",
                 ),
             )
-            connection.commit()
 
-    def _fetch_notification(self, notification_id: str) -> sqlite3.Row:
-        with closing(sqlite3.connect(self.db_path)) as connection:
-            connection.row_factory = sqlite3.Row
-            row: sqlite3.Row | None = connection.execute(
-                "SELECT * FROM Notification WHERE id = ?",
-                (notification_id,),
+    def _fetch_notification(self, notification_id: str) -> dict[str, Any]:
+        with self._connect() as connection:
+            row = connection.execute(
+                'SELECT * FROM "Notification" WHERE id = %s', (notification_id,)
             ).fetchone()
 
         assert row is not None
         return row
 
-    def _fetch_inbound_email(self, inbound_email_id: str) -> sqlite3.Row:
-        with closing(sqlite3.connect(self.db_path)) as connection:
-            connection.row_factory = sqlite3.Row
-            row: sqlite3.Row | None = connection.execute(
-                "SELECT * FROM InboundEmail WHERE id = ?",
-                (inbound_email_id,),
+    def _fetch_inbound_email(self, inbound_email_id: str) -> dict[str, Any]:
+        with self._connect() as connection:
+            row = connection.execute(
+                'SELECT * FROM "InboundEmail" WHERE id = %s', (inbound_email_id,)
             ).fetchone()
 
         assert row is not None

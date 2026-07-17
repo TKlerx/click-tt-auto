@@ -2,12 +2,9 @@ from __future__ import annotations
 
 import json
 import re
-import sqlite3
 import uuid
-from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
@@ -17,11 +14,16 @@ from psycopg.rows import dict_row
 from .config import WorkerConfig
 
 PRISMA_ONLY_QUERY_PARAMS = frozenset({"connection_limit"})
+POSTGRES_URL_SCHEMES = ("postgresql://", "postgres://")
 
 
 def normalize_postgres_database_url(database_url: str) -> str:
-    if database_url.startswith("file:"):
-        return database_url
+    if not database_url.startswith(POSTGRES_URL_SCHEMES):
+        raise ValueError(
+            "The worker requires a PostgreSQL database URL "
+            f"(postgresql:// or postgres://), got: {database_url!r}. "
+            "SQLite support was removed; set WORKER_DATABASE_URL or DATABASE_URL."
+        )
 
     parsed = urlsplit(database_url)
     query = urlencode(
@@ -45,50 +47,18 @@ class BackgroundJob:
 class JobStore:
     def __init__(self, config: WorkerConfig) -> None:
         self._config = config
-        self._is_sqlite = config.database_url.startswith("file:")
-        self._sqlite_path: Path | None = None
         self._postgres_database_url = normalize_postgres_database_url(
             config.database_url,
         )
-        if self._is_sqlite:
-            self._sqlite_path = Path(config.database_url.removeprefix("file:")).resolve()
-
-    def _sqlite_conn(self) -> sqlite3.Connection:
-        assert self._sqlite_path is not None
-        return sqlite3.connect(self._sqlite_path)
 
     def claim_next_job(self) -> BackgroundJob | None:
-        if self._is_sqlite:
-            return self._claim_sqlite_job()
-
         return self._claim_postgres_job()
 
     def requeue_stale_jobs(self) -> int:
-        if self._is_sqlite:
-            return self._requeue_stale_sqlite_jobs()
-
         return self._requeue_stale_postgres_jobs()
 
     def complete_job(self, job_id: str, result: dict[str, Any]) -> None:
         payload = json.dumps(result)
-        if self._is_sqlite:
-            with closing(self._sqlite_conn()) as connection:
-                connection.execute(
-                    """
-                    UPDATE BackgroundJob
-                    SET status = 'COMPLETED',
-                        result = ?,
-                        error = NULL,
-                        lockedAt = NULL,
-                        finishedAt = CURRENT_TIMESTAMP,
-                        updatedAt = CURRENT_TIMESTAMP
-                    WHERE id = ?
-                    """,
-                    (payload, job_id),
-                )
-                connection.commit()
-            return
-
         with psycopg.connect(self._postgres_database_url) as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
@@ -107,29 +77,10 @@ class JobStore:
             connection.commit()
 
     def fail_job(self, job_id: str, error: str, *, retry: bool = True) -> None:
-        if self._is_sqlite:
-            self._fail_sqlite_job(job_id, error, retry=retry)
-            return
-
         self._fail_postgres_job(job_id, error, retry=retry)
 
     def mark_notification_processing(self, notification_id: str, attempt_count: int) -> None:
         retry_count = max(attempt_count - 1, 0)
-        if self._is_sqlite:
-            with closing(self._sqlite_conn()) as connection:
-                connection.execute(
-                    """
-                    UPDATE Notification
-                    SET status = 'SENDING',
-                        retryCount = ?,
-                        updatedAt = CURRENT_TIMESTAMP
-                    WHERE id = ?
-                    """,
-                    (retry_count, notification_id),
-                )
-                connection.commit()
-            return
-
         with psycopg.connect(self._postgres_database_url) as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
@@ -146,23 +97,6 @@ class JobStore:
 
     def mark_notification_sent(self, notification_id: str, attempt_count: int) -> None:
         retry_count = max(attempt_count - 1, 0)
-        if self._is_sqlite:
-            with closing(self._sqlite_conn()) as connection:
-                connection.execute(
-                    """
-                    UPDATE Notification
-                    SET status = 'SENT',
-                        retryCount = ?,
-                        lastError = NULL,
-                        sentAt = CURRENT_TIMESTAMP,
-                        updatedAt = CURRENT_TIMESTAMP
-                    WHERE id = ?
-                    """,
-                    (retry_count, notification_id),
-                )
-                connection.commit()
-            return
-
         with psycopg.connect(self._postgres_database_url) as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
@@ -189,22 +123,6 @@ class JobStore:
     ) -> None:
         retry_count = max(attempt_count - 1, 0)
         status = "RETRYING" if will_retry else "FAILED"
-        if self._is_sqlite:
-            with closing(self._sqlite_conn()) as connection:
-                connection.execute(
-                    """
-                    UPDATE Notification
-                    SET status = ?,
-                        retryCount = ?,
-                        lastError = ?,
-                        updatedAt = CURRENT_TIMESTAMP
-                    WHERE id = ?
-                    """,
-                    (status, retry_count, error, notification_id),
-                )
-                connection.commit()
-            return
-
         with psycopg.connect(self._postgres_database_url) as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
@@ -221,24 +139,6 @@ class JobStore:
             connection.commit()
 
     def mark_raster_run_running(self, run_id: str, job_id: str) -> None:
-        if self._is_sqlite:
-            with closing(self._sqlite_conn()) as connection:
-                connection.execute(
-                    """
-                    UPDATE RasterOptimizationRun
-                    SET status = 'RUNNING',
-                        outcome = NULL,
-                        solverStatus = NULL,
-                        finishedAt = NULL,
-                        jobId = ?
-                    WHERE id = ?
-                      AND status != 'CANCELLED'
-                    """,
-                    (job_id, run_id),
-                )
-                connection.commit()
-            return
-
         with psycopg.connect(self._postgres_database_url) as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
@@ -257,20 +157,6 @@ class JobStore:
             connection.commit()
 
     def mark_raster_run_succeeded(self, run_id: str) -> None:
-        if self._is_sqlite:
-            with closing(self._sqlite_conn()) as connection:
-                connection.execute(
-                    """
-                    UPDATE RasterOptimizationRun
-                    SET status = 'SUCCEEDED',
-                        finishedAt = CURRENT_TIMESTAMP
-                    WHERE id = ?
-                    """,
-                    (run_id,),
-                )
-                connection.commit()
-            return
-
         with psycopg.connect(self._postgres_database_url) as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
@@ -285,22 +171,6 @@ class JobStore:
             connection.commit()
 
     def mark_raster_run_failed(self, run_id: str, error: str) -> None:
-        if self._is_sqlite:
-            with closing(self._sqlite_conn()) as connection:
-                connection.execute(
-                    """
-                    UPDATE RasterOptimizationRun
-                    SET status = 'FAILED',
-                        outcome = 'FAILED',
-                        solverStatus = ?,
-                        finishedAt = CURRENT_TIMESTAMP
-                    WHERE id = ?
-                    """,
-                    (error, run_id),
-                )
-                connection.commit()
-            return
-
         with psycopg.connect(self._postgres_database_url) as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
@@ -317,22 +187,6 @@ class JobStore:
             connection.commit()
 
     def mark_raster_run_infeasible(self, run_id: str, reason: str) -> None:
-        if self._is_sqlite:
-            with closing(self._sqlite_conn()) as connection:
-                connection.execute(
-                    """
-                    UPDATE RasterOptimizationRun
-                    SET status = 'FAILED',
-                        outcome = 'INFEASIBLE',
-                        solverStatus = ?,
-                        finishedAt = CURRENT_TIMESTAMP
-                    WHERE id = ?
-                    """,
-                    (reason, run_id),
-                )
-                connection.commit()
-            return
-
         with psycopg.connect(self._postgres_database_url) as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
@@ -349,26 +203,6 @@ class JobStore:
             connection.commit()
 
     def get_raster_run_context(self, run_id: str) -> dict[str, Any]:
-        if self._is_sqlite:
-            with closing(self._sqlite_conn()) as connection:
-                connection.row_factory = sqlite3.Row
-                row = connection.execute(
-                    """
-                    SELECT run.id, run.status, run.settings, input.scopeId, input.seasonModelJson
-                    FROM RasterOptimizationRun run
-                    JOIN RasterInputSet input ON input.id = run.inputSetId
-                    WHERE run.id = ?
-                    """,
-                    (run_id,),
-                ).fetchone()
-                if row is None:
-                    raise ValueError(f"Raster run {run_id} not found")
-                result = dict(row)
-                result["seasonModels"] = [
-                    {"scopeId": result["scopeId"], "seasonModelJson": result["seasonModelJson"]}
-                ]
-                return result
-
         with psycopg.connect(self._postgres_database_url, row_factory=dict_row) as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
@@ -430,16 +264,6 @@ class JobStore:
             return dict(row)
 
     def get_raster_run_status(self, run_id: str) -> str:
-        if self._is_sqlite:
-            with closing(self._sqlite_conn()) as connection:
-                row = connection.execute(
-                    "SELECT status FROM RasterOptimizationRun WHERE id = ?",
-                    (run_id,),
-                ).fetchone()
-                if row is None:
-                    raise ValueError(f"Raster run {run_id} not found")
-                return str(row[0])
-
         with psycopg.connect(self._postgres_database_url) as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
@@ -453,20 +277,6 @@ class JobStore:
             return str(row[0])
 
     def list_raster_hall_capacities(self, scope: object) -> list[dict[str, Any]]:
-        if self._is_sqlite:
-            scope_id = str(scope[0] if isinstance(scope, list) and scope else scope)
-            with closing(self._sqlite_conn()) as connection:
-                connection.row_factory = sqlite3.Row
-                rows = connection.execute(
-                    """
-                    SELECT clubId, hall, weekday, capacity
-                    FROM RasterHallCapacity
-                    WHERE scopeId = ?
-                    """,
-                    (scope_id,),
-                ).fetchall()
-                return [dict(row) for row in rows]
-
         with psycopg.connect(self._postgres_database_url, row_factory=dict_row) as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
@@ -505,64 +315,6 @@ class JobStore:
             metadata.get("objectiveBreakdown")
             or _objective_breakdown(overages, metadata.get("weights"))
         )
-
-        if self._is_sqlite:
-            with closing(self._sqlite_conn()) as connection:
-                connection.execute("BEGIN")
-                connection.execute(
-                    """
-                    INSERT INTO RasterSnapshot (
-                        id, runId, scopeId, origin, optimality, stale, totalConflicts,
-                        totalExcess, maxExcess, affectedClubs, objectiveBreakdown, createdAt
-                    ) VALUES (?, ?, ?, 'GENERATED', ?, 0, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                    """,
-                    (
-                        snapshot_id,
-                        run_id,
-                        scope_id,
-                        optimality,
-                        len(overages),
-                        total_excess,
-                        max_excess,
-                        affected_clubs,
-                        objective_breakdown,
-                    ),
-                )
-                connection.executemany(
-                    """
-                    INSERT INTO RasterAssignment (
-                        id, snapshotId, league, "group", clubId, clubName, team, rasterzahl,
-                        status, weekday, hall, startTime, weekSlot
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    assignments,
-                )
-                connection.executemany(
-                    """
-                    INSERT INTO RasterConflict (
-                        id, snapshotId, matchWeek, clubId, clubName, weekday, hall,
-                        capacity, actualCount, excess, teams
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    _conflict_rows(snapshot_id, model, overages),
-                )
-                connection.execute(
-                    """
-                    UPDATE RasterOptimizationRun
-                    SET status = 'SUCCEEDED', outcome = ?, objectiveValue = ?,
-                        objectiveBreakdown = ?, solverStatus = ?, finishedAt = CURRENT_TIMESTAMP
-                    WHERE id = ?
-                    """,
-                    (
-                        outcome,
-                        metadata.get("objective"),
-                        objective_breakdown,
-                        metadata.get("status"),
-                        run_id,
-                    ),
-                )
-                connection.commit()
-                return snapshot_id
 
         with psycopg.connect(self._postgres_database_url) as connection:
             with connection.cursor() as cursor:
@@ -631,14 +383,6 @@ class JobStore:
             return snapshot_id
 
     def has_inbound_email(self, provider_message_id: str) -> bool:
-        if self._is_sqlite:
-            with closing(self._sqlite_conn()) as connection:
-                row = connection.execute(
-                    "SELECT 1 FROM InboundEmail WHERE providerMessageId = ? LIMIT 1",
-                    (provider_message_id,),
-                ).fetchone()
-                return row is not None
-
         with psycopg.connect(self._postgres_database_url) as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
@@ -651,38 +395,6 @@ class JobStore:
 
     def create_inbound_email(self, payload: dict[str, Any]) -> str:
         reference_ids = json.dumps(payload.get("referenceIds") or [])
-        if self._is_sqlite:
-            with closing(self._sqlite_conn()) as connection:
-                cursor = connection.execute(
-                    """
-                    INSERT INTO InboundEmail (
-                        id, providerMessageId, mailbox, internetMessageId, conversationId,
-                        senderEmail, senderName, subject, bodyPreview, bodyText, bodyHtml,
-                        inReplyTo, referenceIds, receivedAt, processingStatus, createdAt, updatedAt
-                    ) VALUES (
-                        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'RECEIVED', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-                    )
-                    """,
-                    (
-                        payload["id"],
-                        payload["providerMessageId"],
-                        payload["mailbox"],
-                        payload.get("internetMessageId"),
-                        payload.get("conversationId"),
-                        payload.get("senderEmail"),
-                        payload.get("senderName"),
-                        payload.get("subject") or "",
-                        payload.get("bodyPreview"),
-                        payload.get("bodyText"),
-                        payload.get("bodyHtml"),
-                        payload.get("inReplyTo"),
-                        reference_ids,
-                        payload["receivedAt"],
-                    ),
-                )
-                connection.commit()
-                return str(payload["id"] if cursor.rowcount else payload["id"])
-
         with psycopg.connect(self._postgres_database_url) as connection:
             with connection.cursor() as pg_cursor:
                 pg_cursor.execute(
@@ -725,31 +437,6 @@ class JobStore:
         linked_entity_type: str | None = None,
         linked_entity_id: str | None = None,
     ) -> None:
-        if self._is_sqlite:
-            with closing(self._sqlite_conn()) as connection:
-                connection.execute(
-                    """
-                    UPDATE InboundEmail
-                    SET processingStatus = ?,
-                        processingNotes = ?,
-                        correlatedNotificationId = ?,
-                        linkedEntityType = ?,
-                        linkedEntityId = ?,
-                        updatedAt = CURRENT_TIMESTAMP
-                    WHERE id = ?
-                    """,
-                    (
-                        processing_status,
-                        processing_notes,
-                        correlated_notification_id,
-                        linked_entity_type,
-                        linked_entity_id,
-                        inbound_email_id,
-                    ),
-                )
-                connection.commit()
-            return
-
         with psycopg.connect(self._postgres_database_url) as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
@@ -775,21 +462,6 @@ class JobStore:
             connection.commit()
 
     def mark_notification_bounced(self, notification_id: str, error: str) -> None:
-        if self._is_sqlite:
-            with closing(self._sqlite_conn()) as connection:
-                connection.execute(
-                    """
-                    UPDATE Notification
-                    SET status = 'BOUNCED',
-                        lastError = ?,
-                        updatedAt = CURRENT_TIMESTAMP
-                    WHERE id = ?
-                    """,
-                    (error, notification_id),
-                )
-                connection.commit()
-            return
-
         with psycopg.connect(self._postgres_database_url) as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
@@ -810,23 +482,6 @@ class JobStore:
         if not provider_message_ids:
             return None
 
-        if self._is_sqlite:
-            with closing(self._sqlite_conn()) as connection:
-                connection.row_factory = sqlite3.Row
-                for provider_message_id in provider_message_ids:
-                    row = connection.execute(
-                        """
-                        SELECT id, providerMessageId
-                        FROM Notification
-                        WHERE providerMessageId = ?
-                        LIMIT 1
-                        """,
-                        (provider_message_id,),
-                    ).fetchone()
-                    if row is not None:
-                        return dict(row)
-            return None
-
         with psycopg.connect(self._postgres_database_url) as connection:
             with connection.cursor(row_factory=dict_row) as cursor:
                 cursor.execute(
@@ -841,21 +496,6 @@ class JobStore:
                 return cursor.fetchone()
 
     def mark_teams_outbound_processing(self, outbound_message_id: str, attempt_count: int) -> None:
-        if self._is_sqlite:
-            with closing(self._sqlite_conn()) as connection:
-                connection.execute(
-                    """
-                    UPDATE TeamsOutboundMessage
-                    SET status = 'SENDING',
-                        attemptCount = ?,
-                        updatedAt = CURRENT_TIMESTAMP
-                    WHERE id = ?
-                    """,
-                    (attempt_count, outbound_message_id),
-                )
-                connection.commit()
-            return
-
         with psycopg.connect(self._postgres_database_url) as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
@@ -873,23 +513,6 @@ class JobStore:
     def mark_teams_outbound_sent(
         self, outbound_message_id: str, graph_message_id: str | None
     ) -> None:
-        if self._is_sqlite:
-            with closing(self._sqlite_conn()) as connection:
-                connection.execute(
-                    """
-                    UPDATE TeamsOutboundMessage
-                    SET status = 'SENT',
-                        graphMessageId = ?,
-                        lastError = NULL,
-                        sentAt = CURRENT_TIMESTAMP,
-                        updatedAt = CURRENT_TIMESTAMP
-                    WHERE id = ?
-                    """,
-                    (graph_message_id, outbound_message_id),
-                )
-                connection.commit()
-            return
-
         with psycopg.connect(self._postgres_database_url) as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
@@ -915,22 +538,6 @@ class JobStore:
         will_retry: bool,
     ) -> None:
         status = "RETRYING" if will_retry else "FAILED"
-        if self._is_sqlite:
-            with closing(self._sqlite_conn()) as connection:
-                connection.execute(
-                    """
-                    UPDATE TeamsOutboundMessage
-                    SET status = ?,
-                        attemptCount = ?,
-                        lastError = ?,
-                        updatedAt = CURRENT_TIMESTAMP
-                    WHERE id = ?
-                    """,
-                    (status, attempt_count, error, outbound_message_id),
-                )
-                connection.commit()
-            return
-
         with psycopg.connect(self._postgres_database_url) as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
@@ -947,14 +554,6 @@ class JobStore:
             connection.commit()
 
     def has_teams_inbound_message(self, provider_message_id: str) -> bool:
-        if self._is_sqlite:
-            with closing(self._sqlite_conn()) as connection:
-                row = connection.execute(
-                    "SELECT 1 FROM TeamsInboundMessage WHERE providerMessageId = ? LIMIT 1",
-                    (provider_message_id,),
-                ).fetchone()
-                return row is not None
-
         with psycopg.connect(self._postgres_database_url) as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
@@ -966,33 +565,6 @@ class JobStore:
             return row is not None
 
     def create_teams_inbound_message(self, payload: dict[str, Any]) -> str:
-        if self._is_sqlite:
-            with closing(self._sqlite_conn()) as connection:
-                connection.execute(
-                    """
-                    INSERT INTO TeamsInboundMessage (
-                        id, subscriptionId, providerMessageId, teamId, channelId, senderDisplayName,
-                        senderUserId, content, contentType, truncated, processingStatus,
-                        processingNotes, messageCreatedAt, createdAt, updatedAt
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'RECEIVED', NULL, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                    """,
-                    (
-                        payload["id"],
-                        payload["subscriptionId"],
-                        payload["providerMessageId"],
-                        payload["teamId"],
-                        payload["channelId"],
-                        payload.get("senderDisplayName"),
-                        payload.get("senderUserId"),
-                        payload.get("content"),
-                        payload.get("contentType"),
-                        bool(payload.get("truncated")),
-                        payload["messageCreatedAt"],
-                    ),
-                )
-                connection.commit()
-            return str(payload["id"])
-
         with psycopg.connect(self._postgres_database_url) as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
@@ -1025,21 +597,6 @@ class JobStore:
         subscription_id: str,
         delta_token: str | None,
     ) -> None:
-        if self._is_sqlite:
-            with closing(self._sqlite_conn()) as connection:
-                connection.execute(
-                    """
-                    UPDATE TeamsIntakeSubscription
-                    SET deltaToken = ?,
-                        lastPolledAt = CURRENT_TIMESTAMP,
-                        updatedAt = CURRENT_TIMESTAMP
-                    WHERE id = ?
-                    """,
-                    (delta_token, subscription_id),
-                )
-                connection.commit()
-            return
-
         with psycopg.connect(self._postgres_database_url) as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
@@ -1055,19 +612,6 @@ class JobStore:
             connection.commit()
 
     def list_active_teams_subscriptions(self) -> list[dict[str, Any]]:
-        if self._is_sqlite:
-            with closing(self._sqlite_conn()) as connection:
-                connection.row_factory = sqlite3.Row
-                rows = connection.execute(
-                    """
-                    SELECT id, teamId, channelId, deltaToken
-                    FROM TeamsIntakeSubscription
-                    WHERE active = 1
-                    ORDER BY createdAt ASC
-                    """
-                ).fetchall()
-                return [dict(row) for row in rows]
-
         with psycopg.connect(self._postgres_database_url, row_factory=dict_row) as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
@@ -1083,38 +627,6 @@ class JobStore:
             return list(rows)
 
     def create_teams_intake_poll_job_if_missing(self) -> bool:
-        if self._is_sqlite:
-            with closing(self._sqlite_conn()) as connection:
-                existing = connection.execute(
-                    """
-                    SELECT 1 FROM BackgroundJob
-                    WHERE jobType = 'teams_intake_poll'
-                      AND status IN ('PENDING', 'IN_PROGRESS')
-                    LIMIT 1
-                    """
-                ).fetchone()
-                if existing:
-                    return False
-
-                connection.execute(
-                    """
-                    INSERT INTO BackgroundJob (
-                        id, jobType, status, payload, attemptCount, availableAt, createdAt, updatedAt
-                    ) VALUES (
-                        lower(hex(randomblob(16))),
-                        'teams_intake_poll',
-                        'PENDING',
-                        '{}',
-                        0,
-                        CURRENT_TIMESTAMP,
-                        CURRENT_TIMESTAMP,
-                        CURRENT_TIMESTAMP
-                    )
-                    """
-                )
-                connection.commit()
-                return True
-
         with psycopg.connect(self._postgres_database_url) as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
@@ -1149,24 +661,6 @@ class JobStore:
             return True
 
     def get_teams_integration_flags(self) -> dict[str, bool]:
-        if self._is_sqlite:
-            with closing(self._sqlite_conn()) as connection:
-                connection.row_factory = sqlite3.Row
-                row = connection.execute(
-                    """
-                    SELECT sendEnabled, intakeEnabled
-                    FROM TeamsIntegrationConfig
-                    ORDER BY createdAt ASC
-                    LIMIT 1
-                    """
-                ).fetchone()
-                if not row:
-                    return {"sendEnabled": False, "intakeEnabled": False}
-                return {
-                    "sendEnabled": bool(row["sendEnabled"]),
-                    "intakeEnabled": bool(row["intakeEnabled"]),
-                }
-
         with psycopg.connect(self._postgres_database_url, row_factory=dict_row) as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
@@ -1186,46 +680,6 @@ class JobStore:
                 "intakeEnabled": bool(row["intakeEnabled"]),
             }
 
-    def _claim_sqlite_job(self) -> BackgroundJob | None:
-        with closing(self._sqlite_conn()) as connection:
-            connection.row_factory = sqlite3.Row
-            connection.execute("BEGIN IMMEDIATE")
-            row = connection.execute(
-                """
-                SELECT id, jobType, payload, attemptCount
-                FROM BackgroundJob
-                WHERE status = 'PENDING'
-                  AND datetime(availableAt) <= datetime('now')
-                ORDER BY createdAt ASC
-                LIMIT 1
-                """
-            ).fetchone()
-
-            if row is None:
-                connection.commit()
-                return None
-
-            connection.execute(
-                """
-                UPDATE BackgroundJob
-                SET status = 'IN_PROGRESS',
-                    attemptCount = attemptCount + 1,
-                    startedAt = COALESCE(startedAt, CURRENT_TIMESTAMP),
-                    lockedAt = CURRENT_TIMESTAMP,
-                    workerId = ?,
-                    updatedAt = CURRENT_TIMESTAMP
-                WHERE id = ?
-                """,
-                (self._config.worker_id, row["id"]),
-            )
-            connection.commit()
-
-            return BackgroundJob(
-                id=row["id"],
-                job_type=row["jobType"],
-                payload=_parse_payload(row["payload"]),
-                attempt_count=row["attemptCount"] + 1,
-            )
 
     def _claim_postgres_job(self) -> BackgroundJob | None:
         with psycopg.connect(self._postgres_database_url, row_factory=dict_row) as connection:
@@ -1267,28 +721,6 @@ class JobStore:
             attempt_count=row["attemptCount"],
         )
 
-    def _requeue_stale_sqlite_jobs(self) -> int:
-        with closing(self._sqlite_conn()) as connection:
-            cursor = connection.execute(
-                """
-                UPDATE BackgroundJob
-                SET status = 'PENDING',
-                    error = CASE
-                        WHEN error IS NULL OR error = '' THEN 'Worker lock expired; job requeued.'
-                        ELSE error || '\nWorker lock expired; job requeued.'
-                    END,
-                    availableAt = CURRENT_TIMESTAMP,
-                    lockedAt = NULL,
-                    workerId = NULL,
-                    updatedAt = CURRENT_TIMESTAMP
-                WHERE status = 'IN_PROGRESS'
-                  AND lockedAt IS NOT NULL
-                  AND datetime(lockedAt) <= datetime('now', ?)
-                """,
-                (f"-{self._config.stale_lock_seconds} seconds",),
-            )
-            connection.commit()
-            return int(cursor.rowcount or 0)
 
     def _requeue_stale_postgres_jobs(self) -> int:
         with psycopg.connect(self._postgres_database_url) as connection:
@@ -1315,50 +747,6 @@ class JobStore:
             connection.commit()
             return row_count
 
-    def _fail_sqlite_job(self, job_id: str, error: str, *, retry: bool) -> None:
-        with closing(self._sqlite_conn()) as connection:
-            connection.row_factory = sqlite3.Row
-            row = connection.execute(
-                "SELECT attemptCount FROM BackgroundJob WHERE id = ?",
-                (job_id,),
-            ).fetchone()
-            if row is None:
-                return
-
-            attempt_count = int(row["attemptCount"])
-            should_retry = retry and attempt_count < self._config.max_attempts
-            if should_retry:
-                connection.execute(
-                    """
-                    UPDATE BackgroundJob
-                    SET status = 'PENDING',
-                        error = ?,
-                        availableAt = ?,
-                        lockedAt = NULL,
-                        finishedAt = NULL,
-                        updatedAt = CURRENT_TIMESTAMP
-                    WHERE id = ?
-                    """,
-                    (
-                        error,
-                        _sqlite_timestamp_after_seconds(self._retry_delay_seconds(attempt_count)),
-                        job_id,
-                    ),
-                )
-            else:
-                connection.execute(
-                    """
-                    UPDATE BackgroundJob
-                    SET status = 'FAILED',
-                        error = ?,
-                        lockedAt = NULL,
-                        finishedAt = CURRENT_TIMESTAMP,
-                        updatedAt = CURRENT_TIMESTAMP
-                    WHERE id = ?
-                    """,
-                    (error, job_id),
-                )
-            connection.commit()
 
     def _fail_postgres_job(self, job_id: str, error: str, *, retry: bool) -> None:
         with psycopg.connect(self._postgres_database_url) as connection:
@@ -1425,9 +813,6 @@ def _parse_payload(value: str | None) -> dict[str, Any]:
     return parsed if isinstance(parsed, dict) else {"value": parsed}
 
 
-def _sqlite_timestamp_after_seconds(delay_seconds: float) -> str:
-    scheduled_for = datetime.now(timezone.utc) + timedelta(seconds=delay_seconds)
-    return scheduled_for.strftime("%Y-%m-%d %H:%M:%S")
 
 
 def _new_id() -> str:

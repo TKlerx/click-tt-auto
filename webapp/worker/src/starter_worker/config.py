@@ -27,9 +27,12 @@ def load_shared_env(env_path: Path | None = None) -> None:
 
 def load_config(env_path: Path | None = None) -> WorkerConfig:
     load_shared_env(env_path)
-    database_url = os.environ.get("WORKER_DATABASE_URL") or os.environ.get(
-        "DATABASE_URL", "file:./dev.db"
-    )
+    database_url = os.environ.get("WORKER_DATABASE_URL") or os.environ.get("DATABASE_URL")
+    if not database_url:
+        raise RuntimeError(
+            "No database URL configured. Set WORKER_DATABASE_URL or DATABASE_URL "
+            "to a PostgreSQL connection string."
+        )
 
     return WorkerConfig(
         database_url=database_url,

@@ -51,7 +51,7 @@ These files are intentionally committed into the template so copied repos still 
 ## Includes
 
 - Next.js 16 app router
-- Prisma starter data model with SQLite for local development
+- Prisma starter data model on PostgreSQL
 - PostgreSQL-backed Docker deployment
 - Go-based `starterctl` CLI with PAT-backed API access and GoReleaser packaging
 - uv-managed Python worker skeleton for background jobs
@@ -111,9 +111,8 @@ creates or starts that container, ensures the `business_app_starter_e2e_test`
 database exists, resets that database, seeds the initial admin, and runs the app
 with the Postgres Prisma schema. Use a separate database such as
 `business_app_starter_manual` in the same container for manual exploratory
-testing. Set an explicit `DATABASE_URL=file:./e2e.db` only when you intentionally
-need the legacy SQLite E2E path. Set `E2E_REUSE_SERVER=1` only when you are not
-resetting the database between runs.
+testing. Set `E2E_REUSE_SERVER=1` only when you are not resetting the database
+between runs.
 
 `precommit` is the fast local hook phase: TypeScript typecheck,
 dependency-cruiser architecture, and jscpd duplication.
@@ -188,7 +187,7 @@ pnpm run cli:install-releases
 
 ## Docker Deployment
 
-- Local `pnpm run dev` uses SQLite via `DATABASE_URL=file:./dev.db`.
+- Local `pnpm run dev` uses PostgreSQL via `DATABASE_URL`; there is no SQLite fallback.
 - Put Docker-only PostgreSQL and initial admin values in `.env.docker` using `.env.docker.example` as the template, then start Docker with `pnpm docker up`.
 - Production-style Docker uses separate database URL names by runtime: `APP_DATABASE_URL`, `WORKER_DATABASE_URL`, and `MIGRATION_DATABASE_URL`.
 - Docker services receive explicit allowlisted environment variables; the Postgres container only receives `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD`.

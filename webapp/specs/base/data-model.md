@@ -157,14 +157,13 @@ Includes key user-admin and auth events, such as:
 - `COMPLETED`
 - `FAILED`
 
-## Dual Database Model
+## Database Model
 
-- SQLite schema:
-  - `prisma/schema.prisma`
-- PostgreSQL schema:
-  - `prisma/schema.postgres.prisma`
+- Single PostgreSQL schema: `prisma/schema.postgres.prisma`
+- Migrations: `prisma/migrations-postgres/`
 
-The structural intent should remain aligned across both.
+There is one schema, so there is no cross-schema alignment to maintain. The
+earlier SQLite/PostgreSQL pair had to be kept in step by hand and drifted.
 
 ## Design Expectations
 

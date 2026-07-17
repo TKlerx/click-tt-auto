@@ -16,14 +16,24 @@ uv run starter-worker
 ```
 
 The worker automatically loads the shared repo-root `.env` file when started
-from the `worker/` subdirectory. Production-style runs should set
-`WORKER_DATABASE_URL`; local development can still fall back to
-`DATABASE_URL=file:./dev.db`.
+from the `worker/` subdirectory. Set `WORKER_DATABASE_URL` (preferred) or
+`DATABASE_URL` to a PostgreSQL connection string. There is no default: the
+worker refuses to start without one.
 
-The worker supports both:
+PostgreSQL is the only supported database. A `file:` SQLite URL is rejected at
+startup rather than silently accepted.
 
-- `file:` SQLite URLs for local development
-- PostgreSQL URLs for Docker/shared deployments
+## Tests
+
+```powershell
+node ../scripts/ensure-e2e-db.mjs   # from webapp/, starts the PostgreSQL container
+cd worker
+uv run pytest
+```
+
+The tests run against their own `business_app_starter_worker_test` database on
+the E2E PostgreSQL container, built from the real Prisma migrations. Override the
+target with `WORKER_TEST_DATABASE_URL`.
 
 ## Reliability Settings
 

@@ -26,8 +26,7 @@ Self-service signup is disabled. Users are either created by admins or provision
 | `src/app/api/auth/sso/azure/route.ts`          | Azure SSO initiation and test-only mock path               |
 | `src/app/api/auth/sso/azure/callback/route.ts` | Azure SSO callback handler                                 |
 | `src/app/(dashboard)/layout.tsx`               | Dashboard layout with auth enforcement                     |
-| `prisma/schema.prisma`                         | SQLite schema for local development                        |
-| `prisma/schema.postgres.prisma`                | PostgreSQL schema for Docker / production-style deployment |
+| `prisma/schema.postgres.prisma`                | PostgreSQL schema (local development, Docker, production)  |
 
 ## 1. Email/Password Login
 
