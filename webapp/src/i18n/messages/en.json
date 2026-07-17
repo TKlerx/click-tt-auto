@@ -409,6 +409,25 @@
       "overwritesCount": "{count, plural, one {# import would undo your edit} other {# imports would undo your edits}}",
       "sourceChangedCount": "{count, plural, one {# wish changed at the source} other {# wishes changed at the source}}"
     },
+    "combined": {
+      "title": "Combined planning",
+      "selectScopes": "Select scopes",
+      "startRun": "Start combined run",
+      "minimumScopes": "Select at least two scopes.",
+      "gapSummary": "Gaps before start"
+    },
+    "readiness": {
+      "title": "Readiness overview",
+      "complete": "Complete",
+      "incomplete": "Incomplete",
+      "missingItems": "Missing items"
+    },
+    "coverage": {
+      "incomplete": "Incomplete",
+      "complete": "Complete",
+      "combined": "Combined",
+      "spannedScopes": "Spanned scopes"
+    },
     "steps": {
       "import": "Import data",
       "review": "Review data",

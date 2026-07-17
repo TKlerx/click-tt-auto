@@ -310,9 +310,11 @@ model Scope {
   auditEntries         AuditEntry[]
   rasterSources        RasterSource[]
   rasterInputSets      RasterInputSet[]
+  rasterInputSetScopes RasterInputSetScope[]
   rasterHallCapacities RasterHallCapacity[]
   rasterSnapshots      RasterSnapshot[]
   rasterTeamRosters    RasterTeamRoster[]
+  rasterSnapshotScopes RasterSnapshotScope[]
 
   @@index([parentId])
 }
@@ -627,11 +629,23 @@ model RasterInputSet {
   wishConflicts          RasterWishConflict[]
   fixedRasterzahlen      RasterFixedRasterzahl[]
   runs                   RasterOptimizationRun[]
+  spannedScopes          RasterInputSetScope[]
   matchReviews           RasterMatchReview[]
   manualAssignmentDrafts RasterManualAssignmentDraft[]
 
   @@index([scopeId, season, createdAt])
   @@index([createdById])
+}
+
+model RasterInputSetScope {
+  id         String         @id @default(cuid())
+  inputSetId String
+  scopeId    String
+  inputSet   RasterInputSet @relation(fields: [inputSetId], references: [id], onDelete: Cascade)
+  scope      Scope          @relation(fields: [scopeId], references: [id], onDelete: Restrict)
+
+  @@unique([inputSetId, scopeId])
+  @@index([scopeId])
 }
 
 model RasterWish {
@@ -768,9 +782,10 @@ model RasterOptimizationRun {
   outcome            OptimizationRunOutcome?
   objectiveValue     Float?
   objectiveBreakdown String?
-  unresolvedWishConflictsJson String @default("{}")
   solverStatus       String?
   settings           String                  @default("{}")
+  coverageComplete   Boolean                 @default(false)
+  coverageJson       String                  @default("{}")
   createdAt          DateTime                @default(now())
   finishedAt         DateTime?
   archivedAt         DateTime?
@@ -782,6 +797,7 @@ model RasterOptimizationRun {
   @@index([startedById])
   @@index([status, createdAt])
   @@index([archivedAt])
+  @@index([coverageComplete])
 }
 
 model RasterSnapshot {
@@ -803,10 +819,21 @@ model RasterSnapshot {
   assignments        RasterAssignment[]
   conflicts          RasterConflict[]
   reviewDecisions    RasterReviewDecision[]
+  spannedScopes      RasterSnapshotScope[]
 
   @@index([scopeId, createdAt])
   @@index([stale])
   @@index([archivedAt])
+}
+
+model RasterSnapshotScope {
+  id         String         @id @default(cuid())
+  snapshotId String
+  scopeId    String
+  snapshot   RasterSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  scope      Scope          @relation(fields: [scopeId], references: [id], onDelete: Restrict)
+
+  @@unique([snapshotId, scopeId])
 }
 
 model RasterMatchReview {

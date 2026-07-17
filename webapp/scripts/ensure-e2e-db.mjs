@@ -20,6 +20,7 @@ if (
 const parsed = new URL(databaseUrl);
 const containerName =
   process.env.E2E_POSTGRES_CONTAINER || "click-tt-e2e-postgres";
+const postgresImage = process.env.E2E_POSTGRES_IMAGE || "postgres:18-alpine";
 const postgresUser = decodeURIComponent(parsed.username || "starter");
 const postgresPassword = decodeURIComponent(
   parsed.password || "starter_e2e_password",
@@ -32,6 +33,7 @@ await ensureDockerPostgres();
 ensureTargetDatabase();
 
 const env = {
+  APP_DATABASE_URL: databaseUrl,
   DATABASE_URL: databaseUrl,
   MIGRATION_DATABASE_URL: databaseUrl,
   INITIAL_ADMIN_EMAIL: process.env.INITIAL_ADMIN_EMAIL ?? "admin@example.com",
@@ -57,34 +59,71 @@ async function ensureDockerPostgres() {
   ]).trim();
 
   if (existing) {
+    if (!containerMatchesRequestedRuntime()) {
+      runDockerStep("Recreate PostgreSQL E2E container", [
+        "rm",
+        "-f",
+        containerName,
+      ]);
+      createPostgresContainer();
+      waitForPostgres();
+      await waitForPublishedPort();
+      return;
+    }
     if (!existing.includes("Up ")) {
       runDockerStep("Start PostgreSQL E2E container", ["start", containerName]);
     }
   } else {
-    runDockerStep("Create PostgreSQL E2E container", [
-      "run",
-      "-d",
-      "--name",
-      containerName,
-      "-p",
-      `${hostPort}:5432`,
-      "-e",
-      `POSTGRES_USER=${postgresUser}`,
-      "-e",
-      `POSTGRES_PASSWORD=${postgresPassword}`,
-      "-e",
-      `POSTGRES_DB=${postgresDb}`,
-      "postgres:18-alpine",
-    ]);
+    createPostgresContainer();
   }
 
   waitForPostgres();
   await waitForPublishedPort();
 }
 
-// pg_isready only proves PostgreSQL is up *inside* the container. The published
-// port can still be unreachable from the host, which surfaces later as an
-// unexplained Prisma P1001. Fail here instead, where the cause is knowable.
+function createPostgresContainer() {
+  runDockerStep("Create PostgreSQL E2E container", [
+    "run",
+    "-d",
+    "--name",
+    containerName,
+    "-p",
+    `${hostPort}:5432`,
+    "-e",
+    `POSTGRES_USER=${postgresUser}`,
+    "-e",
+    `POSTGRES_PASSWORD=${postgresPassword}`,
+    "-e",
+    `POSTGRES_DB=${postgresDb}`,
+    postgresImage,
+  ]);
+}
+
+function containerMatchesRequestedRuntime() {
+  return containerPublishesRequestedPort() && containerUsesRequestedImage();
+}
+
+function containerPublishesRequestedPort() {
+  const published = runDockerCaptured(["port", containerName, "5432/tcp"]);
+  return published
+    .split(/\r?\n/)
+    .some((line) => line.trim().endsWith(`:${hostPort}`));
+}
+
+function containerUsesRequestedImage() {
+  return (
+    runDockerCaptured([
+      "inspect",
+      "-f",
+      "{{.Config.Image}}",
+      containerName,
+    ]).trim() === postgresImage
+  );
+}
+
+// pg_isready only proves PostgreSQL is up inside the container. The published
+// port can still be unreachable from the host, which otherwise surfaces later
+// as an unexplained Prisma P1001.
 async function waitForPublishedPort() {
   const deadline = Date.now() + 30_000;
   let lastError = "";

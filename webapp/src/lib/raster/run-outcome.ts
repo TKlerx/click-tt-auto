@@ -22,3 +22,22 @@ export function mapOutcomeToSnapshotOptimality(
   }
   return null;
 }
+
+export function infeasibleScopeMessage(coverageJson?: string | null) {
+  const scope = firstSpannedScope(coverageJson);
+  return scope
+    ? `No feasible assignment for constraints including ${scope}.`
+    : "No feasible assignment exists with the current hard constraints.";
+}
+
+function firstSpannedScope(coverageJson?: string | null) {
+  if (!coverageJson) return null;
+  try {
+    const parsed = JSON.parse(coverageJson) as { spannedScopes?: unknown };
+    return Array.isArray(parsed.spannedScopes) && parsed.spannedScopes[0]
+      ? String(parsed.spannedScopes[0])
+      : null;
+  } catch {
+    return null;
+  }
+}

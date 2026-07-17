@@ -1,14 +1,11 @@
 import { NextResponse } from "next/server";
 import { requireApiUser } from "@/lib/route-auth";
 import { assertRasterAccess, resolveRasterScope } from "@/lib/raster/access";
-import { listMatchReviewState } from "@/lib/raster/match-review";
-import { deriveRasterReadiness } from "@/lib/raster/readiness";
-import { normalizeRasterSeason } from "@/lib/raster/season";
 import {
-  listInputSets,
-  listRasterSourcesForScope,
-  reviewHallCapacitiesForInputSet,
-} from "@/services/raster";
+  buildReadinessAcrossScopes,
+  buildReadinessForScope,
+} from "@/lib/raster/readiness-across-scopes";
+import { normalizeRasterSeason } from "@/lib/raster/season";
 
 export async function GET(request: Request) {
   const auth = await requireApiUser(request);
@@ -16,8 +13,11 @@ export async function GET(request: Request) {
 
   const search = new URL(request.url).searchParams;
   const scopeCode = search.get("scope")?.trim();
+  const season = normalizeRasterSeason(search.get("season"));
   if (!scopeCode) {
-    return NextResponse.json({ error: "scope is required" }, { status: 400 });
+    return NextResponse.json({
+      scopes: await buildReadinessAcrossScopes(auth.user, season),
+    });
   }
   const access = await assertRasterAccess(auth.user, scopeCode, "viewer");
   if (access !== true) return access.error;
@@ -26,27 +26,8 @@ export async function GET(request: Request) {
   if (!scope) {
     return NextResponse.json({ error: "Unknown scope" }, { status: 404 });
   }
-  const season = normalizeRasterSeason(search.get("season"));
-  const [inputSets, sources] = await Promise.all([
-    listInputSets(scope.id, season),
-    listRasterSourcesForScope(scope.id, season),
-  ]);
-  const inputSet = inputSets[0] ?? null;
-  const [capacityReview, matchReview] = inputSet
-    ? await Promise.all([
-        reviewHallCapacitiesForInputSet(inputSet.id),
-        listMatchReviewState(inputSet.id),
-      ])
-    : [null, []];
 
   return NextResponse.json({
-    readiness: deriveRasterReadiness({
-      sourceCount: sources.length,
-      inputSet,
-      capacityReview,
-      matchReviewOutstandingCount: matchReview.filter(
-        (record) => record.status === "outstanding",
-      ).length,
-    }),
+    readiness: await buildReadinessForScope(scope.id, season),
   });
 }

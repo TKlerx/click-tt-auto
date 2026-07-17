@@ -3,14 +3,21 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
 import { syncInputSetSourceCaches } from "@/services/raster/inputSets";
 import {
+  AssignmentStatus,
   AuthMethod,
+  InputSetStatus,
   NotificationEventType,
   NotificationStatus,
+  OptimizationRunOutcome,
+  OptimizationRunStatus,
   Role,
+  SnapshotOptimality,
+  SnapshotOrigin,
   ThemePreference,
   UserStatus,
   type AuditAction,
 } from "../../../generated/prisma/enums";
+import type { Prisma } from "../../../generated/prisma/client";
 
 type Operation =
   | "seedLocalUser"
@@ -22,6 +29,7 @@ type Operation =
   | "seedRasterScopeHierarchy"
   | "seedRasterSource"
   | "seedRasterProjectionFixture"
+  | "seedRasterCombinedReviewFixture"
   | "addAuditEntryFixture"
   | "seedBackgroundJob"
   | "seedNotificationTypeConfiguration"
@@ -55,6 +63,61 @@ async function readJson<T>() {
 
   const input = Buffer.concat(chunks).toString("utf8").trim();
   return (input ? JSON.parse(input) : {}) as T;
+}
+
+function assignment(
+  scopeId: string,
+  clubName: string,
+  team: string,
+  idSuffix: string,
+): Omit<Prisma.RasterAssignmentCreateManyInput, "snapshotId"> {
+  return {
+    id: `e2e-assignment-${idSuffix}`,
+    league: "Liga",
+    group: "Gruppe 1",
+    clubId: `${scopeId}:club-${idSuffix}`,
+    clubName,
+    team,
+    rasterzahl: 1,
+    status: AssignmentStatus.OPTIMIZED,
+    weekday: "FRIDAY",
+    hall: "1",
+    startTime: "19:30",
+    weekSlot: "A",
+  };
+}
+
+async function createSnapshot(
+  tx: Prisma.TransactionClient,
+  input: {
+    runId: string;
+    scopeId: string;
+    spannedScopeIds?: string[];
+    assignments: Array<
+      Omit<Prisma.RasterAssignmentCreateManyInput, "snapshotId">
+    >;
+  },
+) {
+  const snapshot = await tx.rasterSnapshot.create({
+    data: {
+      runId: input.runId,
+      scopeId: input.scopeId,
+      origin: SnapshotOrigin.GENERATED,
+      optimality: SnapshotOptimality.PROVEN_OPTIMAL,
+      objectiveBreakdown: "{}",
+      spannedScopes: input.spannedScopeIds?.length
+        ? { create: input.spannedScopeIds.map((scopeId) => ({ scopeId })) }
+        : undefined,
+    },
+    select: { id: true },
+  });
+  await tx.rasterAssignment.createMany({
+    data: input.assignments.map((row) => ({
+      ...row,
+      snapshotId: snapshot.id,
+    })),
+  });
+  return snapshot;
 }
 
 // eslint-disable-next-line complexity, max-lines-per-function, sonarjs/cognitive-complexity
@@ -548,6 +611,160 @@ async function main() {
           relationalWishes: model.wishes?.length ?? 0,
         }),
       );
+      break;
+    }
+
+    case "seedRasterCombinedReviewFixture": {
+      const input = await readJson<{ email: string; suffix: string }>();
+      const user = await prisma.user.findUnique({
+        where: { email: normalizeEmail(input.email) },
+        select: { id: true },
+      });
+      if (!user) throw new Error(`User not found: ${input.email}`);
+
+      const [owl, westfalen] = await Promise.all([
+        prisma.scope.findUnique({
+          where: { code: "OWL" },
+          select: { id: true },
+        }),
+        prisma.scope.findUnique({
+          where: { code: "WESTFALEN_MITTE" },
+          select: { id: true },
+        }),
+      ]);
+      if (!owl || !westfalen) {
+        throw new Error("Raster scope hierarchy must be seeded first");
+      }
+
+      const result = await prisma.$transaction(async (tx) => {
+        const singleInputSet = await tx.rasterInputSet.create({
+          data: {
+            name: `E2E single review ${input.suffix}`,
+            scopeId: owl.id,
+            season: "2026/27",
+            createdById: user.id,
+            status: InputSetStatus.READY,
+            seasonModelJson: "{}",
+          },
+          select: { id: true },
+        });
+        const singleRun = await tx.rasterOptimizationRun.create({
+          data: {
+            inputSetId: singleInputSet.id,
+            startedById: user.id,
+            status: OptimizationRunStatus.SUCCEEDED,
+            outcome: OptimizationRunOutcome.PROVEN_OPTIMAL,
+            settings: JSON.stringify({ strategy: "cp_sat", name: "Single" }),
+            coverageComplete: true,
+            coverageJson: JSON.stringify({
+              complete: true,
+              spannedScopes: [owl.id],
+              spannedAll: true,
+              excludedGroups: [],
+              wishGaps: [],
+              capacityGaps: [],
+            }),
+          },
+          select: { id: true },
+        });
+        const singleSnapshot = await createSnapshot(tx, {
+          runId: singleRun.id,
+          scopeId: owl.id,
+          assignments: [assignment(owl.id, "OWL Club", "OWL I", "single-owl")],
+        });
+
+        const combinedInputSet = await tx.rasterInputSet.create({
+          data: {
+            name: `E2E combined review ${input.suffix}`,
+            scopeId: owl.id,
+            season: "2026/27",
+            createdById: user.id,
+            status: InputSetStatus.READY,
+            seasonModelJson: "{}",
+            spannedScopes: {
+              create: [{ scopeId: owl.id }, { scopeId: westfalen.id }],
+            },
+          },
+          select: { id: true },
+        });
+        const incompleteRun = await tx.rasterOptimizationRun.create({
+          data: {
+            inputSetId: combinedInputSet.id,
+            startedById: user.id,
+            status: OptimizationRunStatus.SUCCEEDED,
+            outcome: OptimizationRunOutcome.PROVEN_OPTIMAL,
+            settings: JSON.stringify({
+              strategy: "cp_sat",
+              name: "Incomplete combined",
+            }),
+            coverageComplete: false,
+            coverageJson: JSON.stringify({
+              complete: false,
+              spannedScopes: [owl.id, westfalen.id],
+              spannedAll: false,
+              excludedGroups: ["Liga::Gruppe 1"],
+              wishGaps: [],
+              capacityGaps: [],
+            }),
+          },
+          select: { id: true },
+        });
+        const combinedSnapshot = await createSnapshot(tx, {
+          runId: incompleteRun.id,
+          scopeId: owl.id,
+          spannedScopeIds: [owl.id, westfalen.id],
+          assignments: [
+            assignment(owl.id, "OWL Club", "OWL I", "combined-owl"),
+            assignment(
+              westfalen.id,
+              "Westfalen Club",
+              "Westfalen I",
+              "combined-westfalen",
+            ),
+          ],
+        });
+
+        const completeRun = await tx.rasterOptimizationRun.create({
+          data: {
+            inputSetId: combinedInputSet.id,
+            startedById: user.id,
+            status: OptimizationRunStatus.SUCCEEDED,
+            outcome: OptimizationRunOutcome.PROVEN_OPTIMAL,
+            settings: JSON.stringify({
+              strategy: "cp_sat",
+              name: "Complete combined",
+            }),
+            coverageComplete: true,
+            coverageJson: JSON.stringify({
+              complete: true,
+              spannedScopes: [owl.id, westfalen.id],
+              spannedAll: true,
+              excludedGroups: [],
+              wishGaps: [],
+              capacityGaps: [],
+            }),
+          },
+          select: { id: true },
+        });
+        const completeCombinedSnapshot = await createSnapshot(tx, {
+          runId: completeRun.id,
+          scopeId: owl.id,
+          spannedScopeIds: [owl.id, westfalen.id],
+          assignments: [
+            assignment(owl.id, "Complete OWL Club", "OWL II", "complete-owl"),
+          ],
+        });
+
+        return {
+          combinedSnapshotId: combinedSnapshot.id,
+          completeCombinedSnapshotId: completeCombinedSnapshot.id,
+          singleSnapshotId: singleSnapshot.id,
+          owlScopeId: owl.id,
+          westfalenScopeId: westfalen.id,
+        };
+      });
+
+      process.stdout.write(JSON.stringify(result));
       break;
     }
 

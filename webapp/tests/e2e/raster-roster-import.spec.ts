@@ -2,7 +2,11 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
 import { Role } from "../../generated/prisma/enums";
-import { appBasePath, expectOnDashboard, loginWithPassword } from "./helpers/auth";
+import {
+  appBasePath,
+  expectOnDashboard,
+  loginWithPassword,
+} from "./helpers/auth";
 import {
   assignUserToScope,
   seedLocalUser,

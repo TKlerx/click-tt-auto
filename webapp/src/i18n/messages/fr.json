@@ -409,6 +409,25 @@
       "overwritesCount": "{count, plural, one {# import annulerait votre modification} other {# imports annuleraient vos modifications}}",
       "sourceChangedCount": "{count, plural, one {# souhait a changé à la source} other {# souhaits ont changé à la source}}"
     },
+    "combined": {
+      "title": "Planification combinee",
+      "selectScopes": "Selectionner les perimetres",
+      "startRun": "Lancer un calcul combine",
+      "minimumScopes": "Selectionnez au moins deux perimetres.",
+      "gapSummary": "Manques avant lancement"
+    },
+    "readiness": {
+      "title": "Vue de preparation",
+      "complete": "Complet",
+      "incomplete": "Incomplet",
+      "missingItems": "Elements manquants"
+    },
+    "coverage": {
+      "incomplete": "Incomplet",
+      "complete": "Complet",
+      "combined": "Combine",
+      "spannedScopes": "Perimetres couverts"
+    },
     "steps": {
       "import": "Import data",
       "review": "Review data",

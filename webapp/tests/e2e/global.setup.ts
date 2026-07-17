@@ -6,7 +6,9 @@ const defaultE2eDatabaseUrl =
 export default async function globalSetup() {
   const env = {
     ...process.env,
+    APP_DATABASE_URL: process.env.DATABASE_URL ?? defaultE2eDatabaseUrl,
     DATABASE_URL: process.env.DATABASE_URL ?? defaultE2eDatabaseUrl,
+    MIGRATION_DATABASE_URL: process.env.DATABASE_URL ?? defaultE2eDatabaseUrl,
     INITIAL_ADMIN_EMAIL: process.env.INITIAL_ADMIN_EMAIL ?? "admin@example.com",
     INITIAL_ADMIN_PASSWORD:
       process.env.INITIAL_ADMIN_PASSWORD ?? "ChangeMe123!",

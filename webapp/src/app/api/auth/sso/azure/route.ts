@@ -125,10 +125,7 @@ export async function GET(request: Request) {
       return redirectTo("/login?error=sso-mock-failed");
     }
 
-    return applySetCookieHeaders(
-      redirectTo(redirectTarget),
-      authResponse,
-    );
+    return applySetCookieHeaders(redirectTo(redirectTarget), authResponse);
   }
 
   if (!hasRealAzureAdConfig()) {

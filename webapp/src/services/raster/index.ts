@@ -1,4 +1,5 @@
 export * from "./capacity";
+export * from "./combinedInputSets";
 export * from "./fixedRasterzahlen";
 export * from "./inputSets";
 export * from "./manualAssignments";

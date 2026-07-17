@@ -6,10 +6,23 @@ const prisma = vi.hoisted(() => ({
   rasterOptimizationRun: { create: vi.fn(), update: vi.fn() },
   backgroundJob: { create: vi.fn() },
 }));
+const { buildCoverageRecordForInputSet } = vi.hoisted(() => ({
+  buildCoverageRecordForInputSet: vi.fn().mockResolvedValue({
+    complete: true,
+    spannedScopes: ["scope-owl"],
+    spannedAll: true,
+    excludedGroups: [],
+    wishGaps: [],
+    capacityGaps: [],
+  }),
+}));
 
 vi.mock("@/lib/db", () => ({ prisma }));
 vi.mock("@/services/raster/inputSets", () => ({
   syncInputSetSourceCaches: vi.fn(),
+}));
+vi.mock("@/lib/raster/coverage", () => ({
+  buildCoverageRecordForInputSet,
 }));
 
 import { startOptimizationRun } from "@/services/raster/runs";
@@ -25,7 +38,7 @@ describe("raster wish conflicts do not block runs", () => {
     prisma.rasterOptimizationRun.update.mockResolvedValue({
       id: "run-1",
       jobId: "job-1",
-      unresolvedWishConflictsJson: JSON.stringify({ count: 1 }),
+      coverageJson: JSON.stringify({ unresolvedWishConflicts: { count: 1 } }),
     });
   });
 
@@ -39,11 +52,20 @@ describe("raster wish conflicts do not block runs", () => {
     expect(run.id).toBe("run-1");
     expect(prisma.rasterOptimizationRun.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
-        unresolvedWishConflictsJson: JSON.stringify({
-          count: 1,
-          conflicts: [
-            { id: "conflict-1", wishId: "wish-1", importedRowId: "row-1" },
-          ],
+        coverageComplete: false,
+        coverageJson: JSON.stringify({
+          complete: false,
+          spannedScopes: ["scope-owl"],
+          spannedAll: true,
+          excludedGroups: [],
+          wishGaps: [],
+          capacityGaps: [],
+          unresolvedWishConflicts: {
+            count: 1,
+            conflicts: [
+              { id: "conflict-1", wishId: "wish-1", importedRowId: "row-1" },
+            ],
+          },
         }),
       }),
     });

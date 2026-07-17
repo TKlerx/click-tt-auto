@@ -74,8 +74,9 @@ describe("raster wishes import service", () => {
 
     expect(prismaMock.rasterWish.deleteMany).not.toHaveBeenCalled();
     expect(prismaMock.rasterWishImportBatch.create).toHaveBeenCalled();
-    expect(firstCallData(prismaMock.rasterImportedWishRow.createManyAndReturn))
-      .toHaveLength(1);
+    expect(
+      firstCallData(prismaMock.rasterImportedWishRow.createManyAndReturn),
+    ).toHaveLength(1);
   });
 
   it("stores requestedRasterzahl as a single-encoded JSON array", async () => {
@@ -339,7 +340,9 @@ describe("raster wishes import service", () => {
       },
     });
 
-    const rows = firstCallData(prismaMock.rasterImportedWishRow.createManyAndReturn);
+    const rows = firstCallData(
+      prismaMock.rasterImportedWishRow.createManyAndReturn,
+    );
     // club-a's row brought its wish into existence; club-b's only matched one.
     expect(rows.map((row) => row.createdWish)).toEqual([true, false]);
   });

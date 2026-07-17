@@ -7,20 +7,25 @@ import sqlite3
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from contextlib import closing
 from pathlib import Path
+from typing import Any, cast
 from unittest.mock import patch
 
 from starter_worker.config import WorkerConfig, load_config
-from starter_worker.db import JobStore, _find_overage_rows, normalize_postgres_database_url
+from starter_worker.db import BackgroundJob, JobStore, _find_overage_rows, normalize_postgres_database_url
 from starter_worker.main import (
+    RasterInputInvalid,
     RasterSolverInfeasible,
     _exclude_unplanned_groups,
+    _process_claimed_job,
     _log_job_claimed,
     _log_job_completed,
     _log_job_failed,
     _log_jobs_requeued_stale,
     _log_teams_poll_scheduled,
+    _raster_run_model,
     _solve_raster_model,
     process_inbound_mail_poll,
     process_job,
@@ -249,6 +254,227 @@ class WorkerTests(unittest.TestCase):
         self.assertEqual(row, ("CANCELLED", "CANCELLED", None))
         self.assertEqual(snapshots, 0)
 
+    @staticmethod
+    def _combined_context(
+        *,
+        fixed_rasterzahlen: list[dict[str, object]] | None = None,
+    ) -> dict[str, Any]:
+        """Two scopes sharing one real club, which is the case combined runs exist for.
+
+        Club ids are slugs of club names, so a club fielding a Verband team and a
+        Bezirk team carries the same id in both models.
+        """
+        context: dict[str, Any] = {
+            "seasonModels": [
+                {
+                    "scopeId": "scope-a",
+                    "seasonModelJson": json.dumps(
+                        {
+                            "clubs": [
+                                {
+                                    "id": "ttc-muster",
+                                    "name": "TTC Muster",
+                                    "venues": [{"hall": "1", "capacity": 2}],
+                                }
+                            ],
+                            "teams": [
+                                {
+                                    "id": "oberliga-ttc-muster-i",
+                                    "clubId": "ttc-muster",
+                                    "label": "I",
+                                    "hall": "1",
+                                    "rasterzahl": {"kind": "fixed", "value": 3},
+                                }
+                            ],
+                            "groups": [
+                                {
+                                    "ref": {"league": "Kreisliga", "name": "Gruppe 1"},
+                                    "size": 10,
+                                    "teamIds": ["oberliga-ttc-muster-i"],
+                                }
+                            ],
+                            "wishes": [
+                                {
+                                    "clubId": "ttc-muster",
+                                    "teamA": "oberliga-ttc-muster-i",
+                                    "teamB": "kreisliga-ttc-muster-ii",
+                                    "relation": "wechsel",
+                                }
+                            ],
+                        }
+                    ),
+                },
+                {
+                    "scopeId": "scope-b",
+                    "seasonModelJson": json.dumps(
+                        {
+                            "clubs": [
+                                {
+                                    "id": "ttc-muster",
+                                    "name": "TTC Muster",
+                                    "venues": [{"hall": "2", "capacity": 1}],
+                                }
+                            ],
+                            "teams": [
+                                {
+                                    "id": "kreisliga-ttc-muster-ii",
+                                    "clubId": "ttc-muster",
+                                    "label": "II",
+                                    "hall": "2",
+                                    "rasterzahl": {"kind": "pinned", "value": 5},
+                                }
+                            ],
+                            "groups": [
+                                {
+                                    "ref": {"league": "Kreisliga", "name": "Gruppe 1"},
+                                    "size": 10,
+                                    "teamIds": ["kreisliga-ttc-muster-ii"],
+                                }
+                            ],
+                        }
+                    ),
+                },
+            ]
+        }
+        if fixed_rasterzahlen is not None:
+            context["fixedRasterzahlen"] = fixed_rasterzahlen
+        return context
+
+    def test_combined_raster_model_keeps_ids_so_wishes_and_clubs_still_resolve(self) -> None:
+        model = _raster_run_model(self._combined_context())
+        teams = cast(list[dict[str, object]], model["teams"])
+        clubs = cast(list[dict[str, object]], model["clubs"])
+        wishes = cast(list[dict[str, object]], model["wishes"])
+
+        team_ids = {str(team["id"]) for team in teams}
+        # A wish naming a team in the other spanned scope must still find it.
+        self.assertIn(str(wishes[0]["teamA"]), team_ids)
+        self.assertIn(str(wishes[0]["teamB"]), team_ids)
+        # One real club stays one club, so hall capacity and same-club spacing
+        # see both of its teams.
+        self.assertEqual([club["id"] for club in clubs], ["ttc-muster"])
+        self.assertEqual({str(team["clubId"]) for team in teams}, {"ttc-muster"})
+
+    def test_combined_raster_model_keeps_every_venue_of_a_shared_club(self) -> None:
+        model = _raster_run_model(self._combined_context())
+        clubs = cast(list[dict[str, object]], model["clubs"])
+        venues = cast(list[dict[str, object]], clubs[0]["venues"])
+
+        self.assertEqual([venue["hall"] for venue in venues], ["1", "2"])
+
+    def test_combined_raster_model_unfixes_inherited_but_keeps_pins(self) -> None:
+        model = _raster_run_model(self._combined_context())
+        teams = cast(list[dict[str, object]], model["teams"])
+        by_id = {str(team["id"]): team for team in teams}
+
+        # Inherited upper-league number: the combined run decides it (FR-013).
+        self.assertEqual(
+            by_id["oberliga-ttc-muster-i"]["rasterzahl"], {"kind": "assignable"}
+        )
+        # A deliberate pin is not an inherited constraint and survives.
+        self.assertEqual(
+            by_id["kreisliga-ttc-muster-ii"]["rasterzahl"], {"kind": "pinned", "value": 5}
+        )
+
+    def test_combined_raster_model_honours_numbers_supplied_for_the_combined_set(self) -> None:
+        model = _raster_run_model(
+            self._combined_context(
+                fixed_rasterzahlen=[
+                    {"clubId": "ttc-muster", "teamLabel": "I", "rasterzahl": 7}
+                ]
+            )
+        )
+        teams = cast(list[dict[str, object]], model["teams"])
+        by_id = {str(team["id"]): team for team in teams}
+
+        # FR-014: supplied against the combined set, so a hard constraint here.
+        self.assertEqual(
+            by_id["oberliga-ttc-muster-i"]["rasterzahl"], {"kind": "fixed", "value": 7}
+        )
+
+    def test_combined_raster_model_tags_groups_with_scope_to_keep_them_distinct(self) -> None:
+        model = _raster_run_model(self._combined_context())
+        groups = cast(list[dict[str, object]], model["groups"])
+
+        # Both are "Kreisliga / Gruppe 1"; only the scope tells them apart.
+        self.assertEqual([group["scopeId"] for group in groups], ["scope-a", "scope-b"])
+
+    def test_combined_raster_model_refuses_a_team_id_claimed_by_two_scopes(self) -> None:
+        # Two different clubs sharing a name, in identically named groups, in
+        # different Bezirke: both slug to one team id.
+        def scope(scope_id: str) -> dict[str, object]:
+            return {
+                "scopeId": scope_id,
+                "seasonModelJson": json.dumps(
+                    {
+                        "clubs": [{"id": "tus-germania", "name": "TuS Germania"}],
+                        "teams": [
+                            {
+                                "id": "gruppe-1-tus-germania-i",
+                                "clubId": "tus-germania",
+                                "label": "I",
+                            }
+                        ],
+                        "groups": [
+                            {
+                                "ref": {"league": "Kreisliga", "name": "Gruppe 1"},
+                                "size": 10,
+                                "teamIds": ["gruppe-1-tus-germania-i"],
+                            }
+                        ],
+                    }
+                ),
+            }
+
+        with self.assertRaises(RasterInputInvalid) as caught:
+            _raster_run_model({"seasonModels": [scope("bezirk-a"), scope("bezirk-b")]})
+
+        self.assertIn("gruppe-1-tus-germania-i", str(caught.exception))
+        self.assertIn("bezirk-a", str(caught.exception))
+        self.assertIn("bezirk-b", str(caught.exception))
+
+    def test_invalid_combined_input_fails_the_run_without_retrying(self) -> None:
+        # The id collision is decided by the inputs, so all a retry buys is the
+        # same failure twice more.
+        store = unittest.mock.MagicMock()
+        job = BackgroundJob(
+            id="job-1",
+            job_type="raster_run",
+            payload={"runId": "run-1"},
+            attempt_count=1,
+        )
+        config = WorkerConfig(
+            database_url="postgresql://ignored/db",
+            poll_interval_seconds=0.1,
+            worker_id="worker-test",
+            max_attempts=3,
+            retry_backoff_seconds=15,
+            stale_lock_seconds=300,
+            teams_poll_interval_seconds=60,
+        )
+
+        with patch(
+            "starter_worker.main.process_raster_run",
+            side_effect=RasterInputInvalid("two teams share an id"),
+        ):
+            _process_claimed_job(store, config, job)
+
+        store.fail_job.assert_called_once_with(
+            "job-1", "two teams share an id", retry=False
+        )
+        # Not an infeasible plan; the inputs never described one.
+        store.mark_raster_run_failed.assert_called_once()
+        store.mark_raster_run_infeasible.assert_not_called()
+
+    def test_combined_raster_model_allows_one_club_across_verband_and_bezirk(self) -> None:
+        # The legitimate case the guard must not catch: one club, two teams, two
+        # scopes, different team ids. This is what combined planning is for.
+        model = _raster_run_model(self._combined_context())
+        teams = cast(list[dict[str, object]], model["teams"])
+
+        self.assertEqual(len(teams), 2)
+        self.assertEqual({str(team["clubId"]) for team in teams}, {"ttc-muster"})
+
     def test_worker_runtime_has_ortools(self) -> None:
         result = subprocess.run(
             [sys.executable, "-c", "import ortools"],
@@ -381,6 +607,48 @@ class WorkerTests(unittest.TestCase):
         self.assertEqual([team["id"] for team in week_11["teams"]], ["team-a", "team-b"])
         self.assertEqual(week_11["actualCount"], 2)
         self.assertEqual(week_11["excess"], 1)
+
+    def test_persisted_overages_keep_same_named_odd_groups_distinct_by_scope(self) -> None:
+        model = {
+            "clubs": [{"id": "club", "name": "Club", "venues": [{"hall": "1", "capacity": 1}]}],
+            "teams": [
+                {
+                    "id": "team-a",
+                    "clubId": "club",
+                    "hall": "1",
+                    "homeWeekday": "friday",
+                    "rasterzahl": {"kind": "assignable"},
+                },
+                {
+                    "id": "team-b",
+                    "clubId": "club",
+                    "hall": "1",
+                    "homeWeekday": "friday",
+                    "rasterzahl": {"kind": "assignable"},
+                },
+            ],
+            "groups": [
+                {
+                    "scopeId": "scope-a",
+                    "ref": {"league": "Kreisliga", "name": "Gruppe 1"},
+                    "size": 5,
+                    "teamIds": ["team-a"],
+                },
+                {
+                    "scopeId": "scope-b",
+                    "ref": {"league": "Kreisliga", "name": "Gruppe 1"},
+                    "size": 5,
+                    "teamIds": ["team-b"],
+                },
+            ],
+        }
+
+        rows = _find_overage_rows(model, {"team-a": 1, "team-b": 2})
+
+        week_1 = next(row for row in rows if row["week"] == 1)
+        self.assertEqual([team["id"] for team in week_1["teams"]], ["team-a", "team-b"])
+        self.assertEqual(week_1["actualCount"], 2)
+        self.assertEqual(week_1["excess"], 1)
 
     def test_persisted_overages_ignore_capacity_irrelevant_teams(self) -> None:
         model = {

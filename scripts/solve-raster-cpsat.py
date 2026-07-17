@@ -83,6 +83,19 @@ def circle_pairs(size: str) -> list[list[dict[str, int]]]:
     return rounds
 
 
+def group_key(group: dict[str, Any]) -> str:
+    """Identity of a group within one solve.
+
+    League + name is unique inside a single scope, but a combined run merges
+    several: two Bezirke can each have a "Kreisliga" / "Gruppe 1". The merged
+    model tags every group with its scopeId, so include it when present. Models
+    from a single scope carry no scopeId and keep their existing key.
+    """
+    base = str(group["ref"]["league"]) + "::" + str(group["ref"]["name"])
+    scope_id = group.get("scopeId")
+    return f"{scope_id}::{base}" if scope_id else base
+
+
 def raster_values_for_group(group: dict[str, Any]) -> range:
     return range(1, numeric_raster_size(raster_key_for_group(group)) + 1)
 
@@ -305,9 +318,9 @@ def main() -> None:
             if kind in ("fixed", "pinned"):
                 model.add(var == int(team["rasterzahl"]["value"]))
         if int(group["size"]) % 2 == 1:
-            group_key = str(group["ref"]["league"]) + "::" + str(group["ref"]["name"])
+            group_id = group_key(group)
             bye_var = model.new_int_var(1, numeric_raster_size(raster_key_for_group(group)), f"bye_{len(bye)}")
-            bye[group_key] = bye_var
+            bye[group_id] = bye_var
             model.add_all_different([*group_vars, bye_var])
         else:
             model.add_all_different(group_vars)
@@ -339,8 +352,7 @@ def main() -> None:
         group = team_group.get(team_id)
         if not group:
             continue
-        group_key = str(group["ref"]["league"]) + "::" + str(group["ref"]["name"])
-        bye_var = bye.get(group_key)
+        bye_var = bye.get(group_key(group))
         all_weeks = sorted({
             week
             for value in raster_values_for_group(group)
@@ -426,8 +438,8 @@ def main() -> None:
         if not team_a or not team_b or not group_a or not group_b:
             continue
         ok_pairs = []
-        key_a = str(group_a["ref"]["league"]) + "::" + str(group_a["ref"]["name"])
-        key_b = str(group_b["ref"]["league"]) + "::" + str(group_b["ref"]["name"])
+        key_a = group_key(group_a)
+        key_b = group_key(group_b)
         bye_a = bye.get(key_a)
         bye_b = bye.get(key_b)
         same_bye = bye_a is not None and bye_a is bye_b
@@ -476,8 +488,8 @@ def main() -> None:
                 group_a = team_group[left_id]
                 group_b = team_group[right_id]
                 expected = "zeitgleich" if left["spielwochePref"] == right["spielwochePref"] else "wechsel"
-                key_a = str(group_a["ref"]["league"]) + "::" + str(group_a["ref"]["name"])
-                key_b = str(group_b["ref"]["league"]) + "::" + str(group_b["ref"]["name"])
+                key_a = group_key(group_a)
+                key_b = group_key(group_b)
                 bye_a = bye.get(key_a)
                 bye_b = bye.get(key_b)
                 same_bye = bye_a is not None and bye_a is bye_b

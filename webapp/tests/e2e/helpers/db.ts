@@ -40,7 +40,9 @@ function runDbWorkerWithRetry<TInput>(
     cwd: process.cwd(),
     env: {
       ...process.env,
+      APP_DATABASE_URL: databaseUrl,
       DATABASE_URL: databaseUrl,
+      MIGRATION_DATABASE_URL: databaseUrl,
     },
     encoding: "utf8",
     input: JSON.stringify(payload),
@@ -179,6 +181,22 @@ export function seedRasterProjectionFixture(input: {
       relationalWishes: number;
     }
   >("seedRasterProjectionFixture", input);
+}
+
+export function seedRasterCombinedReviewFixture(input: {
+  email: string;
+  suffix: string;
+}) {
+  return runDbWorker<
+    typeof input,
+    {
+      combinedSnapshotId: string;
+      completeCombinedSnapshotId: string;
+      singleSnapshotId: string;
+      owlScopeId: string;
+      westfalenScopeId: string;
+    }
+  >("seedRasterCombinedReviewFixture", input);
 }
 
 export function addAuditEntryFixture(input: {

@@ -20,7 +20,10 @@ const bodySchema = z
     (body) =>
       body.decision !== RasterConflictDecision.MANUAL ||
       (body.manualValue && Object.keys(body.manualValue).length > 0),
-    { message: "A manual decision requires a manual value", path: ["manualValue"] },
+    {
+      message: "A manual decision requires a manual value",
+      path: ["manualValue"],
+    },
   );
 
 export async function POST(

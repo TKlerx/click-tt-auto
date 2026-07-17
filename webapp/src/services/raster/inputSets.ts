@@ -3,6 +3,7 @@ import { rasterScopeWhere } from "@/lib/raster/access";
 import { rasterIngest } from "@/lib/raster/pipeline";
 import { normalizeRasterSeason } from "@/lib/raster/season";
 import { seasonModelSchema, type SeasonModelInput } from "@/lib/raster/schemas";
+import { closestClubId, normalizeClubName } from "@/lib/raster/club-matching";
 import { InputSetStatus } from "../../../generated/prisma/enums";
 import type { TeamRasterAssignmentRow } from "../../../../src/raster/ingest/clicktt-assignments.js";
 import type { WishParseResult } from "../../../../src/raster/ingest/wishes-pdf.js";
@@ -50,7 +51,7 @@ export async function listInputSets(
   scopeId: string,
   season = normalizeRasterSeason(undefined),
 ) {
-  return prisma.rasterInputSet.findMany({
+  const inputSets = await prisma.rasterInputSet.findMany({
     where: {
       ...rasterScopeWhere(scopeId),
       season: normalizeRasterSeason(season),
@@ -86,11 +87,34 @@ export async function listInputSets(
         take: 5,
         include: { snapshot: { select: { id: true } } },
       },
+      spannedScopes: { select: { scopeId: true } },
       _count: {
         select: { wishes: true, fixedRasterzahlen: true, runs: true },
       },
     },
   });
+  return Promise.all(
+    inputSets.map(async (inputSet) => {
+      const spannedScopes = inputSet.spannedScopes ?? [];
+      if (spannedScopes.length < 2) return inputSet;
+      const scopeIds = spannedScopes.map((scope) => scope.scopeId);
+      const runs = await Promise.all(
+        inputSet.runs.map(async (run) => ({
+          ...run,
+          sourceChangedSinceStart:
+            (run.status === "PENDING" || run.status === "RUNNING") &&
+            (await prisma.rasterSource.count({
+              where: {
+                scopeId: { in: scopeIds },
+                season: inputSet.season,
+                updatedAt: { gt: run.createdAt },
+              },
+            })) > 0,
+        })),
+      );
+      return { ...inputSet, runs };
+    }),
+  );
 }
 
 export async function createInputSet(params: {
@@ -422,55 +446,6 @@ function teamIdentityKey(
   label: string | undefined,
 ) {
   return `${clubId ?? ""}|${(label ?? "").trim().toLowerCase()}`;
-}
-
-function normalizeClubName(value: string | undefined) {
-  return (value ?? "")
-    .normalize("NFKD")
-    .replace(/\p{Diacritic}/gu, "")
-    .replace(/(?:^|\s)e\.?\s*v\.?$/i, "")
-    .replace(/ß/g, "ss")
-    .replace(/\brot[\s-]*weiss\b/gi, "rw")
-    .replace(/\btischtennisverein\b/gi, "ttv")
-    .replace(/[^a-z0-9]/gi, "")
-    .trim()
-    .toLowerCase();
-}
-
-function closestClubId(
-  normalizedName: string,
-  wishClubIdByName: Map<string, string>,
-) {
-  let best: { distance: number; id: string } | null = null;
-  for (const [candidate, id] of wishClubIdByName) {
-    const distance = editDistance(normalizedName, candidate);
-    if (distance <= 2 && (!best || distance < best.distance)) {
-      best = { distance, id };
-    }
-  }
-  return best?.id;
-}
-
-function editDistance(left: string, right: string) {
-  const previous = Array.from(
-    { length: right.length + 1 },
-    (_, index) => index,
-  );
-  for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
-    let diagonal = previous[0]!;
-    previous[0] = leftIndex;
-    for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
-      const cost = left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1;
-      const next = Math.min(
-        previous[rightIndex]! + 1,
-        previous[rightIndex - 1]! + 1,
-        diagonal + cost,
-      );
-      diagonal = previous[rightIndex]!;
-      previous[rightIndex] = next;
-    }
-  }
-  return previous[right.length]!;
 }
 
 function groupReviewsByKey(seasonModelJson?: string | null) {

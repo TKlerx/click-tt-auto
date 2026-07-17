@@ -8,11 +8,16 @@ import {
   summarizeSnapshotConflicts,
 } from "@/services/raster";
 import { AssignmentTable } from "@/components/raster/assignments/assignment-table";
+import { IncompleteBadge } from "@/components/raster/coverage/incomplete-badge";
+import { CoverageDetail } from "@/components/raster/coverage/coverage-detail";
+import { CombinedBadge } from "@/components/raster/coverage/combined-badge";
 
 export default async function RasterSnapshotPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{ scope?: string }>;
 }) {
   const user = await requireSession();
   const snapshot = await getSnapshot((await params).id);
@@ -27,22 +32,66 @@ export default async function RasterSnapshotPage({
     );
   }
 
+  const coveredScopes = snapshot.spannedScopes.length
+    ? snapshot.spannedScopes.map((row) => row.scope.code)
+    : [snapshot.scope.code];
+  const scopeRows = snapshot.spannedScopes.length
+    ? snapshot.spannedScopes
+    : [{ scopeId: snapshot.scopeId, scope: snapshot.scope }];
+  const requestedScope = (await searchParams)?.scope;
+  const selectedScopeId = scopeRows.some(
+    (row) => row.scopeId === requestedScope,
+  )
+    ? requestedScope
+    : null;
+  const combined = coveredScopes.length > 1;
   const [assignments, conflicts, topClubs] = await Promise.all([
-    listSnapshotAssignments(snapshot.id),
-    listSnapshotConflicts(snapshot.id),
-    summarizeSnapshotConflicts(snapshot.id),
+    listSnapshotAssignments(snapshot.id, { scopeId: selectedScopeId }),
+    listSnapshotConflicts(snapshot.id, { scopeId: selectedScopeId }),
+    summarizeSnapshotConflicts(snapshot.id, { scopeId: selectedScopeId }),
   ]);
 
   return (
     <div className="space-y-7">
       <section>
         <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[var(--muted-foreground)]">
-          {snapshot.scope.code}
+          {coveredScopes.join(", ")}
         </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <CombinedBadge combined={combined} />
+          <IncompleteBadge complete={snapshot.run?.coverageComplete} />
+        </div>
         <h1 className="mt-3 text-3xl font-semibold leading-tight tracking-tight sm:text-5xl">
           Raster results
         </h1>
+        {combined ? (
+          <form className="mt-4 flex flex-wrap items-center gap-2" method="get">
+            <label className="text-sm font-medium">
+              Scope
+              <select
+                className="ml-2 h-9 rounded-md border border-[var(--border)] bg-transparent px-2"
+                defaultValue={selectedScopeId ?? ""}
+                name="scope"
+              >
+                <option value="">All</option>
+                {scopeRows.map((row) => (
+                  <option key={row.scopeId} value={row.scopeId}>
+                    {row.scope.code}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              className="h-9 rounded-md border border-[var(--border)] px-3 text-sm font-medium"
+              type="submit"
+            >
+              Apply
+            </button>
+          </form>
+        ) : null}
       </section>
+
+      <CoverageDetail coverageJson={snapshot.run?.coverageJson} />
 
       <section className="grid gap-3 md:grid-cols-4">
         <Metric label="Optimality" value={snapshot.optimality} />
