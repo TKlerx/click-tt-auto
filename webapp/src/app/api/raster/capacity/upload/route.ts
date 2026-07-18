@@ -22,7 +22,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "CSV is empty" }, { status: 400 });
   }
 
-  const headers = rasterIngest.parseCsvLine(headerLine);
+  const headers = rasterIngest
+    .parseCsvLine(headerLine)
+    .map((header) => (header === "district" ? "scope" : header));
   const rows = lines.map((line) => {
     const values = rasterIngest.parseCsvLine(line);
     return Object.fromEntries(

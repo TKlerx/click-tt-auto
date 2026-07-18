@@ -8,7 +8,9 @@ const DEFAULT_E2E_DATABASE_URL =
   "postgresql://starter:starter_e2e_password@localhost:45432/business_app_starter_e2e_test";
 
 const databaseUrl =
-  process.env.DATABASE_URL?.trim() || DEFAULT_E2E_DATABASE_URL;
+  process.env.E2E_DATABASE_URL?.trim() ||
+  process.env.DATABASE_URL?.trim() ||
+  DEFAULT_E2E_DATABASE_URL;
 
 if (
   !databaseUrl.startsWith("postgresql://") &&
@@ -29,8 +31,10 @@ const postgresDb =
   parsed.pathname.replace(/^\//, "") || "business_app_starter_e2e_test";
 const hostPort = parsed.port || "45432";
 
-await ensureDockerPostgres();
-ensureTargetDatabase();
+if (isLocalPostgres(parsed.hostname)) {
+  await ensureDockerPostgres();
+  ensureTargetDatabase();
+}
 
 const env = {
   APP_DATABASE_URL: databaseUrl,
@@ -167,6 +171,12 @@ function probeHostPort() {
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isLocalPostgres(hostname) {
+  return (
+    hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1"
+  );
 }
 
 function waitForPostgres() {

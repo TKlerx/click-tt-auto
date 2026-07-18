@@ -177,7 +177,7 @@ describe("last admin protection", () => {
 
     expect(response?.status).toBe(401);
     expect(requireRouteUserWithRoles).toHaveBeenCalledWith(
-      [Role.PLATFORM_ADMIN],
+      [Role.PLATFORM_ADMIN, Role.SCOPE_ADMIN],
       request,
     );
   });

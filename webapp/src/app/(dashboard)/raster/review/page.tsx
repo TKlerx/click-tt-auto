@@ -1,8 +1,8 @@
-import { Role } from "../../../../../generated/prisma/enums";
 import { CapacityTable } from "@/components/raster/capacity/capacity-table";
 import { InferCapacitiesButton } from "@/components/raster/capacity/infer-capacities-button";
 import { MatchReviewPanel } from "@/components/raster/match-review-panel";
 import { WishImportReviewPanel } from "@/components/raster/wish-import-review-panel";
+import { canUseRasterLevel } from "@/lib/raster/access";
 import { listMatchReviewState } from "@/lib/raster/match-review";
 import { FixedScheduleNumbersForm } from "@/components/raster/input-set-actions";
 import {
@@ -49,7 +49,7 @@ export default async function RasterReviewPage({
         listWishImportReview(inputSet.id),
       ])
     : [null, [], null];
-  const canEdit = context.user.role === Role.PLATFORM_ADMIN;
+  const canEdit = canUseRasterLevel(context.user, "scheduler");
 
   if (!inputSet) {
     return (

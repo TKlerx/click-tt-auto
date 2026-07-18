@@ -84,6 +84,21 @@
     "lastAdminDeactivateError": "Impossible de desactiver le dernier utilisateur admin",
     "lastAdminRoleError": "Impossible de changer le role du dernier utilisateur admin",
     "couldNotUpdate": "Impossible de mettre a jour l'utilisateur",
+    "scopes": "Perimetres",
+    "noScopes": "Aucun perimetre attribue",
+    "assignScope": "Attribuer un perimetre",
+    "revokeScope": "Retirer le perimetre",
+    "scopeGranted": "Perimetre attribue",
+    "scopeRevoked": "Perimetre retire",
+    "scopeColumn": "Acces par perimetre",
+    "accessLookupOnly": "Recherchez par email exact pour gerer un utilisateur.",
+    "lookupUser": "Chercher utilisateur",
+    "noUserFound": "Aucun utilisateur trouve",
+    "noScopeAccess": "Aucun perimetre ne vous est attribue.",
+    "scopeLevels": {
+      "association": "Verband",
+      "bezirk": "Bezirk"
+    },
     "roles": {
       "PLATFORM_ADMIN": "Admin plateforme",
       "SCOPE_ADMIN": "Admin perimetre",

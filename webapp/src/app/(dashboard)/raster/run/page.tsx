@@ -1,5 +1,5 @@
-import { Role } from "../../../../../generated/prisma/enums";
 import { InputSetRunActions } from "@/components/raster/input-set-actions";
+import { canUseRasterLevel } from "@/lib/raster/access";
 import {
   listInputSets,
   reviewHallCapacitiesForInputSet,
@@ -45,7 +45,7 @@ export default async function RasterRunPage({
           ? "This run is provisional because excluded groups are not planned yet."
           : "The goal is a run covering every group in this input set."}
       </p>
-      {context.user.role === Role.PLATFORM_ADMIN ? (
+      {canUseRasterLevel(context.user, "scheduler") ? (
         <InputSetRunActions
           capacityReview={capacityReview ?? undefined}
           combined={inputSet.spannedScopes.length > 1}
@@ -56,8 +56,7 @@ export default async function RasterRunPage({
         />
       ) : (
         <p className="mt-3 text-sm text-[var(--muted-foreground)]">
-          You can view this step, but run controls are only shown to platform
-          admins.
+          You can view this step, but run controls are only shown to schedulers.
         </p>
       )}
     </section>

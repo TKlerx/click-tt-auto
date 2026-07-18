@@ -84,6 +84,21 @@
     "lastAdminDeactivateError": "No se puede desactivar al ultimo usuario administrador",
     "lastAdminRoleError": "No se puede cambiar el rol del ultimo usuario administrador",
     "couldNotUpdate": "No se pudo actualizar el usuario",
+    "scopes": "Ambitos",
+    "noScopes": "Sin ambitos asignados",
+    "assignScope": "Asignar ambito",
+    "revokeScope": "Revocar ambito",
+    "scopeGranted": "Ambito asignado",
+    "scopeRevoked": "Ambito revocado",
+    "scopeColumn": "Acceso por ambito",
+    "accessLookupOnly": "Busca por email exacto para gestionar un usuario.",
+    "lookupUser": "Buscar usuario",
+    "noUserFound": "No se encontro ningun usuario",
+    "noScopeAccess": "No tienes ambitos asignados.",
+    "scopeLevels": {
+      "association": "Verband",
+      "bezirk": "Bezirk"
+    },
     "roles": {
       "PLATFORM_ADMIN": "Administrador de plataforma",
       "SCOPE_ADMIN": "Administrador de alcance",

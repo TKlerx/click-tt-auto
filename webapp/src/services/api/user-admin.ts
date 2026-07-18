@@ -6,10 +6,12 @@ import {
 import { safeLogAudit } from "@/lib/audit";
 import { prisma } from "@/lib/db";
 import { jsonError } from "@/lib/http";
+import { canAssignRole } from "@/lib/rbac";
 import {
   requireRouteUser,
   requireRouteUserWithRoles,
 } from "@/services/api/route-context";
+import { withSerializableRetry } from "@/services/api/serializable-retry";
 import {
   safeQueueRoleChangedNotifications,
   safeQueueUserCreatedNotifications,
@@ -29,8 +31,6 @@ import {
 } from "../../../generated/prisma/enums";
 import type { User } from "../../../generated/prisma/client";
 import { Prisma } from "../../../generated/prisma/client";
-
-const SERIALIZABLE_RETRY_LIMIT = 3;
 
 export function parseUserStatusFilter(value: string | null) {
   if (!value) {
@@ -64,6 +64,51 @@ export async function listUsers(status: UserStatus | null) {
     authMethod: user.authMethod,
     createdAt: user.createdAt,
   }));
+}
+
+export async function lookupUserByEmail(
+  email: string | null,
+  request?: Request,
+) {
+  const auth = await requireRouteUserWithRoles(
+    [Role.PLATFORM_ADMIN, Role.SCOPE_ADMIN],
+    request,
+  );
+  if ("error" in auth) {
+    return auth;
+  }
+
+  const normalizedEmail = email?.trim().toLowerCase();
+  if (!normalizedEmail) {
+    return { user: null };
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { email: normalizedEmail },
+    include: {
+      scopeAssignments: { include: { scope: { select: scopeSelect } } },
+    },
+  });
+
+  if (
+    !user ||
+    user.id === auth.user.id ||
+    !canAssignRole(auth.user, user.role)
+  ) {
+    return { user: null };
+  }
+
+  return {
+    user: {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      status: user.status,
+      authMethod: user.authMethod,
+      scopes: user.scopeAssignments.map((assignment) => assignment.scope),
+    },
+  };
 }
 
 export async function createLocalUser(
@@ -171,8 +216,9 @@ export async function updateOwnThemePreference(
 export async function requireManagedUserContext(
   params: RouteParamsWithId,
   request?: Request,
+  roles: Role[] = [Role.PLATFORM_ADMIN],
 ): Promise<ManagedUserResult> {
-  const auth = await requireRouteUserWithRoles([Role.PLATFORM_ADMIN], request);
+  const auth = await requireRouteUserWithRoles(roles, request);
   if ("error" in auth) {
     return auth;
   }
@@ -323,9 +369,16 @@ export async function updateManagedUserRole(
     return { error: jsonError("Invalid role", 400) };
   }
 
-  const managed = await requireManagedUserContext(params, request);
+  const managed = await requireManagedUserContext(params, request, [
+    Role.PLATFORM_ADMIN,
+    Role.SCOPE_ADMIN,
+  ]);
   if ("error" in managed) {
     return managed;
+  }
+
+  if (!canAssignRole(managed.actor, body.role)) {
+    return { error: jsonError("Not authorized to assign this role", 403) };
   }
 
   let updated: User;
@@ -391,39 +444,15 @@ export async function updateManagedUserRole(
   return { user: { id: updated.id, role: updated.role } };
 }
 
-async function withSerializableRetry<T>(run: () => Promise<T>) {
-  let attempt = 0;
-  while (attempt < SERIALIZABLE_RETRY_LIMIT) {
-    try {
-      return await run();
-    } catch (error) {
-      if (error instanceof Response) {
-        throw error;
-      }
-
-      if (
-        isSerializableConflict(error) &&
-        attempt < SERIALIZABLE_RETRY_LIMIT - 1
-      ) {
-        attempt += 1;
-        continue;
-      }
-
-      throw error;
-    }
-  }
-
-  throw new Error("Unreachable serializable retry state");
-}
-
-function isSerializableConflict(error: unknown) {
-  if (error instanceof Prisma.PrismaClientKnownRequestError) {
-    return error.code === "P2034";
-  }
-
-  if (typeof error === "object" && error !== null && "code" in error) {
-    return (error as { code?: string }).code === "P2034";
-  }
-
-  return false;
-}
+const scopeSelect = {
+  id: true,
+  code: true,
+  name: true,
+  parent: {
+    select: {
+      code: true,
+      name: true,
+      parent: { select: { code: true, name: true } },
+    },
+  },
+} satisfies Prisma.ScopeSelect;

@@ -32,7 +32,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const context = await requireRasterInputSet(request, id, "admin");
+  const context = await requireRasterInputSet(request, id, "scheduler");
   if ("error" in context) return context.error;
 
   const parsed = postSchema.safeParse(await request.json().catch(() => null));

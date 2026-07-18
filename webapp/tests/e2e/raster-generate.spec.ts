@@ -130,10 +130,13 @@ test("admin can generate and review a raster snapshot", async ({ page }) => {
     page.getByRole("heading", { name: "Run optimizer" }),
   ).toBeVisible();
   await page
-    .getByRole("button", { name: "Infer missing capacities" })
+    .getByRole("button", { name: "Recheck capacities" })
     .first()
     .click();
-  await expect(page.getByText(/Capacity rows inferred/)).toBeVisible();
+  await expect(page.getByText(/Inferred \d+; \d+ need review/)).toBeVisible();
+  await page.getByRole("button", { name: "Mark all reviewed" }).click();
+  await expect(page.getByText("Source matches (0 outstanding)")).toBeVisible();
+  await page.getByRole("link", { name: /^Run optimizer/ }).click();
   await page.getByRole("button", { name: "Validate" }).click();
   await expect(page.getByText(/Validation passed/)).toBeVisible();
   await page.getByRole("button", { name: "Queue run" }).click();

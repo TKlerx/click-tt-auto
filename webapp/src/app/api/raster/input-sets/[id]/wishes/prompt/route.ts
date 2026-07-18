@@ -8,7 +8,7 @@ export async function GET(
   const context = await requireRasterInputSet(
     request,
     (await params).id,
-    "admin",
+    "scheduler",
   );
   if ("error" in context) return context.error;
 

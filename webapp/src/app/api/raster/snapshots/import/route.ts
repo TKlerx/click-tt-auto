@@ -50,7 +50,8 @@ const conflictSchema = z.object({
 });
 
 const bodySchema = z.object({
-  scope: z.string().trim().min(1),
+  scope: z.string().trim().min(1).optional(),
+  district: z.string().trim().min(1).optional(),
   objectiveBreakdown: z.record(z.string(), z.unknown()).optional(),
   assignments: z.array(assignmentSchema),
   conflicts: z.array(conflictSchema).default([]),
@@ -68,13 +69,17 @@ export async function POST(request: Request) {
     );
   }
 
-  const access = await assertRasterAccess(
-    auth.user,
-    parsed.data.scope,
-    "admin",
-  );
+  const scopeCode = parsed.data.scope ?? parsed.data.district;
+  if (!scopeCode) {
+    return NextResponse.json(
+      { error: "Invalid snapshot import" },
+      { status: 422 },
+    );
+  }
+
+  const access = await assertRasterAccess(auth.user, scopeCode, "admin");
   if (access !== true) return access.error;
-  const scope = await resolveRasterScope(parsed.data.scope);
+  const scope = await resolveRasterScope(scopeCode);
   if (!scope) {
     return NextResponse.json({ error: "Scope not found" }, { status: 404 });
   }
@@ -93,7 +98,7 @@ export async function POST(request: Request) {
   await logRasterAudit({
     action: AuditAction.RASTER_INPUT_UPLOADED,
     actorId: auth.user.id,
-    scope: parsed.data.scope,
+    scope: scopeCode,
     entityType: "RasterSnapshot",
     entityId: snapshot.id,
     details: {

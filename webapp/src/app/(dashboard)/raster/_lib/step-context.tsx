@@ -8,6 +8,7 @@ import { normalizeRasterSeason } from "@/lib/raster/season";
 
 export type RasterStepSearchParams = Promise<{
   scope?: string;
+  district?: string;
   season?: string;
 }>;
 
@@ -26,11 +27,12 @@ export async function requireRasterStep(
   const user = await requireSession();
   const scopes = await listAccessibleRasterScopes(user);
   const params = await searchParams;
-  const scopeCode = params.scope?.trim() || scopes[0]?.code;
+  const scopeCode =
+    params.scope?.trim() || params.district?.trim() || scopes[0]?.code;
   const season = normalizeRasterSeason(params.season);
 
   if (!scopeCode) {
-    return { error: "No Raster scopes are configured for your account." };
+    return { error: "You have no assigned Raster scopes." };
   }
 
   const access = await assertRasterAccess(user, scopeCode, "viewer");

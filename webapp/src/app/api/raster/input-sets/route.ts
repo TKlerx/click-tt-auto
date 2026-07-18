@@ -6,7 +6,8 @@ import { createInputSet, listInputSets } from "@/services/raster";
 import { z } from "zod";
 
 const createInputSetBodySchema = z.object({
-  scope: z.string().trim().min(1),
+  scope: z.string().trim().min(1).optional(),
+  district: z.string().trim().min(1).optional(),
   season: z.string().trim().optional(),
   name: z.string().trim().min(1),
 });
@@ -15,10 +16,10 @@ export async function GET(request: Request) {
   const auth = await requireApiUser(request);
   if ("error" in auth) return auth.error;
 
-  const scopeCode = new URL(request.url).searchParams.get("scope")?.trim();
-  const season = normalizeRasterSeason(
-    new URL(request.url).searchParams.get("season"),
-  );
+  const searchParams = new URL(request.url).searchParams;
+  const scopeCode =
+    searchParams.get("scope")?.trim() ?? searchParams.get("district")?.trim();
+  const season = normalizeRasterSeason(searchParams.get("season"));
   if (!scopeCode) {
     return NextResponse.json({ error: "scope is required" }, { status: 400 });
   }
@@ -49,13 +50,17 @@ export async function POST(request: Request) {
     );
   }
 
-  const access = await assertRasterAccess(
-    auth.user,
-    parsed.data.scope,
-    "admin",
-  );
+  const scopeCode = parsed.data.scope ?? parsed.data.district;
+  if (!scopeCode) {
+    return NextResponse.json(
+      { error: "Invalid input set payload" },
+      { status: 400 },
+    );
+  }
+
+  const access = await assertRasterAccess(auth.user, scopeCode, "scheduler");
   if (access !== true) return access.error;
-  const scope = await resolveRasterScope(parsed.data.scope);
+  const scope = await resolveRasterScope(scopeCode);
   if (!scope) {
     return NextResponse.json({ error: "Scope not found" }, { status: 404 });
   }

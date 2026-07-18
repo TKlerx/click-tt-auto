@@ -84,6 +84,21 @@
     "lastAdminDeactivateError": "Der letzte Admin-Benutzer kann nicht deaktiviert werden",
     "lastAdminRoleError": "Die Rolle des letzten Admin-Benutzers kann nicht geandert werden",
     "couldNotUpdate": "Benutzer konnte nicht aktualisiert werden",
+    "scopes": "Scopes",
+    "noScopes": "Keine Scopes zugewiesen",
+    "assignScope": "Scope zuweisen",
+    "revokeScope": "Scope entziehen",
+    "scopeGranted": "Scope zugewiesen",
+    "scopeRevoked": "Scope entzogen",
+    "scopeColumn": "Scope-Zugriff",
+    "accessLookupOnly": "Exakte E-Mail suchen, um einen Benutzer zu verwalten.",
+    "lookupUser": "Benutzer suchen",
+    "noUserFound": "Kein Benutzer gefunden",
+    "noScopeAccess": "Ihnen sind keine Scopes zugewiesen.",
+    "scopeLevels": {
+      "association": "Verband",
+      "bezirk": "Bezirk"
+    },
     "roles": {
       "PLATFORM_ADMIN": "Plattform-Admin",
       "SCOPE_ADMIN": "Bereichs-Admin",
