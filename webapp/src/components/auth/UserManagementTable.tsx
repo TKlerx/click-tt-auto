@@ -113,24 +113,6 @@ export function UserManagementTable({
                   {entry.email}
                 </td>
                 <td className="px-4 py-4">
-                  <div className="flex max-w-[18rem] flex-wrap gap-1">
-                    {entry.scopes.length === 0 ? (
-                      <span className="text-xs text-[var(--muted-foreground)]">
-                        {t("noScopes")}
-                      </span>
-                    ) : (
-                      entry.scopes.map((scope) => (
-                        <span
-                          className="rounded-full border border-[var(--border)] bg-[var(--secondary)] px-2 py-1 text-xs font-semibold text-[var(--secondary-foreground)]"
-                          key={scope.id}
-                        >
-                          {scope.name}
-                        </span>
-                      ))
-                    )}
-                  </div>
-                </td>
-                <td className="px-4 py-4">
                   <Select
                     disabled={!canEditSelfRole || Boolean(isBusy)}
                     value={entry.role}
@@ -161,6 +143,24 @@ export function UserManagementTable({
                       ))}
                     </SelectContent>
                   </Select>
+                </td>
+                <td className="px-4 py-4">
+                  <div className="flex max-w-[18rem] flex-wrap gap-1">
+                    {entry.scopes.length === 0 ? (
+                      <span className="text-xs text-[var(--muted-foreground)]">
+                        {t("noScopes")}
+                      </span>
+                    ) : (
+                      entry.scopes.map((scope) => (
+                        <span
+                          className="rounded-full border border-[var(--border)] bg-[var(--secondary)] px-2 py-1 text-xs font-semibold text-[var(--secondary-foreground)]"
+                          key={scope.id}
+                        >
+                          {scope.name}
+                        </span>
+                      ))
+                    )}
+                  </div>
                 </td>
                 <td className="px-4 py-4">
                   <span className="rounded-full border border-[var(--border)] bg-[var(--secondary)] px-3 py-1 text-xs font-semibold text-[var(--secondary-foreground)]">
