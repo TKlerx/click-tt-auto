@@ -68,6 +68,15 @@ The extracted text is one blob with almost no newlines, which is why its `[^\n]{
 
 This feature therefore **writes a parser**; it does not expose the existing one. The contract test is already in the repo, skipped, at `tests/unit/groups-pdf.test.ts`.
 
+## Clarifications
+
+### Session 2026-07-19
+
+- Q: Where should a parsed upper-league import be stored? → A: A per-scope `RasterSource` row on each Bezirk that imports it. `sourceType` is free text, so no migration; the PDF is federation-wide, but each Bezirk needs only its own clubs' teams, so the duplication is cheap and everything stays scope-keyed.
+- Q: When a club named in the PDF has no exact match among the scope's click-TT clubs? → A: Import the exact matches and flag the unmatched published entries for the admin (User Story 3). No fuzzy matching, no silent drop, and neither the import nor the run is blocked.
+- Q: A corrected PDF is re-imported mid-season, after runs already exist? → A: The new numbers replace the old (FR-012), and any run that used the replaced numbers is flagged stale via the existing `sourceChangedSinceStart` signal.
+- Q: Where are the run-time gaps recorded — an upper-league team excluded for having no wish (FR-024), and no import for the season (FR-026)? → A: In feature 006's coverage record, alongside the other gap types.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - A Bezirk plan respects the upper leagues (Priority: P1)
@@ -152,8 +161,9 @@ An admin can see which imported upper-league teams were matched to clubs in the 
 #### Importing
 
 - **FR-010**: An admin MUST be able to import the published PDF for a season, alongside the existing sources.
-- **FR-011**: The import MUST record what it parsed, so a later run uses reviewed data rather than re-parsing at run time.
-- **FR-012**: Re-importing a corrected PDF MUST replace the previous import for that season.
+- **FR-011**: The import MUST record what it parsed, as a per-scope `RasterSource` row on the importing scope, so a later run uses reviewed data rather than re-parsing at run time. The federation-wide PDF is imported per Bezirk; each import keeps only what that scope needs.
+- **FR-011a**: An upper-league team MUST be matched to a scope club by exact name. A published entry with no exact match MUST be flagged as unmatched for the admin (User Story 3); it MUST NOT be fuzzy-matched, MUST NOT be silently dropped, and MUST NOT block the import or the run.
+- **FR-012**: Re-importing a corrected PDF MUST replace the previous import for that season, and any run that used the replaced numbers MUST be flagged stale via the existing `sourceChangedSinceStart` signal, so the admin knows to re-run.
 - **FR-013**: The admin MUST be able to see what was parsed before planning against it.
 
 #### Constraining a run
@@ -162,14 +172,14 @@ An admin can see which imported upper-league teams were matched to clubs in the 
 - **FR-021**: Only upper-league teams of clubs in the scope being planned MUST be included (Q2 parks the shared-venue case).
 - **FR-022**: An included upper-league team's Rasterzahl MUST be a hard constraint and MUST NOT be re-decided by the run.
 - **FR-023**: An included upper-league team MUST occupy its club's hall on each of its home weeks, at its home day and start time, exactly as a Bezirk team does.
-- **FR-024**: An upper-league team whose hall or home day is unknown MUST NOT be counted as occupying capacity, and its exclusion MUST be recorded. It must not become capacity-irrelevant silently.
+- **FR-024**: An upper-league team whose hall or home day is unknown MUST NOT be counted as occupying capacity, and its exclusion MUST be recorded in feature 006's coverage record. It must not become capacity-irrelevant silently.
 - **FR-025**: An included upper-league team MUST NOT appear in the run's output as a planned assignment. It is an input.
 - **FR-026**: A run started with no import for the season MUST proceed, and MUST record that the upper-league numbers were absent. Feature 006's coverage record is the place for this.
 - **FR-027**: A combined run MUST continue to decide upper-league Rasterzahlen for the scopes it spans rather than take them as fixed (006 FR-013). This feature supplies the constraint that combined planning removes; it does not contradict it.
 
 ### Key Entities
 
-- **Published raster import**: Per season, the parsed content of the association's PDF — leagues, teams, Rasterzahlen, home days and times. New. Sourced from outside click-TT and authoritative for upper-league numbers.
+- **Published raster import**: Per season, the parsed content of the association's PDF — leagues, teams, Rasterzahlen, home days and times. Stored as a per-scope `RasterSource` row (Clarifications, 2026-07-19). New. Sourced from outside click-TT and authoritative for upper-league numbers.
 - **Upper-league team**: A team the run must respect but not plan: fixed number, occupies its club's hall, produces no assignment.
 
 ## Success Criteria *(mandatory)*
@@ -204,7 +214,7 @@ An admin can see which imported upper-league teams were matched to clubs in the 
 
 ## Open Questions
 
-- **Q1 (decide at planning)**: Where should the parsed import live — a `RasterSource` row for the scope being planned, or once per season for the whole federation? The PDF covers all of WTTV, so importing per Bezirk duplicates it thirteen times; but sources are currently scope-keyed. `sourceType` is free text, so either shape needs no migration.
+- **Q1 (closed, 2026-07-19)**: Where should the parsed import live? **A per-scope `RasterSource` row on the importing Bezirk.** The PDF is federation-wide but each Bezirk needs only its own clubs' teams, and `sourceType` is free text so no migration is required. See FR-011.
 - **Q2 (closed, 2026-07-17)**: Should an upper-league team occupy a hall in a Bezirk other than its club's own, where two clubs share a venue? **No.** Only that Bezirk's own clubs' upper-league teams are pulled in. The edge case is acknowledged and parked.
-- **Q3 (decide at planning)**: What happens when a club's name in the PDF does not match click-TT's? Refusing the import is too strict — one unmatched club would block a season. Ignoring it silently drops a real constraint. User Story 3 makes it visible; whether it should also block a run is open.
+- **Q3 (closed, 2026-07-19)**: What happens when a club's name in the PDF does not match click-TT's? **Exact-match only; unmatched entries are flagged for the admin, never fuzzy-matched or silently dropped, and never block the import or run.** See FR-011a.
 - **Q4 (open, low)**: Should club identity move to a real club number? `clubInfoDisplay?club=8276` is reachable from public click-TT pages for the whole federation with no special permission, and the OWL Tabellen export carries `VereinNr=42608` — a third namespace. Both are exact where today's name slug is a guess. Out of scope here: this feature matches by name like everything else, and inherits whatever identity later lands.
