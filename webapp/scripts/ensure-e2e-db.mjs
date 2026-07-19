@@ -138,7 +138,7 @@ async function waitForPublishedPort() {
         ? [
             "On Windows this usually means the port falls inside a reserved range. Check:",
             "  netsh interface ipv4 show excludedportrange protocol=tcp",
-            `If ${hostPort} falls inside a listed range, set DATABASE_URL to a free port below 49152.`,
+            `If ${hostPort} falls inside a listed range, set E2E_DATABASE_URL to a free port below 49152.`,
           ].join("\n")
         : "Check that the container's published port is not blocked by the host.",
     ].join("\n"),
