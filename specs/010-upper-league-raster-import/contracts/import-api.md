@@ -32,8 +32,8 @@ buildUpperLeagueInjection(scopeId, season, model): {
 |---|---|---|
 | J1 | an import exists; a scope club has a Verbandsliga team with a wish (hall known) | inject it fixed + capacity-relevant, group + size from the import, hall from the wish (FR-020, FR-022, FR-023) |
 | J2 | a matched team with no wish (no hall/home day) | do NOT inject as capacity-relevant; record in `excludedNoHall` (FR-024) — never silently capacity-irrelevant |
-| J3 | a parsed entry whose club is not in this scope | omit silently (FR-021) |
-| J4 | a parsed entry whose club IS in scope but name doesn't exactly match | record in `unmatched`; no fuzzy match (FR-011a, US3) |
+| J3 | a parsed entry whose club has no exact scope-club match | omit from injection (FR-021); exact matching alone does not classify it as an in-scope gap |
+| J4 | a scope club/team expected from wish data has no exact published match | record in `unmatched`; no fuzzy match (FR-011a, US3) |
 | J5 | no import for the season | `importPresent: false`, inject nothing, run proceeds (FR-026) |
 | J6 | any injected team | it never appears as an assignment in the snapshot (FR-025, SC-005) |
 

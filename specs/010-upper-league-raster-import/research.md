@@ -36,23 +36,23 @@ All decisions below feed Phase 1 (data model, contracts). No open `NEEDS CLARIFI
 
 ## R5 — Storage and staleness (FR-011, FR-012)
 
-**Decision**: Store the parsed import as a per-scope `RasterSource` row: `scopeId` + `season` + a new `sourceType` (e.g. `UPPER_LEAGUE_RASTER`) + `parsedJson`. Re-import replaces the row for that scope+season and bumps its `updatedAt`; runs started before that time are flagged stale via the existing `sourceChangedSinceStart` signal (already computed from `rasterSource.updatedAt > run.createdAt`).
+**Decision**: Store the parsed import as a per-scope `RasterSource` row: `scopeId` + `season` + a new `sourceType` (e.g. `UPPER_LEAGUE_RASTER`) + `parsedJson`. Re-import deletes existing rows for that scope+season+sourceType and creates the new row in one transaction; runs started before that time are flagged stale via `sourceChangedSinceStart`, extended to cover single-scope runs.
 
-**Rationale**: `RasterSource` is exactly the existing "a parsed thing that feeds a run" model; `sourceType` is free text so no migration (Q1). The staleness signal already exists from the combined-planning work — reusing it is why the clarify chose "flag affected runs stale."
+**Rationale**: `RasterSource` is exactly the existing "a parsed thing that feeds a run" model; `sourceType` is free text so no migration (Q1). The DB unique key includes `sourceRef`, so delete-then-create is the smallest way to guarantee one active upper-league import per scope+season. The staleness signal already exists for combined planning; extending it to single-scope runs keeps FR-012 on the same UI path.
 
 **Alternatives considered**: a bespoke per-season federation table — rejected (Q1), new shape, no scope-keying, and each Bezirk needs only its own clubs' teams anyway.
 
 ## R6 — Matching parsed entries to scope clubs (FR-011a)
 
-**Decision**: Exact-name match against the scope's clubs (the same name identity the model already uses). A parsed entry with no exact match is recorded as unmatched and surfaced to the admin (US3); it is never fuzzy-matched, never silently dropped, and never blocks the import or run.
+**Decision**: Exact-name match against the scope's clubs (the same name identity the model already uses). A parsed entry with no exact match is omitted from injection; exact matching alone cannot prove it belongs to this Bezirk. To make scope-relevant gaps visible without fuzzy matching, compare the scope's upper-league-looking wish/team rows against exact parsed matches and record any missing ones as `unmatched` for US3. Gaps never block the import or run.
 
-**Rationale**: The clarify session chose exact-match + flag. Fuzzy matching risks a wrong auto-match becoming a hard constraint (worse than none, per FR-007's spirit); refusing blocks a season on one odd name. Flagging matches US3.
+**Rationale**: The clarify session chose exact-match + flag. Fuzzy matching risks a wrong auto-match becoming a hard constraint (worse than none, per FR-007's spirit); refusing blocks a season on one odd name. Flagging scope wish gaps matches US3 without pretending every unmatched federation-wide PDF row is local.
 
 **Alternatives considered**: reuse `closestClubId` fuzzy matching — rejected here (kept available for a later, explicitly-reviewed pass, tied to Q4's club-number work).
 
 ## R7 — Recording gaps in the coverage record (FR-024, FR-026)
 
-**Decision**: Extend feature 006's coverage record with the upper-league facts: which teams were matched and injected, which parsed entries were unmatched, which matched teams were excluded for lack of a hall/home day, and whether any import existed for the season. No new gap-reporting surface.
+**Decision**: Extend feature 006's coverage record with the upper-league facts: which teams were matched and injected, which scope wish/team rows lacked an exact published match, which matched teams were excluded for lack of a hall/home day, and whether any import existed for the season. No new gap-reporting surface.
 
 **Rationale**: The clarify session chose the coverage record; FR-026 already routes "no import" there. One place for all gap types is consistent and testable, and the coverage record is already persisted per run.
 

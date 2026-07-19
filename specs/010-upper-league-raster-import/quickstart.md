@@ -19,7 +19,7 @@ The (now un-skipped) contract test parses the fixture and checks every `data/upp
 
 1. Sign in as a scheduler for the Bezirk.
 2. On the Raster import view, upload the Gruppen-und-Raster PDF for the season.
-3. Confirm the parsed preview lists the leagues and Rasterzahlen, and shows which of *this Bezirk's* clubs matched and which published entries were left unmatched (US2, US3).
+3. Confirm the parsed preview lists the leagues and Rasterzahlen, and shows which of *this Bezirk's* clubs matched and which scope wish/team rows still have no exact published match (US2, US3).
 4. Re-upload a corrected PDF → the previous import is replaced (FR-012).
 
 ## 3. Constrained run
@@ -28,7 +28,7 @@ The (now un-skipped) contract test parses the fixture and checks every `data/upp
 2. Verify in the snapshot:
    - the 2nd team is not placed at home in the same week/time as the 1st team's fixed slot (SC-001);
    - the upper-league team does not appear as an assignment (SC-005);
-   - the run's coverage record lists the matched upper-league team, any unmatched entries, and any excluded-for-no-hall teams.
+   - the run's coverage record lists the matched upper-league team, any unmatched scope wish/team rows, and any excluded-for-no-hall teams.
 3. Start a run for a club with no upper-league team → its plan is unchanged from before this feature (SC-006).
 
 ## 4. Failure-safe

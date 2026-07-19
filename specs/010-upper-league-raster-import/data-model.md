@@ -17,7 +17,7 @@ One row per importing scope + season for the published PDF.
 | `parsedJson` | the `ParsedUpperLeagueImport` below |
 | `updatedAt` | bumped on re-import; drives `sourceChangedSinceStart` staleness (FR-012) |
 
-Uniqueness: at most one `UPPER_LEAGUE_RASTER` row per (`scopeId`, `season`) — re-import replaces (FR-012).
+Uniqueness: at most one `UPPER_LEAGUE_RASTER` row per (`scopeId`, `season`) — re-import deletes any existing rows for that scope+season+sourceType and creates the new row in the same transaction (FR-012). This avoids a schema migration even though the existing DB unique key also includes `sourceRef`.
 
 ## In-memory shapes
 
@@ -60,7 +60,7 @@ InjectedUpperLeagueTeam {
 }
 ```
 
-State/transitions: an entry is **matched** (exact club name in scope) or **unmatched** (recorded, US3). A matched team is **injected** (hall resolved → capacity-relevant) or **excluded** (no hall/home day → recorded, FR-024, never silently capacity-irrelevant).
+State/transitions: a parsed entry is **matched** when its club name exactly matches a scope club; otherwise it is omitted from injection because exact matching alone cannot prove scope membership. A scope club/team expected from wish data but not exactly matched is recorded as **unmatched** (US3). A matched team is **injected** (hall resolved → capacity-relevant) or **excluded** (no hall/home day → recorded, FR-024, never silently capacity-irrelevant).
 
 ### Coverage record additions (feature 006 record — extended)
 
@@ -70,7 +70,7 @@ Per run, alongside the existing gap fields (R7):
 coverage.upperLeague {
   importPresent: boolean          // false → recorded, run still proceeds (FR-026)
   matched: Array<{ clubId, label, rasterzahl }>
-  unmatched: Array<{ league, team }>        // parsed but no scope club (US3)
+  unmatched: Array<{ clubId, label }>       // scope wish/team row with no exact published match (US3)
   excludedNoHall: Array<{ clubId, label }>  // matched but no hall/home day (FR-024)
 }
 ```
