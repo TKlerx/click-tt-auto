@@ -22,6 +22,8 @@ const config = [
       ".agents/**",
       ".claude/**",
       "**/*.min.js",
+      "**/*.d.ts",
+      "**/*.d.mts",
     ],
   },
   ...nextVitals,
