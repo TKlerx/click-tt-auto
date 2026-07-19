@@ -8,6 +8,8 @@ Auto-generated from all feature plans. Last updated: 2026-07-19
 - TypeScript 5.9 (strict), Node.js LTS 22.x + Next.js 16, React 19, Prisma 7, zod — all present; this feature adds none (008-wish-import-conflicts)
 - TypeScript 5.9 (strict) for the webapp and `src/raster` ingest; Python 3.12 for the CP-SAT solver/worker (unchanged by this feature) + Next.js 16 (App Router), Prisma 7 (PostgreSQL), `pdfjs-dist` via existing `src/raster/ingest/pdf-text.ts`; existing raster ingest/season-model pipeline (010-upper-league-raster-import)
 - PostgreSQL. Reuses the existing `RasterSource` table (scope + season + `sourceType` + `parsedJson`); no schema migration (`sourceType` is free text) (010-upper-league-raster-import)
+- TypeScript 5.9 (strict), Next.js 16 App Router, React 19 + Prisma 7 (PostgreSQL), next-intl, Tailwind 4 / shadcn, better-auth (via 007 access layer) (011-raster-import-ux)
+- PostgreSQL. **One migration**: add `inputSetId String?` FK from `RasterSource` to `RasterInputSet` and re-key source uniqueness to the workspace. `RasterInputSet` already has a `name` — it *is* the planning workspace; no new entity. (011-raster-import-ux)
 
 - TypeScript 5.9 strict for webapp/root raster code; Python 3.12 for the existing CP-SAT subprocess + Existing Next.js 16, React 19, Prisma 7, better-auth, next-intl, zod, Tailwind/shadcn; existing root `src/raster/*`; existing Python OR-Tools CP-SAT script (004-compare-raster-runs)
 - Existing Prisma SQLite dev / PostgreSQL prod schema, extended with scenario/manual-assignment fields as needed (004-compare-raster-runs)
@@ -36,6 +38,7 @@ TypeScript 5.x, Node.js LTS (22.x): Follow standard conventions
 
 ## Recent Changes
 - 010-upper-league-raster-import: Added TypeScript 5.9 (strict) for the webapp and `src/raster` ingest; Python 3.12 for the CP-SAT solver/worker (unchanged by this feature) + Next.js 16 (App Router), Prisma 7 (PostgreSQL), `pdfjs-dist` via existing `src/raster/ingest/pdf-text.ts`; existing raster ingest/season-model pipeline
+- 011-raster-import-ux: Added TypeScript 5.9 (strict), Next.js 16 App Router, React 19 + Prisma 7 (PostgreSQL), next-intl, Tailwind 4 / shadcn, better-auth (via 007 access layer)
 - 009-nuliga-team-roster-import: Added TypeScript 5.9 (strict), Node.js LTS 22.x — both halves + CLI — Playwright, dotenv, minimist (all present). Webapp — Next.js 16, Prisma 7, zod (all present). **One new dependency is likely**: a zip reader for the webapp's bundle path (FR-019a), justified below.
 - 008-wish-import-conflicts: Added TypeScript 5.9 (strict), Node.js LTS 22.x + Next.js 16, React 19, Prisma 7, zod — all present; this feature adds none
 
