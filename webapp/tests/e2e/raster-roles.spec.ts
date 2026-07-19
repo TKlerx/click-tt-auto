@@ -115,7 +115,7 @@ test("raster role matrix allows admin, scheduler, and viewer actions correctly",
       data: { scope: scopeCode, season, name: "blocked scheduler input set" },
     },
   );
-  expect(schedulerInputCreate.status()).toBe(403);
+  expect(schedulerInputCreate.status()).toBe(201);
 
   const schedulerWishesUpload = await schedulerRequest.post(
     `${appBasePath}/api/raster/input-sets/${inputSetBody.inputSet.id}/wishes/json`,
@@ -123,7 +123,7 @@ test("raster role matrix allows admin, scheduler, and viewer actions correctly",
       data: { wishes: [] },
     },
   );
-  expect(schedulerWishesUpload.status()).toBe(403);
+  expect(schedulerWishesUpload.status()).toBe(200);
 
   const schedulerRunStart = await schedulerRequest.post(
     `${appBasePath}/api/raster/input-sets/${inputSetBody.inputSet.id}/runs`,
@@ -131,7 +131,7 @@ test("raster role matrix allows admin, scheduler, and viewer actions correctly",
       data: {},
     },
   );
-  expect(schedulerRunStart.status()).toBe(403);
+  expect(schedulerRunStart.status()).not.toBe(403);
 
   const schedulerCapacityUpload = await schedulerRequest.post(
     `${appBasePath}/api/raster/capacity/upload`,

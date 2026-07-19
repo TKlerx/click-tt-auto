@@ -6,10 +6,12 @@ import {
 import { safeLogAudit } from "@/lib/audit";
 import { prisma } from "@/lib/db";
 import { jsonError } from "@/lib/http";
+import { canAssignRole, getUserScopeIds, mayManageUserRole } from "@/lib/rbac";
 import {
   requireRouteUser,
   requireRouteUserWithRoles,
 } from "@/services/api/route-context";
+import { withSerializableRetry } from "@/services/api/serializable-retry";
 import {
   safeQueueRoleChangedNotifications,
   safeQueueUserCreatedNotifications,
@@ -29,8 +31,6 @@ import {
 } from "../../../generated/prisma/enums";
 import type { User } from "../../../generated/prisma/client";
 import { Prisma } from "../../../generated/prisma/client";
-
-const SERIALIZABLE_RETRY_LIMIT = 3;
 
 export function parseUserStatusFilter(value: string | null) {
   if (!value) {
@@ -64,6 +64,73 @@ export async function listUsers(status: UserStatus | null) {
     authMethod: user.authMethod,
     createdAt: user.createdAt,
   }));
+}
+
+export async function lookupUserByEmail(
+  email: string | null,
+  request?: Request,
+) {
+  const auth = await requireRouteUserWithRoles(
+    [Role.PLATFORM_ADMIN, Role.SCOPE_ADMIN],
+    request,
+  );
+  if ("error" in auth) {
+    return auth;
+  }
+
+  const normalizedEmail = email?.trim().toLowerCase();
+  if (!normalizedEmail) {
+    return { user: null };
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { email: normalizedEmail },
+    include: {
+      scopeAssignments: { include: { scope: { select: scopeSelect } } },
+    },
+  });
+
+  if (
+    !user ||
+    user.id === auth.user.id ||
+    !canAssignRole(auth.user, user.role)
+  ) {
+    return { user: null };
+  }
+
+  // FR-042: a scope admin sees a user's assignments only for scopes they hold.
+  // listManagedUserScopes filters the same way; the lookup must not be the leak.
+  const visibleAssignments =
+    auth.user.role === Role.PLATFORM_ADMIN
+      ? user.scopeAssignments
+      : await filterAssignmentsToActorScopes(
+          auth.user.id,
+          user.scopeAssignments,
+        );
+
+  return {
+    user: {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      status: user.status,
+      authMethod: user.authMethod,
+      scopes: visibleAssignments.map((assignment) => assignment.scope),
+    },
+  };
+}
+
+async function filterAssignmentsToActorScopes<
+  T extends { scopeId: string },
+>(actorId: string, assignments: T[]): Promise<T[]> {
+  if (assignments.length === 0) {
+    return assignments;
+  }
+  const actorScopeIds = new Set(await getUserScopeIds(actorId));
+  return assignments.filter((assignment) =>
+    actorScopeIds.has(assignment.scopeId),
+  );
 }
 
 export async function createLocalUser(
@@ -171,8 +238,9 @@ export async function updateOwnThemePreference(
 export async function requireManagedUserContext(
   params: RouteParamsWithId,
   request?: Request,
+  roles: Role[] = [Role.PLATFORM_ADMIN],
 ): Promise<ManagedUserResult> {
-  const auth = await requireRouteUserWithRoles([Role.PLATFORM_ADMIN], request);
+  const auth = await requireRouteUserWithRoles(roles, request);
   if ("error" in auth) {
     return auth;
   }
@@ -322,8 +390,12 @@ export async function updateManagedUserRole(
   if (!Object.values(Role).includes(body.role)) {
     return { error: jsonError("Invalid role", 400) };
   }
+  const nextRole = body.role;
 
-  const managed = await requireManagedUserContext(params, request);
+  const managed = await requireManagedUserContext(params, request, [
+    Role.PLATFORM_ADMIN,
+    Role.SCOPE_ADMIN,
+  ]);
   if ("error" in managed) {
     return managed;
   }
@@ -340,10 +412,38 @@ export async function updateManagedUserRole(
             throw jsonError("User not found", 404);
           }
 
+          const canManageFreshRole = await mayManageUserRole(
+            managed.actor,
+            fresh,
+            nextRole,
+            async (actorId, targetId) => {
+              const actorScopeIds = await tx.userScopeAssignment.findMany({
+                where: { userId: actorId },
+                select: { scopeId: true },
+              });
+              if (actorScopeIds.length === 0) {
+                return false;
+              }
+
+              return !!(await tx.userScopeAssignment.findFirst({
+                where: {
+                  userId: targetId,
+                  scopeId: {
+                    in: actorScopeIds.map((assignment) => assignment.scopeId),
+                  },
+                },
+                select: { scopeId: true },
+              }));
+            },
+          );
+          if (!canManageFreshRole) {
+            throw jsonError("Not authorized to assign this role", 403);
+          }
+
           const denied = await ensureAdminUserCanChange(
             fresh,
             {
-              role: body.role,
+              role: nextRole,
               message: "Cannot change role of the last Admin user",
             },
             tx.user.count,
@@ -354,7 +454,7 @@ export async function updateManagedUserRole(
 
           return tx.user.update({
             where: { id: managed.user.id },
-            data: { role: body.role },
+            data: { role: nextRole },
           });
         },
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
@@ -391,39 +491,15 @@ export async function updateManagedUserRole(
   return { user: { id: updated.id, role: updated.role } };
 }
 
-async function withSerializableRetry<T>(run: () => Promise<T>) {
-  let attempt = 0;
-  while (attempt < SERIALIZABLE_RETRY_LIMIT) {
-    try {
-      return await run();
-    } catch (error) {
-      if (error instanceof Response) {
-        throw error;
-      }
-
-      if (
-        isSerializableConflict(error) &&
-        attempt < SERIALIZABLE_RETRY_LIMIT - 1
-      ) {
-        attempt += 1;
-        continue;
-      }
-
-      throw error;
-    }
-  }
-
-  throw new Error("Unreachable serializable retry state");
-}
-
-function isSerializableConflict(error: unknown) {
-  if (error instanceof Prisma.PrismaClientKnownRequestError) {
-    return error.code === "P2034";
-  }
-
-  if (typeof error === "object" && error !== null && "code" in error) {
-    return (error as { code?: string }).code === "P2034";
-  }
-
-  return false;
-}
+const scopeSelect = {
+  id: true,
+  code: true,
+  name: true,
+  parent: {
+    select: {
+      code: true,
+      name: true,
+      parent: { select: { code: true, name: true } },
+    },
+  },
+} satisfies Prisma.ScopeSelect;

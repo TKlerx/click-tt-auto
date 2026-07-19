@@ -8,7 +8,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string; wishId: string }> },
 ) {
   const { id, wishId } = await params;
-  const context = await requireRasterInputSet(request, id, "admin");
+  const context = await requireRasterInputSet(request, id, "scheduler");
   if ("error" in context) return context.error;
 
   const parsed = wishJsonSchema.safeParse(

@@ -62,7 +62,7 @@ export async function POST(request: Request) {
   const access = await assertRasterAccess(
     auth.user,
     parsed.data.scopeCode,
-    "admin",
+    "scheduler",
   );
   if (access !== true) return access.error;
 

@@ -22,22 +22,33 @@ import {
 import { withBasePath } from "@/lib/base-path";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
+import {
+  ScopeAssignmentDialog,
+  type ScopeAssignmentScope,
+} from "@/components/auth/ScopeAssignmentDialog";
 
-type UserRow = {
+export type UserRow = {
   id: string;
   name: string;
   email: string;
   role: Role;
   status: UserStatus;
   authMethod: AuthMethod;
+  scopes: ScopeAssignmentScope[];
 };
 
 export function UserManagementTable({
+  canManageStatus = true,
   currentUserId,
+  roleOptions = Object.values(RoleEnum),
   users,
+  availableScopes,
 }: {
+  canManageStatus?: boolean;
   currentUserId: string;
+  roleOptions?: Role[];
   users: UserRow[];
+  availableScopes: ScopeAssignmentScope[];
 }) {
   const router = useRouter();
   const { pushToast } = useToast();
@@ -79,6 +90,7 @@ export function UserManagementTable({
             <th className="px-4 py-3 sm:px-6">{t("name")}</th>
             <th className="px-4 py-3">{t("email")}</th>
             <th className="px-4 py-3">{t("role")}</th>
+            <th className="px-4 py-3">{t("scopeColumn")}</th>
             <th className="px-4 py-3">{t("statusLabel")}</th>
             <th className="px-4 py-3">{t("auth")}</th>
             <th className="px-4 py-3 sm:px-6">{t("actions")}</th>
@@ -124,13 +136,31 @@ export function UserManagementTable({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="rounded-lg border-[var(--border)]">
-                      {Object.values(RoleEnum).map((role) => (
+                      {roleOptions.map((role) => (
                         <SelectItem key={role} value={role}>
                           {t(`roles.${role}`)}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                </td>
+                <td className="px-4 py-4">
+                  <div className="flex max-w-[18rem] flex-wrap gap-1">
+                    {entry.scopes.length === 0 ? (
+                      <span className="text-xs text-[var(--muted-foreground)]">
+                        {t("noScopes")}
+                      </span>
+                    ) : (
+                      entry.scopes.map((scope) => (
+                        <span
+                          className="rounded-full border border-[var(--border)] bg-[var(--secondary)] px-2 py-1 text-xs font-semibold text-[var(--secondary-foreground)]"
+                          key={scope.id}
+                        >
+                          {scope.name}
+                        </span>
+                      ))
+                    )}
+                  </div>
                 </td>
                 <td className="px-4 py-4">
                   <span className="rounded-full border border-[var(--border)] bg-[var(--secondary)] px-3 py-1 text-xs font-semibold text-[var(--secondary-foreground)]">
@@ -142,7 +172,14 @@ export function UserManagementTable({
                 </td>
                 <td className="px-4 py-4 sm:px-6">
                   <div className="flex flex-wrap gap-2">
-                    {entry.status === UserStatusEnum.PENDING_APPROVAL ? (
+                    <ScopeAssignmentDialog
+                      assignedScopes={entry.scopes}
+                      availableScopes={availableScopes}
+                      userId={entry.id}
+                    />
+
+                    {canManageStatus &&
+                    entry.status === UserStatusEnum.PENDING_APPROVAL ? (
                       <Button
                         disabled={Boolean(isBusy)}
                         onClick={() =>
@@ -160,7 +197,8 @@ export function UserManagementTable({
                       </Button>
                     ) : null}
 
-                    {entry.status === UserStatusEnum.ACTIVE ? (
+                    {canManageStatus &&
+                    entry.status === UserStatusEnum.ACTIVE ? (
                       <Button
                         disabled={Boolean(isBusy)}
                         onClick={() =>
@@ -178,7 +216,8 @@ export function UserManagementTable({
                       </Button>
                     ) : null}
 
-                    {entry.status === UserStatusEnum.INACTIVE ? (
+                    {canManageStatus &&
+                    entry.status === UserStatusEnum.INACTIVE ? (
                       <Button
                         disabled={Boolean(isBusy)}
                         onClick={() =>

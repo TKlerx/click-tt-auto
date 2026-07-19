@@ -126,7 +126,7 @@ def process_raster_run(store: JobStore, job: BackgroundJob) -> dict[str, object]
     snapshot_id = store.persist_raster_run_result(
         run_id=run_id,
         district=str(context.get("district") or context.get("scopeId") or ""),
-        scope_id=context.get("scopeId"),
+        scope_id=str(context.get("scopeId") or ""),
         spanned_scope_ids=context.get("scopeIds") or [],
         model=model,
         solver_output=solver_output,
@@ -220,9 +220,7 @@ def _raster_run_model(context: dict[str, Any]) -> dict[str, object]:
     return cast(dict[str, object], {"clubs": list(clubs.values()), **merged})
 
 
-def _with_supplied_fixed_numbers(
-    teams: list[object], fixed_rows: object
-) -> list[object]:
+def _with_supplied_fixed_numbers(teams: list[object], fixed_rows: object) -> list[object]:
     """Apply Rasterzahlen supplied for the combined input set itself (FR-014).
 
     _combined_team() unfixes the numbers inherited from each scope, since the
@@ -304,9 +302,7 @@ def _merge_club(clubs: dict[str, dict[str, object]], club: dict[str, object]) ->
         clubs[club_id] = dict(club)
         return
     venues = list(_json_list(existing, "venues"))
-    known = {
-        str(venue.get("hall")) for venue in venues if isinstance(venue, dict)
-    }
+    known = {str(venue.get("hall")) for venue in venues if isinstance(venue, dict)}
     for venue in _json_list(club, "venues"):
         if isinstance(venue, dict) and str(venue.get("hall")) not in known:
             venues.append(venue)
@@ -337,10 +333,7 @@ def _exclude_unplanned_groups(model: dict[str, object]) -> dict[str, object]:
     kept_groups = [
         group
         for group in groups
-        if not (
-            isinstance(group, dict)
-            and str(group.get("planningStatus") or "") == "exclude"
-        )
+        if not (isinstance(group, dict) and str(group.get("planningStatus") or "") == "exclude")
     ]
     kept_team_ids = {
         str(team_id)

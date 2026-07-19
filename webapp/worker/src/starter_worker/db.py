@@ -207,18 +207,24 @@ class JobStore:
             with connection.cursor() as cursor:
                 cursor.execute(
                     """
-                    SELECT run.id, run.status, run.settings, input.id AS "inputSetId",
+                    SELECT run.id, run.status, run.settings,
+                           scope_main.code AS district,
+                           input.id AS "inputSetId",
                            input."scopeId", input.season, input."seasonModelJson",
                            COALESCE(
-                             ARRAY_AGG(scope."scopeId") FILTER (WHERE scope."scopeId" IS NOT NULL),
+                             ARRAY_AGG(input_scope."scopeId") FILTER (
+                               WHERE input_scope."scopeId" IS NOT NULL
+                             ),
                              ARRAY[]::text[]
                            ) AS "scopeIds"
                     FROM "RasterOptimizationRun" run
                     JOIN "RasterInputSet" input ON input.id = run."inputSetId"
-                    LEFT JOIN "RasterInputSetScope" scope ON scope."inputSetId" = input.id
+                    JOIN "Scope" scope_main ON scope_main.id = input."scopeId"
+                    LEFT JOIN "RasterInputSetScope" input_scope
+                      ON input_scope."inputSetId" = input.id
                     WHERE run.id = %s
                     GROUP BY run.id, run.status, run.settings, input.id, input."scopeId",
-                             input.season, input."seasonModelJson"
+                             input.season, input."seasonModelJson", scope_main.code
                     """,
                     (run_id,),
                 )
@@ -370,7 +376,10 @@ class JobStore:
                         run_id,
                     ),
                 )
-                scope_rows = [( _new_id(), snapshot_id, scope_id_value) for scope_id_value in (spanned_scope_ids or [str(scope_id or district)])]
+                scope_rows = [
+                    (_new_id(), snapshot_id, scope_id_value)
+                    for scope_id_value in (spanned_scope_ids or [str(scope_id or district)])
+                ]
                 cursor.executemany(
                     """
                     INSERT INTO "RasterSnapshotScope" (id, "snapshotId", "scopeId")
@@ -680,7 +689,6 @@ class JobStore:
                 "intakeEnabled": bool(row["intakeEnabled"]),
             }
 
-
     def _claim_postgres_job(self) -> BackgroundJob | None:
         with psycopg.connect(self._postgres_database_url, row_factory=dict_row) as connection:
             with connection.cursor() as cursor:
@@ -721,7 +729,6 @@ class JobStore:
             attempt_count=row["attemptCount"],
         )
 
-
     def _requeue_stale_postgres_jobs(self) -> int:
         with psycopg.connect(self._postgres_database_url) as connection:
             with connection.cursor() as cursor:
@@ -746,7 +753,6 @@ class JobStore:
                 row_count = int(cursor.rowcount or 0)
             connection.commit()
             return row_count
-
 
     def _fail_postgres_job(self, job_id: str, error: str, *, retry: bool) -> None:
         with psycopg.connect(self._postgres_database_url) as connection:
@@ -811,8 +817,6 @@ def _parse_payload(value: str | None) -> dict[str, Any]:
         return {"raw": value}
 
     return parsed if isinstance(parsed, dict) else {"value": parsed}
-
-
 
 
 def _new_id() -> str:
@@ -1139,9 +1143,7 @@ def _home_weeks(group: dict[str, Any], rasterzahl: int, bye: int | None = None) 
     return weeks
 
 
-def _unique_home_weeks(
-    group: dict[str, Any], rasterzahl: int, bye: int | None = None
-) -> list[int]:
+def _unique_home_weeks(group: dict[str, Any], rasterzahl: int, bye: int | None = None) -> list[int]:
     return list(dict.fromkeys(_home_weeks(group, rasterzahl, bye)))
 
 
@@ -1184,8 +1186,27 @@ def _circle_pairs(size: int | str) -> list[list[dict[str, int]]]:
 
 _HOME_ROWS = {
     6: [[1, 2, 3], [6, 5, 1], [2, 3, 4], [6, 1, 2], [3, 4, 5]],
-    "6d": [[1, 2, 3], [6, 5, 1], [2, 3, 4], [6, 1, 2], [3, 4, 5], [6, 5, 4], [4, 3, 2], [6, 1, 5], [5, 4, 3], [6, 2, 1]],
-    8: [[1, 2, 3, 4], [8, 6, 7, 1], [2, 3, 4, 5], [8, 7, 1, 2], [3, 4, 5, 6], [8, 1, 2, 3], [4, 5, 6, 7]],
+    "6d": [
+        [1, 2, 3],
+        [6, 5, 1],
+        [2, 3, 4],
+        [6, 1, 2],
+        [3, 4, 5],
+        [6, 5, 4],
+        [4, 3, 2],
+        [6, 1, 5],
+        [5, 4, 3],
+        [6, 2, 1],
+    ],
+    8: [
+        [1, 2, 3, 4],
+        [8, 6, 7, 1],
+        [2, 3, 4, 5],
+        [8, 7, 1, 2],
+        [3, 4, 5, 6],
+        [8, 1, 2, 3],
+        [4, 5, 6, 7],
+    ],
     10: [
         [1, 2, 3, 4, 5],
         [10, 7, 8, 9, 1],
@@ -1248,8 +1269,35 @@ _SPIELWOCHEN = {
     8: [1, 2, 3, 4, 5, 6, 7, 11, 12, 15, 16, 17, 18, 19],
     10: [1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 18, 19],
     12: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21],
-    14: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25],
-    }
+    14: [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+    ],
+}
 
 
 def _weekday_to_db(value: str) -> str:

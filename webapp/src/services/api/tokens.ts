@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { prisma } from "@/lib/db";
 import { jsonError } from "@/lib/http";
 import { logger } from "@/lib/logger";
+import { withSerializableRetry } from "@/services/api/serializable-retry";
 import { Prisma } from "../../../generated/prisma/client";
 import {
   TokenStatus,
@@ -15,7 +16,6 @@ const DEFAULT_CLI_EXPIRY_DAYS = 30;
 const DEFAULT_PAT_LIMIT = 10;
 const RECENTLY_VISIBLE_WINDOW_DAYS = 90;
 const TOKEN_SEGMENT_LENGTH = 8;
-const SERIALIZABLE_RETRY_LIMIT = 3;
 const tokenLogger = logger.child({ component: "tokens" });
 
 function readPositiveInteger(value: string | undefined, fallback: number) {
@@ -201,43 +201,6 @@ export async function createToken(
       createdAt: created.createdAt,
     },
   };
-}
-
-async function withSerializableRetry<T>(run: () => Promise<T>) {
-  let attempt = 0;
-  while (attempt < SERIALIZABLE_RETRY_LIMIT) {
-    try {
-      return await run();
-    } catch (error) {
-      if (error instanceof Response) {
-        throw error;
-      }
-
-      if (
-        isSerializableConflict(error) &&
-        attempt < SERIALIZABLE_RETRY_LIMIT - 1
-      ) {
-        attempt += 1;
-        continue;
-      }
-
-      throw error;
-    }
-  }
-
-  throw new Error("Unreachable serializable retry state");
-}
-
-function isSerializableConflict(error: unknown) {
-  if (error instanceof Prisma.PrismaClientKnownRequestError) {
-    return error.code === "P2034";
-  }
-
-  if (typeof error === "object" && error !== null && "code" in error) {
-    return (error as { code?: string }).code === "P2034";
-  }
-
-  return false;
 }
 
 export async function validateToken(tokenValue: string) {

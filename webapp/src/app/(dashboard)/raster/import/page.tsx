@@ -1,7 +1,7 @@
-import { Role } from "../../../../../generated/prisma/enums";
 import { CreateInputSetForm } from "@/components/raster/input-set-actions";
 import { RasterSourcesPanel } from "@/components/raster/sources/raster-sources-panel";
 import { WishImportReviewPanel } from "@/components/raster/wish-import-review-panel";
+import { canUseRasterLevel } from "@/lib/raster/access";
 import {
   listInputSets,
   listRasterSourcesForScope,
@@ -27,7 +27,7 @@ export default async function RasterImportPage({
   ]);
   const inputSet = inputSets[0] ?? null;
   const review = inputSet ? await listWishImportReview(inputSet.id) : null;
-  const canEdit = context.user.role === Role.PLATFORM_ADMIN;
+  const canEdit = canUseRasterLevel(context.user, "scheduler");
 
   return (
     <div className="space-y-4">

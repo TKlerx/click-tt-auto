@@ -41,17 +41,7 @@ export async function listAccessibleRasterScopes(
     where:
       user.role === Role.PLATFORM_ADMIN
         ? undefined
-        : {
-            OR: [
-              { userAssignments: { some: { userId: user.id } } },
-              { parent: { userAssignments: { some: { userId: user.id } } } },
-              {
-                parent: {
-                  parent: { userAssignments: { some: { userId: user.id } } },
-                },
-              },
-            ],
-          },
+        : { userAssignments: { some: { userId: user.id } } },
     select: {
       code: true,
       id: true,
@@ -90,20 +80,8 @@ export async function canAccessRasterScope(
 
   const scope = await prisma.scope.findFirst({
     where: {
-      AND: [
-        { code: scopeCode },
-        {
-          OR: [
-            { userAssignments: { some: { userId: user.id } } },
-            { parent: { userAssignments: { some: { userId: user.id } } } },
-            {
-              parent: {
-                parent: { userAssignments: { some: { userId: user.id } } },
-              },
-            },
-          ],
-        },
-      ],
+      code: scopeCode,
+      userAssignments: { some: { userId: user.id } },
     },
     select: { id: true },
   });

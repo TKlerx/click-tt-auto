@@ -23,7 +23,7 @@ export async function POST(
   const access = await assertRasterAccess(
     auth.user,
     draft.inputSet.scope.code,
-    "admin",
+    "scheduler",
   );
   if (access !== true) return access.error;
 

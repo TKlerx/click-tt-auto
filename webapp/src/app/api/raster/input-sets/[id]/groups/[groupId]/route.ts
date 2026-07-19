@@ -18,7 +18,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string; groupId: string }> },
 ) {
   const { id, groupId } = await params;
-  const context = await requireRasterInputSet(request, id, "admin");
+  const context = await requireRasterInputSet(request, id, "scheduler");
   if ("error" in context) return context.error;
 
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));

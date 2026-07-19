@@ -15,7 +15,7 @@ describe("raster access", () => {
     vi.clearAllMocks();
   });
 
-  it("allows scoped users through assigned parent scopes", async () => {
+  it("checks only the exact assigned scope", async () => {
     prismaMock.scope.findFirst.mockResolvedValue({ id: "owl" } as never);
 
     await expect(
@@ -24,24 +24,8 @@ describe("raster access", () => {
 
     expect(prismaMock.scope.findFirst).toHaveBeenCalledWith({
       where: {
-        AND: [
-          { code: "OWL" },
-          {
-            OR: [
-              { userAssignments: { some: { userId: "user-1" } } },
-              {
-                parent: { userAssignments: { some: { userId: "user-1" } } },
-              },
-              {
-                parent: {
-                  parent: {
-                    userAssignments: { some: { userId: "user-1" } },
-                  },
-                },
-              },
-            ],
-          },
-        ],
+        code: "OWL",
+        userAssignments: { some: { userId: "user-1" } },
       },
       select: { id: true },
     });
@@ -75,17 +59,7 @@ describe("raster access", () => {
     ]);
 
     expect(prismaMock.scope.findMany).toHaveBeenCalledWith({
-      where: {
-        OR: [
-          { userAssignments: { some: { userId: "user-1" } } },
-          { parent: { userAssignments: { some: { userId: "user-1" } } } },
-          {
-            parent: {
-              parent: { userAssignments: { some: { userId: "user-1" } } },
-            },
-          },
-        ],
-      },
+      where: { userAssignments: { some: { userId: "user-1" } } },
       select: {
         code: true,
         id: true,

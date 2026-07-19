@@ -1,11 +1,11 @@
+import "dotenv/config";
 import { defineConfig } from "@playwright/test";
+import { resolveE2eDatabaseUrl } from "./scripts/e2e-database-url.mjs";
 
 const port = Number(process.env.E2E_PORT ?? "3280");
 const normalizedBasePath = process.env.E2E_BASE_PATH ?? "/app-starter";
 const authBaseUrl = `http://localhost:${port}${normalizedBasePath}`;
-const databaseUrl =
-  process.env.DATABASE_URL ??
-  "postgresql://starter:starter_e2e_password@localhost:45432/business_app_starter_e2e_test";
+const databaseUrl = resolveE2eDatabaseUrl();
 const reuseExistingServer = process.env.E2E_REUSE_SERVER === "1";
 
 process.env.E2E_PORT = String(port);

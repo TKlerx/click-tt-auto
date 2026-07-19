@@ -108,9 +108,8 @@ describe("raster scenarios route", () => {
     // an unconsumed one would leak into the next test.
     prismaMock.scope.findFirst.mockReset();
     prismaMock.scope.findFirst.mockImplementation((async (args: {
-      where: { AND: [{ code: string }, unknown] };
-    }) =>
-      args.where.AND[0].code === "OWL" ? { id: "scope-owl" } : null) as never);
+      where: { code: string };
+    }) => (args.where.code === "OWL" ? { id: "scope-owl" } : null)) as never);
 
     const response = await POST(
       new Request("http://localhost/api/raster/scenarios/compare", {

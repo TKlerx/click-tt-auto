@@ -24,7 +24,7 @@ export async function PATCH(
   const access = await assertRasterAccess(
     auth.user,
     source.scope.code,
-    "admin",
+    "scheduler",
   );
   if (access !== true) return access.error;
 
@@ -80,7 +80,7 @@ export async function DELETE(
   const access = await assertRasterAccess(
     auth.user,
     source.scope.code,
-    "admin",
+    "scheduler",
   );
   if (access !== true) return access.error;
 

@@ -84,6 +84,21 @@
     "lastAdminDeactivateError": "Cannot deactivate the last Admin user",
     "lastAdminRoleError": "Cannot change role of the last Admin user",
     "couldNotUpdate": "Could not update user",
+    "scopes": "Scopes",
+    "noScopes": "No scopes assigned",
+    "assignScope": "Assign scope",
+    "revokeScope": "Revoke scope",
+    "scopeGranted": "Scope granted",
+    "scopeRevoked": "Scope revoked",
+    "scopeColumn": "Scope access",
+    "accessLookupOnly": "Search by exact email to manage a user.",
+    "lookupUser": "Find user",
+    "noUserFound": "No user found",
+    "noScopeAccess": "You have no assigned scopes.",
+    "scopeLevels": {
+      "association": "Verband",
+      "bezirk": "Bezirk"
+    },
     "roles": {
       "PLATFORM_ADMIN": "Platform Admin",
       "SCOPE_ADMIN": "Scoped Admin",

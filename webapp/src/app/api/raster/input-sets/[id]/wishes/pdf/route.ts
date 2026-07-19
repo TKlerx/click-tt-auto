@@ -15,7 +15,7 @@ export async function POST(
   const context = await requireRasterInputSet(
     request,
     (await params).id,
-    "admin",
+    "scheduler",
   );
   if ("error" in context) return context.error;
 
