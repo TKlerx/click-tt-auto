@@ -117,7 +117,7 @@ A raster planner can create a second planning workspace for the same scope and s
 - **FR-008a**: The selected workspace MUST be reflected in the page URL (a query parameter, as scope and season are), so it survives refresh and is shareable.
 - **FR-009**: Source add, parse, validate, and review actions MUST clearly apply to the selected workspace.
 - **FR-009a**: Sources added through the normal import flow MUST belong to the selected planning workspace by default.
-- **FR-009b**: Existing sources that belong to no workspace (created before this feature) MUST be adopted into the first workspace for their scope and season when it is created or auto-selected, so no source is left unowned.
+- **FR-009b**: Existing sources that belong to no workspace (created before this feature) MUST be adopted into the first workspace **selected** for their scope and season — whether it is created, auto-selected, or first chosen from the selector — so no source is left unowned. This MUST hold even when the scope and season already have several workspaces (no create or auto-select event occurs); otherwise legacy sources, hidden by the workspace filter, would disappear from view.
 - **FR-010**: Users MUST be able to create an additional workspace for the same scope and season after one already exists.
 - **FR-010a**: Creating a workspace MUST require only a user-visible workspace name.
 - **FR-010b**: The first workspace name SHOULD default to the current scope and season.

@@ -20,11 +20,11 @@ The clarify sessions (2026-07-16, 2026-07-19) settled the product decisions. The
 
 ## R3 — Legacy source adoption (FR-009b)
 
-**Decision**: Adopt lazily, in the app, not via a migration backfill. When the first workspace for a (scope, season) is created or auto-selected, sources for that scope+season with `inputSetId = null` are assigned to it. Later workspaces do not adopt (only the first).
+**Decision**: Adopt lazily, in the app, not via a migration backfill. On the first workspace **selection** for a (scope, season) — created, auto-selected, or first manually chosen from the selector — sources for that scope+season with `inputSetId = null` are assigned to the selected workspace. Once owned they are never re-adopted, so the second selection is a no-op.
 
-**Rationale**: A blanket migration backfill would have to invent a workspace for every scope+season that has legacy sources; doing it at the "first workspace" moment is precise and matches the clarify answer. Only-the-first avoids a race where two workspaces both claim legacy sources.
+**Rationale**: A blanket migration backfill would have to invent a workspace for every scope+season that has legacy sources. Triggering on *selection* covers all three arrival paths, including the case a create/auto-select trigger would miss: a scope+season that already has **multiple** input sets has no "first workspace" event, so keying on create/auto-select alone would leave its legacy sources orphaned and — because the page filters sources by `inputSetId` — invisible. Adopting into whichever workspace the user first actively uses is deterministic and idempotent.
 
-**Alternatives considered**: migration backfill (create a default workspace per scope+season and reassign) — rejected as heavier and presumptuous; leave-shared hybrid — rejected in clarify.
+**Alternatives considered**: adopt only on create/auto-select — rejected, it strands legacy sources for existing multi-workspace scope+seasons; a migration backfill picking an arbitrary workspace per scope+season — rejected as presumptuous; leave-shared hybrid — rejected in clarify.
 
 ## R4 — Selection tracked in the URL
 

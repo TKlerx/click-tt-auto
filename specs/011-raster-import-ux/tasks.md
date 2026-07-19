@@ -14,7 +14,7 @@ Tests included (constitution II; spec has acceptance scenarios + measurable SCs)
 
 - [ ] T002 Source ownership in `webapp/src/services/raster/sources.ts`: `upsertRasterSource` sets `inputSetId` = the selected workspace; the page listing filters by `inputSetId` (not scope+season); add a legacy `inputSetId = null` query for adoption (FR-009a, S1, S6). Depends: T001.
 - [ ] T003 [P] Workspace service in `webapp/src/services/raster/inputSets.ts`: list and create input sets for a (scope, season), with the name defaulting to scope + season (FR-005, FR-010a, FR-010b).
-- [ ] T004 Legacy adoption: when the first workspace for a (scope, season) is created or auto-selected, adopt its `inputSetId = null` sources into it; later workspaces do not adopt (FR-009b, research R3). Depends: T002, T003.
+- [ ] T004 Legacy adoption: on the first workspace **selection** for a (scope, season) — created, auto-selected, or first manually chosen — adopt its `inputSetId = null` sources into the selected workspace; idempotent, so later selections are no-ops. MUST cover a scope+season that already has multiple input sets (no create/auto-select event), where selecting one adopts the legacy sources — otherwise they stay hidden by the workspace filter (FR-009b, research R3). Depends: T002, T003.
 - [ ] T005 Page-context resolution in `webapp/src/app/(dashboard)/raster/import/page.tsx` (+ a small helper in `webapp/src/lib/raster/`): resolve `(scope, season, workspace)` with the workspace from `?workspace`, applying W1–W5 — none → prompt create, one → auto-select, many → selector, invalid/stale param or scope/season change → drop and re-apply (FR-007, FR-007a, FR-008, FR-008a). Depends: T003.
 - [ ] T006 [P] Gate create-workspace and source add/parse/validate endpoints on `assertRasterAccess(user, scopeCode, "scheduler")`; `SCOPE_USER` is read-only, refused at the API not just hidden (FR-016, research R5).
 
@@ -24,7 +24,7 @@ Tests included (constitution II; spec has acceptance scenarios + measurable SCs)
 
 **Independent test**: on a scope/season page with a selected workspace, add one URL and one PDF and confirm both are owned by the workspace with no repeated scope selection.
 
-- [ ] T007 [P] [US1] Integration test `webapp/tests/integration/raster-source-workspace.test.ts` covering S1 (source saved with `inputSetId`), S2 (add disabled with no workspace), S6 (list filtered by workspace), C3 (`SCOPE_USER` write → 403).
+- [ ] T007 [P] [US1] Integration test `webapp/tests/integration/raster-source-workspace.test.ts` covering S1 (source saved with `inputSetId`), S2 (add disabled with no workspace), S6 (list filtered by workspace), S5 (`SCOPE_USER` source write → 403).
 - [ ] T008 [US1] Add-source panel (click-TT URL + wish PDF) defaulting to current scope+season+selected workspace, with no scope picker and the season visible before submit (FR-001, FR-002, FR-003, FR-003a, FR-004, FR-009a). Depends: T002, T005.
 - [ ] T009 [P] [US1] i18n keys for the add-source panel in `webapp/src/i18n/messages/{en,de,es,fr,pt}.json`.
 
@@ -34,7 +34,7 @@ Tests included (constitution II; spec has acceptance scenarios + measurable SCs)
 
 **Independent test**: with zero/one/many workspaces, confirm create-first / auto-select / selector respectively, and that add/parse/review target the selected workspace.
 
-- [ ] T010 [P] [US2] Unit test `webapp/tests/unit/raster/workspace-selection.test.ts` for W1–W5 (auto-select, selector, reset on scope/season change, stale param), plus integration C1/C2 (create workspace; the first adopts legacy sources).
+- [ ] T010 [P] [US2] Unit test `webapp/tests/unit/raster/workspace-selection.test.ts` for W1–W5 (auto-select, selector, reset on scope/season change, stale param), plus integration C1/C2 (create workspace; the first adopts legacy sources) and the multi-workspace adoption case (a scope+season with legacy sources and several pre-existing input sets: selecting one adopts them; FR-009b).
 - [ ] T011 [US2] Workspace selector + prominent create-first action near the page context, wired to the T005 resolution; source actions unavailable until a workspace is selected (FR-005, FR-006, FR-006a, FR-007, FR-007a, FR-008, FR-008a, FR-009). Depends: T003, T005.
 - [ ] T012 [P] [US2] i18n keys for the workspace selector / create action in `webapp/src/i18n/messages/{en,de,es,fr,pt}.json`.
 
