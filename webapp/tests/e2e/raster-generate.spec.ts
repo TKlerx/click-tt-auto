@@ -123,11 +123,9 @@ test("admin can generate and review a raster snapshot", async ({ page }) => {
 
   // Address the step directly: /raster redirects to whatever step readiness
   // picks, which depends on state other tests leave behind.
-  await page.goto(`${appBasePath}/raster/run?${rasterQuery}`);
-  // The run step shows the scope's input set without naming it, so assert the
-  // step rather than the name the pre-005 single page used to render.
+  await page.goto(`${appBasePath}/raster/review?${rasterQuery}`);
   await expect(
-    page.getByRole("heading", { name: "Run optimizer" }),
+    page.getByText(`E2E generated ${suffix}`, { exact: true }),
   ).toBeVisible();
   await page
     .getByRole("button", { name: "Recheck capacities" })
