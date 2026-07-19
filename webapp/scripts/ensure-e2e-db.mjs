@@ -1,16 +1,9 @@
 import { spawnSync } from "node:child_process";
 import net from "node:net";
 
-// Port 45432 sits below the Windows dynamic port range (49152+), where Hyper-V
-// reserves blocks at boot. A published port inside that range can become
-// unbindable after a reboot: see waitForPublishedPort.
-const DEFAULT_E2E_DATABASE_URL =
-  "postgresql://starter:starter_e2e_password@localhost:45432/business_app_starter_e2e_test";
+import { resolveE2eDatabaseUrl } from "./e2e-database-url.mjs";
 
-const databaseUrl =
-  process.env.E2E_DATABASE_URL?.trim() ||
-  process.env.DATABASE_URL?.trim() ||
-  DEFAULT_E2E_DATABASE_URL;
+const databaseUrl = resolveE2eDatabaseUrl();
 
 if (
   !databaseUrl.startsWith("postgresql://") &&
