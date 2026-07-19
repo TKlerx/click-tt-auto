@@ -6,7 +6,7 @@ import {
 import { safeLogAudit } from "@/lib/audit";
 import { prisma } from "@/lib/db";
 import { jsonError } from "@/lib/http";
-import { canAssignRole } from "@/lib/rbac";
+import { canAssignRole, getUserScopeIds, mayManageUserRole } from "@/lib/rbac";
 import {
   requireRouteUser,
   requireRouteUserWithRoles,
@@ -98,6 +98,16 @@ export async function lookupUserByEmail(
     return { user: null };
   }
 
+  // FR-042: a scope admin sees a user's assignments only for scopes they hold.
+  // listManagedUserScopes filters the same way; the lookup must not be the leak.
+  const visibleAssignments =
+    auth.user.role === Role.PLATFORM_ADMIN
+      ? user.scopeAssignments
+      : await filterAssignmentsToActorScopes(
+          auth.user.id,
+          user.scopeAssignments,
+        );
+
   return {
     user: {
       id: user.id,
@@ -106,9 +116,21 @@ export async function lookupUserByEmail(
       role: user.role,
       status: user.status,
       authMethod: user.authMethod,
-      scopes: user.scopeAssignments.map((assignment) => assignment.scope),
+      scopes: visibleAssignments.map((assignment) => assignment.scope),
     },
   };
+}
+
+async function filterAssignmentsToActorScopes<
+  T extends { scopeId: string },
+>(actorId: string, assignments: T[]): Promise<T[]> {
+  if (assignments.length === 0) {
+    return assignments;
+  }
+  const actorScopeIds = new Set(await getUserScopeIds(actorId));
+  return assignments.filter((assignment) =>
+    actorScopeIds.has(assignment.scopeId),
+  );
 }
 
 export async function createLocalUser(
@@ -368,6 +390,7 @@ export async function updateManagedUserRole(
   if (!Object.values(Role).includes(body.role)) {
     return { error: jsonError("Invalid role", 400) };
   }
+  const nextRole = body.role;
 
   const managed = await requireManagedUserContext(params, request, [
     Role.PLATFORM_ADMIN,
@@ -375,10 +398,6 @@ export async function updateManagedUserRole(
   ]);
   if ("error" in managed) {
     return managed;
-  }
-
-  if (!canAssignRole(managed.actor, body.role)) {
-    return { error: jsonError("Not authorized to assign this role", 403) };
   }
 
   let updated: User;
@@ -393,10 +412,38 @@ export async function updateManagedUserRole(
             throw jsonError("User not found", 404);
           }
 
+          const canManageFreshRole = await mayManageUserRole(
+            managed.actor,
+            fresh,
+            nextRole,
+            async (actorId, targetId) => {
+              const actorScopeIds = await tx.userScopeAssignment.findMany({
+                where: { userId: actorId },
+                select: { scopeId: true },
+              });
+              if (actorScopeIds.length === 0) {
+                return false;
+              }
+
+              return !!(await tx.userScopeAssignment.findFirst({
+                where: {
+                  userId: targetId,
+                  scopeId: {
+                    in: actorScopeIds.map((assignment) => assignment.scopeId),
+                  },
+                },
+                select: { scopeId: true },
+              }));
+            },
+          );
+          if (!canManageFreshRole) {
+            throw jsonError("Not authorized to assign this role", 403);
+          }
+
           const denied = await ensureAdminUserCanChange(
             fresh,
             {
-              role: body.role,
+              role: nextRole,
               message: "Cannot change role of the last Admin user",
             },
             tx.user.count,
@@ -407,7 +454,7 @@ export async function updateManagedUserRole(
 
           return tx.user.update({
             where: { id: managed.user.id },
-            data: { role: body.role },
+            data: { role: nextRole },
           });
         },
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
