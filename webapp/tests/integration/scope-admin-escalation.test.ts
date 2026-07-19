@@ -99,6 +99,23 @@ describe("scope admin escalation", () => {
     expect(prismaMock.user.update).not.toHaveBeenCalled();
   });
 
+  it("refuses demoting a target promoted after the initial lookup", async () => {
+    prismaMock.user.findUnique
+      .mockResolvedValueOnce(targetUser() as never)
+      .mockResolvedValueOnce({
+        id: "target",
+        role: Role.PLATFORM_ADMIN,
+        status: UserStatus.ACTIVE,
+      } as never);
+
+    const result = await updateRole(jsonRequest({ role: Role.SCOPE_USER }), {
+      params: Promise.resolve({ id: "target" }),
+    });
+
+    expect(result.status).toBe(403);
+    expect(prismaMock.user.update).not.toHaveBeenCalled();
+  });
+
   it("refuses a role change for a user outside the actor's scopes", async () => {
     prismaMock.user.findUnique.mockResolvedValue(targetUser() as never);
     prismaMock.userScopeAssignment.findMany.mockResolvedValue([

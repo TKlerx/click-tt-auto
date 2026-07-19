@@ -390,6 +390,7 @@ export async function updateManagedUserRole(
   if (!Object.values(Role).includes(body.role)) {
     return { error: jsonError("Invalid role", 400) };
   }
+  const nextRole = body.role;
 
   const managed = await requireManagedUserContext(params, request, [
     Role.PLATFORM_ADMIN,
@@ -397,10 +398,6 @@ export async function updateManagedUserRole(
   ]);
   if ("error" in managed) {
     return managed;
-  }
-
-  if (!(await mayManageUserRole(managed.actor, managed.user, body.role))) {
-    return { error: jsonError("Not authorized to assign this role", 403) };
   }
 
   let updated: User;
@@ -415,10 +412,38 @@ export async function updateManagedUserRole(
             throw jsonError("User not found", 404);
           }
 
+          const canManageFreshRole = await mayManageUserRole(
+            managed.actor,
+            fresh,
+            nextRole,
+            async (actorId, targetId) => {
+              const actorScopeIds = await tx.userScopeAssignment.findMany({
+                where: { userId: actorId },
+                select: { scopeId: true },
+              });
+              if (actorScopeIds.length === 0) {
+                return false;
+              }
+
+              return !!(await tx.userScopeAssignment.findFirst({
+                where: {
+                  userId: targetId,
+                  scopeId: {
+                    in: actorScopeIds.map((assignment) => assignment.scopeId),
+                  },
+                },
+                select: { scopeId: true },
+              }));
+            },
+          );
+          if (!canManageFreshRole) {
+            throw jsonError("Not authorized to assign this role", 403);
+          }
+
           const denied = await ensureAdminUserCanChange(
             fresh,
             {
-              role: body.role,
+              role: nextRole,
               message: "Cannot change role of the last Admin user",
             },
             tx.user.count,
@@ -429,7 +454,7 @@ export async function updateManagedUserRole(
 
           return tx.user.update({
             where: { id: managed.user.id },
-            data: { role: body.role },
+            data: { role: nextRole },
           });
         },
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
