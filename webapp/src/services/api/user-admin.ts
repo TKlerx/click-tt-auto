@@ -6,7 +6,7 @@ import {
 import { safeLogAudit } from "@/lib/audit";
 import { prisma } from "@/lib/db";
 import { jsonError } from "@/lib/http";
-import { canAssignRole } from "@/lib/rbac";
+import { canAssignRole, getUserScopeIds, mayManageUserRole } from "@/lib/rbac";
 import {
   requireRouteUser,
   requireRouteUserWithRoles,
@@ -98,6 +98,16 @@ export async function lookupUserByEmail(
     return { user: null };
   }
 
+  // FR-042: a scope admin sees a user's assignments only for scopes they hold.
+  // listManagedUserScopes filters the same way; the lookup must not be the leak.
+  const visibleAssignments =
+    auth.user.role === Role.PLATFORM_ADMIN
+      ? user.scopeAssignments
+      : await filterAssignmentsToActorScopes(
+          auth.user.id,
+          user.scopeAssignments,
+        );
+
   return {
     user: {
       id: user.id,
@@ -106,9 +116,21 @@ export async function lookupUserByEmail(
       role: user.role,
       status: user.status,
       authMethod: user.authMethod,
-      scopes: user.scopeAssignments.map((assignment) => assignment.scope),
+      scopes: visibleAssignments.map((assignment) => assignment.scope),
     },
   };
+}
+
+async function filterAssignmentsToActorScopes<
+  T extends { scopeId: string },
+>(actorId: string, assignments: T[]): Promise<T[]> {
+  if (assignments.length === 0) {
+    return assignments;
+  }
+  const actorScopeIds = new Set(await getUserScopeIds(actorId));
+  return assignments.filter((assignment) =>
+    actorScopeIds.has(assignment.scopeId),
+  );
 }
 
 export async function createLocalUser(
@@ -377,7 +399,7 @@ export async function updateManagedUserRole(
     return managed;
   }
 
-  if (!canAssignRole(managed.actor, body.role)) {
+  if (!(await mayManageUserRole(managed.actor, managed.user, body.role))) {
     return { error: jsonError("Not authorized to assign this role", 403) };
   }
 

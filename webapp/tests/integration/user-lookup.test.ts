@@ -66,9 +66,75 @@ describe("user lookup", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ user: null });
   });
+
+  it("shows a scope admin only the target's scopes they hold (FR-042)", async () => {
+    prismaMock.user.findUnique.mockResolvedValue(
+      user("target@example.com", Role.SCOPE_USER, [
+        assignment("scope-owl", "OWL"),
+        assignment("scope-koeln", "KOELN"),
+      ]) as never,
+    );
+    // The actor holds OWL only.
+    prismaMock.userScopeAssignment.findMany.mockResolvedValue([
+      { scopeId: "scope-owl" },
+    ] as never);
+
+    const response = await lookupUser(
+      new Request("http://localhost/api/users/lookup?email=target@example.com"),
+    );
+
+    const body = await response.json();
+    expect(body.user.scopes.map((scope: { code: string }) => scope.code)).toEqual([
+      "OWL",
+    ]);
+  });
+
+  it("shows a platform admin every scope the target holds", async () => {
+    requireRouteUserWithRoles.mockResolvedValue({
+      user: { id: "actor", role: Role.PLATFORM_ADMIN, status: UserStatus.ACTIVE },
+    });
+    prismaMock.user.findUnique.mockResolvedValue(
+      user("target@example.com", Role.SCOPE_USER, [
+        assignment("scope-owl", "OWL"),
+        assignment("scope-koeln", "KOELN"),
+      ]) as never,
+    );
+
+    const response = await lookupUser(
+      new Request("http://localhost/api/users/lookup?email=target@example.com"),
+    );
+
+    const body = await response.json();
+    expect(body.user.scopes.map((scope: { code: string }) => scope.code)).toEqual([
+      "OWL",
+      "KOELN",
+    ]);
+    // No per-actor scope filtering query for a platform admin.
+    expect(prismaMock.userScopeAssignment.findMany).not.toHaveBeenCalled();
+  });
 });
 
-function user(email: string, role: Role = Role.SCOPE_USER) {
+function assignment(scopeId: string, code: string) {
+  return {
+    scopeId,
+    scope: {
+      id: scopeId,
+      code,
+      name: code,
+      parent: {
+        code: "WTTV",
+        name: "WTTV",
+        parent: { code: "DE", name: "Germany" },
+      },
+    },
+  };
+}
+
+function user(
+  email: string,
+  role: Role = Role.SCOPE_USER,
+  scopeAssignments: ReturnType<typeof assignment>[] = [],
+) {
   return {
     id: "target",
     email,
@@ -76,6 +142,6 @@ function user(email: string, role: Role = Role.SCOPE_USER) {
     role,
     status: UserStatus.ACTIVE,
     authMethod: "LOCAL",
-    scopeAssignments: [],
+    scopeAssignments,
   };
 }

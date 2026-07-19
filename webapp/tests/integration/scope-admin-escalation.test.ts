@@ -9,6 +9,11 @@ const auth = vi.hoisted(() => ({
 
 vi.mock("@/lib/db", () => ({ prisma: prismaMock }));
 vi.mock("@/lib/audit", () => ({ safeLogAudit: vi.fn() }));
+vi.mock("@/services/notifications/service", () => ({
+  safeQueueRoleChangedNotifications: vi.fn(),
+  safeQueueUserCreatedNotifications: vi.fn(),
+  safeQueueUserStatusChangedNotifications: vi.fn(),
+}));
 vi.mock("@/services/api/route-context", () => ({
   requireRouteUserWithRoles: auth.requireRouteUserWithRoles,
 }));
@@ -75,6 +80,61 @@ describe("scope admin escalation", () => {
 
     expect(result.status).toBe(403);
     expect(prismaMock.user.update).not.toHaveBeenCalled();
+  });
+
+  it("refuses demoting a platform admin", async () => {
+    // canAssignRole guards only the destination role, so a scope admin could
+    // otherwise strip a platform admin by moving them down to SCOPE_USER.
+    prismaMock.user.findUnique.mockResolvedValue({
+      id: "target",
+      role: Role.PLATFORM_ADMIN,
+      status: UserStatus.ACTIVE,
+    } as never);
+
+    const result = await updateRole(jsonRequest({ role: Role.SCOPE_USER }), {
+      params: Promise.resolve({ id: "target" }),
+    });
+
+    expect(result.status).toBe(403);
+    expect(prismaMock.user.update).not.toHaveBeenCalled();
+  });
+
+  it("refuses a role change for a user outside the actor's scopes", async () => {
+    prismaMock.user.findUnique.mockResolvedValue(targetUser() as never);
+    prismaMock.userScopeAssignment.findMany.mockResolvedValue([
+      { scopeId: "scope-owl" },
+    ] as never);
+    prismaMock.userScopeAssignment.findFirst.mockResolvedValue(null as never);
+
+    const result = await updateRole(jsonRequest({ role: Role.SCOPE_ADMIN }), {
+      params: Promise.resolve({ id: "target" }),
+    });
+
+    expect(result.status).toBe(403);
+    expect(prismaMock.user.update).not.toHaveBeenCalled();
+  });
+
+  it("allows a role change for a user within the actor's scopes", async () => {
+    prismaMock.user.findUnique.mockResolvedValue(targetUser() as never);
+    prismaMock.userScopeAssignment.findMany.mockResolvedValue([
+      { scopeId: "scope-owl" },
+    ] as never);
+    prismaMock.userScopeAssignment.findFirst.mockResolvedValue({
+      scopeId: "scope-owl",
+    } as never);
+    prismaMock.user.update.mockResolvedValue({
+      id: "target",
+      role: Role.SCOPE_ADMIN,
+    } as never);
+
+    const result = await updateRole(jsonRequest({ role: Role.SCOPE_ADMIN }), {
+      params: Promise.resolve({ id: "target" }),
+    });
+
+    expect(result.status).toBe(200);
+    expect(prismaMock.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { role: Role.SCOPE_ADMIN } }),
+    );
   });
 
   it("refuses listing users for scope admins", async () => {

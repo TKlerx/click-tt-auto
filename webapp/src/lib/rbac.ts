@@ -75,3 +75,54 @@ export async function mayManageScopeAssignment(
 
   return (await getActorScopeIds(actor.id)).includes(scopeId);
 }
+
+async function actorSharesScopeWithTarget(actorId: string, targetId: string) {
+  const actorScopeIds = await getUserScopeIds(actorId);
+  if (actorScopeIds.length === 0) {
+    return false;
+  }
+  const shared = await prisma.userScopeAssignment.findFirst({
+    where: { userId: targetId, scopeId: { in: actorScopeIds } },
+    select: { scopeId: true },
+  });
+  return !!shared;
+}
+
+/**
+ * Whether `actor` may set `target`'s role to `nextRole`.
+ *
+ * `canAssignRole` alone guards only the destination rank, which lets a scope
+ * admin demote a user ranked above them (a platform admin) or reroll a user in
+ * a scope they do not hold. The spec confines a scope admin to acting within
+ * their own scopes (User Story 2 scenario 5; edge case "acts on a user who
+ * holds scopes outside the admin's own"), so a scope admin may change a role
+ * only for a target at or below their own rank and sharing at least one scope,
+ * and never their own.
+ */
+export async function mayManageUserRole(
+  actor: Pick<User, "id" | "role">,
+  target: Pick<User, "id" | "role">,
+  nextRole: Role,
+  sharesScope: (
+    actorId: string,
+    targetId: string,
+  ) => Promise<boolean> = actorSharesScopeWithTarget,
+) {
+  if (!canAssignRole(actor, nextRole)) {
+    return false;
+  }
+
+  if (actor.role === Role.PLATFORM_ADMIN) {
+    return true;
+  }
+
+  if (actor.role !== Role.SCOPE_ADMIN || actor.id === target.id) {
+    return false;
+  }
+
+  if (!canAssignRole(actor, target.role)) {
+    return false;
+  }
+
+  return sharesScope(actor.id, target.id);
+}
