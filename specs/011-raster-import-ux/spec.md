@@ -1,6 +1,6 @@
 # Feature Specification: Raster Import UX
 
-**Feature Branch**: `010-raster-import-ux`  
+**Feature Branch**: `011-raster-import-ux`  
 **Created**: 2026-07-15  
 **Status**: Draft  
 **Input**: User description: "Improve Raster import UX so scope and season act as page context, input sets are selected once as planning workspaces, source upload/register actions apply to the selected workspace by default, and the primary import flow avoids bottom-of-page hidden actions and redundant selectors."
@@ -14,6 +14,13 @@
 - Q: Should saving a source parse it immediately or keep parsing as a separate action? → A: Saving only registers or uploads the source, then shows a prominent Parse next action.
 - Q: Should source forms allow choosing a different scope from the current page context? → A: Default flow only uses current scope; no scope picker on source forms.
 - Q: What information is required when creating a planning workspace? → A: Workspace has only a user-visible name; first default is scope + season.
+
+### Session 2026-07-19
+
+- Q: When workspaces arrive, what happens to existing scope+season sources that belong to no workspace? → A: Auto-assign them to the first workspace for that scope+season when it is created/selected (FR-009b). No lingering "unowned" state.
+- Q: How is the selected planning workspace tracked across navigation and refresh? → A: In the page URL as a query parameter, exactly as scope and season are (FR-008a) — shareable, bookmarkable, refresh-safe.
+- Q: Which users may create workspaces and add/parse sources? → A: Feature 007's scheduler level — `PLATFORM_ADMIN`, or `SCOPE_ADMIN` holding the scope; `SCOPE_USER` gets a read-only view (FR-016).
+- Q: When the user changes scope or season while a workspace is selected? → A: Reset the selection and re-apply the auto-select rule for the new context (FR-007a).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -105,9 +112,12 @@ A raster planner can create a second planning workspace for the same scope and s
 - **FR-006**: The import page MUST provide a prominent first-workspace creation action when no workspace exists for the current scope and season.
 - **FR-006a**: Source add actions MUST be unavailable until a planning workspace exists and is selected.
 - **FR-007**: The import page MUST automatically select the only workspace when exactly one workspace exists for the current scope and season.
+- **FR-007a**: Changing scope or season MUST reset the workspace selection and re-apply the auto-select rule (none → prompt to create, one → auto-select, many → selector) for the new context.
 - **FR-008**: The import page MUST provide a workspace selector when multiple workspaces exist for the current scope and season.
+- **FR-008a**: The selected workspace MUST be reflected in the page URL (a query parameter, as scope and season are), so it survives refresh and is shareable.
 - **FR-009**: Source add, parse, validate, and review actions MUST clearly apply to the selected workspace.
 - **FR-009a**: Sources added through the normal import flow MUST belong to the selected planning workspace by default.
+- **FR-009b**: Existing sources that belong to no workspace (created before this feature) MUST be adopted into the first workspace for their scope and season when it is created or auto-selected, so no source is left unowned.
 - **FR-010**: Users MUST be able to create an additional workspace for the same scope and season after one already exists.
 - **FR-010a**: Creating a workspace MUST require only a user-visible workspace name.
 - **FR-010b**: The first workspace name SHOULD default to the current scope and season.
@@ -118,7 +128,7 @@ A raster planner can create a second planning workspace for the same scope and s
 - **FR-013**: The source list MUST distinguish saved-but-unparsed sources from parsed sources.
 - **FR-014**: Parsed sources MUST show a concise summary of imported content.
 - **FR-015**: Parse failures MUST leave the saved source visible and show a recoverable error message.
-- **FR-016**: Permission-limited users MUST see only actions they are allowed to perform.
+- **FR-016**: Permission-limited users MUST see only actions they are allowed to perform. Creating a workspace and adding, parsing, or validating sources require feature 007's scheduler access (`PLATFORM_ADMIN`, or `SCOPE_ADMIN` holding the scope); a `SCOPE_USER` sees a read-only view without create/add actions. Enforced at the API, not only hidden in the UI.
 - **FR-017**: The system MUST support deliberate creation of multiple workspaces for the same scope and season.
 
 ### Key Entities *(include if feature involves data)*
