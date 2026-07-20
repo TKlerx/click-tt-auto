@@ -85,17 +85,7 @@ describe("raster step access", () => {
       prisma.scope.findMany.mockResolvedValue([scope("OWL")]);
       services.listInputSets.mockResolvedValue(
         load === services.listRasterSourcesForInputSet
-          ? [
-              {
-                id: "input-1",
-                name: "OWL 2026/27",
-                scopeId: "scope-OWL",
-                season: "2026/27",
-                status: "DRAFT",
-                seasonModelJson: null,
-                _count: { wishes: 0, fixedRasterzahlen: 0, runs: 0 },
-              },
-            ]
+          ? [inputSet()]
           : [],
       );
       services.listHallCapacities.mockResolvedValue([]);
@@ -119,17 +109,8 @@ describe("raster step access", () => {
       role: Role.SCOPE_USER,
     });
     prisma.scope.findMany.mockResolvedValue([scope("OWL")]);
-    services.listInputSets.mockResolvedValue([
-      {
-        id: "input-1",
-        name: "OWL 2026/27",
-        scopeId: "scope-OWL",
-        season: "2026/27",
-        status: "DRAFT",
-        seasonModelJson: null,
-        _count: { wishes: 0, fixedRasterzahlen: 0, runs: 0 },
-      },
-    ]);
+    prisma.scope.findFirst.mockResolvedValue({ id: "scope-OWL" });
+    services.listInputSets.mockResolvedValue([inputSet()]);
     services.listRasterSourcesForInputSet.mockResolvedValue([]);
     services.listUpperLeagueReview.mockResolvedValue(null);
     services.listWishImportReview.mockResolvedValue(null);
@@ -143,7 +124,38 @@ describe("raster step access", () => {
       "input-1",
     );
   });
+
+  it("adopts legacy sources for scheduler import viewers", async () => {
+    requireSession.mockResolvedValue({
+      id: "scheduler-1",
+      role: Role.SCOPE_ADMIN,
+    });
+    prisma.scope.findMany.mockResolvedValue([scope("OWL")]);
+    prisma.scope.findFirst.mockResolvedValue({ id: "scope-OWL" });
+    services.listInputSets.mockResolvedValue([inputSet()]);
+    services.listRasterSourcesForInputSet.mockResolvedValue([]);
+    services.listUpperLeagueReview.mockResolvedValue(null);
+    services.listWishImportReview.mockResolvedValue(null);
+
+    await ImportPage({
+      searchParams: Promise.resolve({ scope: "OWL", season: "2026/27" }),
+    });
+
+    expect(services.adoptLegacyRasterSources).toHaveBeenCalledWith("input-1");
+  });
 });
+
+function inputSet() {
+  return {
+    id: "input-1",
+    name: "OWL 2026/27",
+    scopeId: "scope-OWL",
+    season: "2026/27",
+    status: "DRAFT",
+    seasonModelJson: null,
+    _count: { wishes: 0, fixedRasterzahlen: 0, runs: 0 },
+  };
+}
 
 function scope(code: string) {
   return {
