@@ -17,6 +17,12 @@ type SeasonTeam = {
   startTime?: string;
   wishMatchId?: string;
 };
+type UpperLeagueCoverage = {
+  importPresent: boolean;
+  matched: Array<{ clubId: string; label: string; rasterzahl: number }>;
+  unmatched: Array<{ clubId: string; label: string }>;
+  excludedNoHall: Array<{ clubId: string; label: string }>;
+};
 
 export type CoverageRecord = {
   complete: boolean;
@@ -35,6 +41,7 @@ export type CoverageRecord = {
     weekday: string;
     status: "missing" | "insufficient";
   }>;
+  upperLeague: UpperLeagueCoverage;
   unresolvedWishConflicts?: {
     count: number;
     conflicts: Array<{ id: string; wishId: string; importedRowId: string }>;
@@ -87,12 +94,21 @@ export function computeCoverageRecord(input: {
   const scopesWithoutInputSet = [
     ...new Set(input.scopesWithoutInputSet ?? []),
   ].sort();
+  const upperLeague = model.upperLeague ?? {
+    importPresent: true,
+    matched: [],
+    unmatched: [],
+    excludedNoHall: [],
+  };
   const complete =
     spannedAll &&
     scopesWithoutInputSet.length === 0 &&
     excludedGroups.length === 0 &&
     wishGaps.length === 0 &&
-    capacityGaps.length === 0;
+    capacityGaps.length === 0 &&
+    upperLeague.importPresent &&
+    upperLeague.unmatched.length === 0 &&
+    upperLeague.excludedNoHall.length === 0;
 
   return {
     complete,
@@ -102,6 +118,7 @@ export function computeCoverageRecord(input: {
     excludedGroups,
     wishGaps,
     capacityGaps,
+    upperLeague,
   };
 }
 
@@ -221,12 +238,14 @@ export async function buildCoverageRecordForScopes(
 function parseSeasonModel(value?: string | null): {
   groups?: SeasonGroup[];
   teams?: SeasonTeam[];
+  upperLeague?: UpperLeagueCoverage;
 } {
   if (!value) return {};
   try {
     return JSON.parse(value) as {
       groups?: SeasonGroup[];
       teams?: SeasonTeam[];
+      upperLeague?: UpperLeagueCoverage;
     };
   } catch {
     return {};

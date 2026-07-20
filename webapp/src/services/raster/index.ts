@@ -9,4 +9,5 @@ export * from "./scenarioDetails";
 export * from "./snapshots";
 export * from "./sources";
 export * from "./roster";
+export * from "./upperLeague";
 export * from "./wishes";

@@ -27,12 +27,20 @@ type RasterInputSetRow = {
   seasonModelJson: string | null;
 };
 
+type UpperLeagueReview = {
+  importPresent: boolean;
+  matched: Array<{ clubId: string; label: string; rasterzahl: number }>;
+  unmatched: Array<{ clubId: string; label: string }>;
+  excludedNoHall: Array<{ clubId: string; label: string }>;
+};
+
 export function RasterSourcesPanel({
   scopeCode,
   season,
   scopes,
   sources,
   inputSet,
+  upperLeagueReview,
   canEdit,
 }: {
   scopeCode: string;
@@ -40,6 +48,7 @@ export function RasterSourcesPanel({
   scopes: RasterScopeOption[];
   sources: RasterSourceRow[];
   inputSet?: RasterInputSetRow | null;
+  upperLeagueReview?: UpperLeagueReview | null;
   canEdit: boolean;
 }) {
   const router = useRouter();
@@ -261,6 +270,13 @@ export function RasterSourcesPanel({
                       sourceJson={source.parsedJson}
                     />
                   ) : null}
+                  {source.sourceType.toUpperCase() ===
+                  "UPPER_LEAGUE_RASTER" ? (
+                    <UpperLeaguePreview
+                      review={upperLeagueReview}
+                      sourceJson={source.parsedJson}
+                    />
+                  ) : null}
                   {canEdit ? (
                     <form
                       action={(formData) =>
@@ -399,6 +415,52 @@ export function RasterSourcesPanel({
               Upload wish PDFs
             </button>
           </form>
+          <form
+            action={uploadSource}
+            className="grid gap-3 rounded-lg border border-[var(--border)] p-4 md:grid-cols-2"
+          >
+            <div className="md:col-span-2">
+              <h3 className="text-sm font-semibold">
+                Upload upper-league raster PDF
+              </h3>
+              <p className="mt-1 text-sm text-[var(--muted-foreground)]">
+                Upload the published Gruppen-und-Raster PDF for this Bezirk&apos;s
+                fixed WTTV-level constraints.
+              </p>
+            </div>
+            <input name="season" type="hidden" value={season} />
+            <input name="sourceType" type="hidden" value="UPPER_LEAGUE_RASTER" />
+            <label className="grid gap-1 text-sm font-medium">
+              Store source under
+              <select
+                className="h-10 rounded-md border border-[var(--border)] bg-transparent px-3 text-sm font-normal"
+                defaultValue={scopeCode}
+                name="scopeCode"
+              >
+                {scopes.map((scope) => (
+                  <option key={scope.code} value={scope.code}>
+                    {scope.code} - {scope.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-1 text-sm font-medium">
+              File
+              <input
+                accept="application/pdf,.pdf"
+                className="h-10 rounded-md border border-[var(--border)] bg-transparent px-3 text-sm font-normal"
+                name="file"
+                required
+                type="file"
+              />
+            </label>
+            <button
+              className="h-10 rounded-md border border-[var(--border)] px-4 text-sm font-medium"
+              type="submit"
+            >
+              Upload upper-league PDF
+            </button>
+          </form>
           <details className="rounded-lg border border-[var(--border)] p-4">
             <summary className="cursor-pointer text-sm font-semibold">
               Advanced: register external source
@@ -483,6 +545,110 @@ export function RasterSourcesPanel({
   );
 }
 
+function UpperLeaguePreview({
+  review,
+  sourceJson,
+}: {
+  review?: UpperLeagueReview | null;
+  sourceJson: string;
+}) {
+  const parsed = parseJson<{
+    leagues?: Array<{
+      league?: string;
+      size?: number;
+      entries?: Array<{ team?: string; rasterzahl?: number }>;
+    }>;
+  }>(sourceJson);
+  const leagues = parsed?.leagues ?? [];
+  if (!leagues.length) return null;
+
+  return (
+    <div className="mt-3 space-y-3 rounded-md border border-[var(--border)] p-3">
+      <div className="overflow-auto">
+        <table className="w-full min-w-[36rem] text-left text-xs">
+          <thead className="text-[var(--muted-foreground)]">
+            <tr>
+              <th className="py-2 pr-3 font-medium">League</th>
+              <th className="py-2 pr-3 font-medium">Size</th>
+              <th className="py-2 pr-3 font-medium">First entries</th>
+            </tr>
+          </thead>
+          <tbody>
+            {leagues.map((league) => (
+              <tr
+                className="border-t border-[var(--border)]"
+                key={league.league}
+              >
+                <td className="py-2 pr-3">{league.league}</td>
+                <td className="py-2 pr-3">{league.size}</td>
+                <td className="py-2 pr-3">
+                  {(league.entries ?? [])
+                    .slice(0, 5)
+                    .map((entry) => `${entry.rasterzahl} ${entry.team}`)
+                    .join(", ")}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {review ? <UpperLeagueMatchReview review={review} /> : null}
+    </div>
+  );
+}
+
+function UpperLeagueMatchReview({ review }: { review: UpperLeagueReview }) {
+  return (
+    <div className="grid gap-3 text-xs md:grid-cols-3">
+      <UpperLeagueReviewList
+        rows={review.matched.map((row) => ({
+          label: `${row.clubId} / ${row.label}`,
+          detail: String(row.rasterzahl),
+        }))}
+        title={`Matched (${review.matched.length})`}
+      />
+      <UpperLeagueReviewList
+        rows={review.unmatched.map((row) => ({
+          label: `${row.clubId} / ${row.label}`,
+        }))}
+        title={`Unmatched (${review.unmatched.length})`}
+      />
+      <UpperLeagueReviewList
+        rows={review.excludedNoHall.map((row) => ({
+          label: `${row.clubId} / ${row.label}`,
+        }))}
+        title={`Excluded no hall (${review.excludedNoHall.length})`}
+      />
+    </div>
+  );
+}
+
+function UpperLeagueReviewList({
+  rows,
+  title,
+}: {
+  rows: Array<{ label: string; detail?: string }>;
+  title: string;
+}) {
+  return (
+    <div className="rounded-md border border-[var(--border)] p-2">
+      <h4 className="font-medium">{title}</h4>
+      {rows.length ? (
+        <ul className="mt-2 grid gap-1 text-[var(--muted-foreground)]">
+          {rows.slice(0, 8).map((row) => (
+            <li className="flex justify-between gap-2" key={row.label}>
+              <span className="break-words">{row.label}</span>
+              {row.detail ? <span>{row.detail}</span> : null}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-2 text-[var(--muted-foreground)]">None</p>
+      )}
+    </div>
+  );
+}
+
 function ProjectionReview({
   inputSet,
   sourceJson,
@@ -548,6 +714,7 @@ function parsedSourceSummary(parsedJson: string) {
       clubs?: unknown[];
       teams?: unknown[];
       wishes?: unknown[];
+      leagues?: unknown[];
     };
     return (
       [
@@ -555,12 +722,21 @@ function parsedSourceSummary(parsedJson: string) {
         countLabel(parsed.clubs, "club"),
         countLabel(parsed.teams, "team"),
         countLabel(parsed.wishes, "wish"),
+        countLabel(parsed.leagues, "league"),
       ]
         .filter(Boolean)
         .join(", ") || "saved"
     );
   } catch {
     return "saved";
+  }
+}
+
+function parseJson<T>(value: string) {
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return null;
   }
 }
 

@@ -21,6 +21,9 @@ vi.mock("@/lib/db", () => ({ prisma }));
 vi.mock("@/services/raster/inputSets", () => ({
   syncInputSetSourceCaches: vi.fn(),
 }));
+vi.mock("@/services/raster/upperLeague", () => ({
+  applyUpperLeagueInjectionToInputSet: vi.fn(),
+}));
 vi.mock("@/lib/raster/coverage", () => ({
   buildCoverageRecordForInputSet,
 }));

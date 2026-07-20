@@ -1,7 +1,10 @@
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { extractPdfText } from "../../src/raster/ingest/pdf-text.js";
-import { parseGroupsPdf } from "../../src/raster/ingest/groups-pdf.js";
+import {
+  parseGroupsPdf,
+  parseUpperLeagueRasterPdf,
+} from "../../src/raster/ingest/groups-pdf.js";
 import type { Team } from "../../src/raster/types.js";
 
 const fixture = path.join(
@@ -52,7 +55,7 @@ describe("published Gruppen-und-Raster PDF", () => {
       );
       expect(entry.test(section), `${league}: ${rasterzahl} ${team}`).toBe(true);
     }
-  });
+  }, 15_000);
 
   it("marks vacant raster slots rather than omitting them", async () => {
     const text = await extractPdfText(fixture);
@@ -80,7 +83,7 @@ describe("published Gruppen-und-Raster PDF", () => {
  * league section rather than on age-class labels, and to read the leading
  * number of each entry as the Rasterzahl.
  */
-describe.skip("parseGroupsPdf reads the published Rasterzahlen", () => {
+describe("parseGroupsPdf reads the published Rasterzahlen", () => {
   it("agrees with the hand-made upper-fixed.csv", async () => {
     const teams: Team[] = publishedRasterzahlen.map((row, index) => ({
       id: `team-${index}`,
@@ -106,4 +109,33 @@ describe.skip("parseGroupsPdf reads the published Rasterzahlen", () => {
       })),
     );
   });
+});
+
+describe("parseUpperLeagueRasterPdf", () => {
+  it("returns league entries with home day, time, vacancies skipped, and stable numbers", async () => {
+    const result = await parseUpperLeagueRasterPdf(fixture);
+    const rows = result.leagues.flatMap((league) =>
+      league.entries.map((entry) => ({ league: league.league, ...entry })),
+    );
+
+    expect(rows).toEqual(
+      expect.arrayContaining(
+        publishedRasterzahlen.map((row) => expect.objectContaining(row)),
+      ),
+    );
+    expect(rows).toContainEqual(
+      expect.objectContaining({
+        league: "Verbandsliga 1 Erwachsene",
+        team: "Jugend 70 Merfeld",
+        rasterzahl: 1,
+        homeWeekday: "saturday",
+        startTime: "17.30",
+      }),
+    );
+    expect(
+      result.leagues
+        .find((league) => league.league === "Verbandsliga 1 Erwachsene")
+        ?.entries.some((entry) => entry.rasterzahl === 4),
+    ).toBe(false);
+  }, 15_000);
 });

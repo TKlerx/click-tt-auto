@@ -18,7 +18,13 @@ from psycopg.rows import dict_row
 from worker_db import ensure_worker_database, truncate_all
 
 from starter_worker.config import WorkerConfig, load_config
-from starter_worker.db import BackgroundJob, JobStore, _find_overage_rows, normalize_postgres_database_url
+from starter_worker.db import (
+    BackgroundJob,
+    JobStore,
+    _assignment_rows,
+    _find_overage_rows,
+    normalize_postgres_database_url,
+)
 from starter_worker.main import (
     RasterInputInvalid,
     RasterSolverInfeasible,
@@ -687,6 +693,40 @@ class WorkerTests(unittest.TestCase):
 
         self.assertEqual(filtered["groups"], [{"teamIds": ["planned"], "planningStatus": "include"}])
         self.assertEqual(filtered["teams"], [{"id": "planned"}])
+
+    def test_assignment_rows_skip_input_only_teams(self) -> None:
+        model = {
+            "clubs": [{"id": "club-a", "name": "Club A"}],
+            "teams": [
+                {
+                    "id": "team-a",
+                    "clubId": "club-a",
+                    "label": "II",
+                    "homeWeekday": "friday",
+                    "hall": "1",
+                    "rasterzahl": {"kind": "assignable"},
+                },
+                {
+                    "id": "upper-team",
+                    "clubId": "club-a",
+                    "label": "Erwachsene",
+                    "homeWeekday": "friday",
+                    "hall": "1",
+                    "planned": False,
+                    "rasterzahl": {"kind": "fixed", "value": 5},
+                },
+            ],
+            "groups": [
+                {
+                    "ref": {"league": "Liga", "name": "Gruppe"},
+                    "teamIds": ["team-a", "upper-team"],
+                }
+            ],
+        }
+
+        rows = _assignment_rows("snapshot-1", model, {"team-a": 2, "upper-team": 5})
+
+        self.assertEqual([row[6] for row in rows], ["II"])
 
     def test_process_inbound_mail_poll_stores_bounces_and_entity_links(self) -> None:
         with (

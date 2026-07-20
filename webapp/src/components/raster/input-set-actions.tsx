@@ -589,8 +589,8 @@ export function InputSetRunActions({
               />
               {run.sourceChangedSinceStart ? (
                 <p className="text-xs text-amber-300">
-                  Sources changed after this combined run was queued. Results
-                  may no longer reflect current inputs.
+                  Sources changed after this run was queued. Results may no
+                  longer reflect current inputs.
                 </p>
               ) : null}
             </div>

@@ -864,6 +864,8 @@ def _assignment_rows(
             team = teams.get(str(team_id))
             if not team:
                 continue
+            if team.get("planned") is False:
+                continue
             club = clubs.get(str(team.get("clubId") or "")) or {}
             rasterzahl = int(assignment.get(str(team_id)) or 0)
             raster_raw = team.get("rasterzahl")

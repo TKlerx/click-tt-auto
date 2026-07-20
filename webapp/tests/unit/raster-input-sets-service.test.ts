@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { prismaMock } from "@/lib/__mocks__/db";
 import {
+  listInputSets,
   syncInputSetSourceCaches,
   updateGroupPlanningStatus,
   updateGroupRasterMode,
@@ -47,6 +48,30 @@ describe("raster input set service", () => {
 
     await expect(validateInputSet("input-1")).resolves.toMatchObject({
       errors: [expect.stringContaining("Six-team group")],
+    });
+  });
+
+  it("flags single-scope runs when a source changed after run start", async () => {
+    prismaMock.rasterInputSet.findMany.mockResolvedValue([
+      {
+        id: "input-1",
+        scopeId: "scope-owl",
+        season: "2026/27",
+        spannedScopes: [],
+        runs: [{ id: "run-1", createdAt: new Date("2026-07-19T10:00:00Z") }],
+      },
+    ] as never);
+    prismaMock.rasterSource.count.mockResolvedValue(1);
+
+    const result = await listInputSets("scope-owl", "2026/27");
+
+    expect(result[0]?.runs[0]?.sourceChangedSinceStart).toBe(true);
+    expect(prismaMock.rasterSource.count).toHaveBeenCalledWith({
+      where: {
+        scopeId: { in: ["scope-owl"] },
+        season: "2026/27",
+        updatedAt: { gt: new Date("2026-07-19T10:00:00Z") },
+      },
     });
   });
 

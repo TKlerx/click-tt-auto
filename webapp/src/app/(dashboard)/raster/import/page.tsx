@@ -5,6 +5,7 @@ import { canUseRasterLevel } from "@/lib/raster/access";
 import {
   listInputSets,
   listRasterSourcesForScope,
+  listUpperLeagueReview,
   listWishImportReview,
 } from "@/services/raster";
 import {
@@ -26,7 +27,12 @@ export default async function RasterImportPage({
     listRasterSourcesForScope(context.scope.id, context.season),
   ]);
   const inputSet = inputSets[0] ?? null;
-  const review = inputSet ? await listWishImportReview(inputSet.id) : null;
+  const [review, upperLeagueReview] = inputSet
+    ? await Promise.all([
+        listWishImportReview(inputSet.id),
+        listUpperLeagueReview(inputSet.id),
+      ])
+    : [null, null];
   const canEdit = canUseRasterLevel(context.user, "scheduler");
 
   return (
@@ -38,6 +44,7 @@ export default async function RasterImportPage({
         season={context.season}
         scopes={context.scopes}
         sources={sources}
+        upperLeagueReview={upperLeagueReview}
       />
       <section className="overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--panel)]">
         <div className="border-b border-[var(--border)] px-4 py-3">
