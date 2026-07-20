@@ -12,6 +12,10 @@ const fixture = path.join(
   __dirname,
   "../fixtures/raster/gruppen-und-raster-2026.pdf",
 );
+const terminmeldungFixture = path.join(
+  __dirname,
+  "../fixtures/raster/terminmeldung-gesamt-bol.pdf",
+);
 
 /**
  * The WTTV Rasterzahlen the association's planner decides and publishes at
@@ -85,6 +89,27 @@ describe("published Gruppen-und-Raster PDF", () => {
  * number of each entry as the Rasterzahl.
  */
 describe("parseGroupsPdf reads the published Rasterzahlen", () => {
+  it("falls back to best-effort grouping when the PDF is not an upper-league raster PDF", async () => {
+    const teams: Team[] = Array.from({ length: 6 }, (_, index) => ({
+      id: `team-${index}`,
+      clubId: `club-${index}`,
+      label: `Team ${index}`,
+      homeWeekday: "friday",
+      hall: "1",
+      rasterzahl: { kind: "assignable" },
+      confidence: "ok",
+    }));
+
+    const result = await parseGroupsPdf(terminmeldungFixture, teams);
+
+    expect(result.groups).toHaveLength(1);
+    expect(result.groups[0]?.teamIds).toEqual(teams.map((team) => team.id));
+    expect(result.fixed.size).toBe(0);
+    expect(result.warnings).toEqual([
+      expect.stringContaining("grouped teams best-effort"),
+    ]);
+  }, 15_000);
+
   it("agrees with the hand-made upper-fixed.csv", async () => {
     const teams: Team[] = publishedRasterzahlen.map((row, index) => ({
       id: `team-${index}`,

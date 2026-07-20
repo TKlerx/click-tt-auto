@@ -75,7 +75,15 @@ export async function parseGroupsPdf(
   filePath: string,
   teams: Team[]
 ): Promise<GroupParseResult> {
-  const upperLeagueImport = await parseUpperLeagueRasterPdf(filePath);
+  const text = await extractPdfText(filePath);
+  const leagues = parseUpperLeagueRasterText(text);
+  const warnings = leagues.length
+    ? []
+    : [`${filePath}: no readable upper-league raster entries found; grouped teams best-effort.`];
+  const upperLeagueImport = {
+    sourceLabel: filePath.split(/[\\/]/).pop() ?? filePath,
+    leagues
+  };
   const allEntries = upperLeagueImport.leagues.flatMap((league) =>
     league.entries.map((entry) => ({ ...entry, league: league.league }))
   );
@@ -111,7 +119,7 @@ export async function parseGroupsPdf(
     };
   });
 
-  return { groups, fixed, warnings: [] };
+  return { groups, fixed, warnings };
 }
 
 export function splitIntoSupportedGroupSizes(total: number): number[] {
