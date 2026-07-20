@@ -16,6 +16,7 @@ import { reviewHallCapacitiesForInputSet } from "./capacity";
 const INPUT_SET_SOURCE_TYPES = [
   "GROUP_ASSIGNMENT",
   "WISHES_PDF",
+  "ROSTER_CSV",
   "UPPER_LEAGUE_RASTER",
 ];
 
