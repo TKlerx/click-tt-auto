@@ -65,6 +65,7 @@ Tests included (constitution II; spec has acceptance scenarios + measurable SCs)
 - [X] T019 [P] E2E `webapp/tests/e2e/raster-import-ux.spec.ts`: the US1–US3 primary journey (context → add → save → parse).
 - [X] T020 [P] Run `webapp` validate (typecheck, lint, `pnpm test`); update raster docs / `CONTINUE.md`.
 - [X] T021 Verify end-to-end the legacy-sources adoption and the `SCOPE_USER` read-only edge cases per [quickstart.md](./quickstart.md) (FR-009b, FR-016).
+- [X] T022 Follow-up polish: prevent duplicate workspace names, default click-TT URL display names, add Parse all, defer upper-league parsing until explicit parse, and sync parsed sources before gym-capacity inference (FR-010c, FR-012c, FR-012d, FR-018).
 
 ## Dependencies & order
 

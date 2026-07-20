@@ -121,15 +121,19 @@ A raster planner can create a second planning workspace for the same scope and s
 - **FR-010**: Users MUST be able to create an additional workspace for the same scope and season after one already exists.
 - **FR-010a**: Creating a workspace MUST require only a user-visible workspace name.
 - **FR-010b**: The first workspace name SHOULD default to the current scope and season.
+- **FR-010c**: Workspace names MUST be unique within the same scope and season, so the selector cannot show indistinguishable planning workspaces.
 - **FR-011**: The primary click-TT URL add action MUST be visible in the main import flow, not hidden behind a bottom-of-page advanced section.
 - **FR-012**: After a source is saved, the page MUST show the saved source and its next required action without making the user search the page.
 - **FR-012a**: Saving a source MUST NOT automatically parse it in the default flow.
 - **FR-012b**: Newly saved unparsed sources MUST present Parse as the prominent next action.
+- **FR-012c**: Source parsing MUST be explicit and consistent across source types, with a Parse all action for the selected workspace.
+- **FR-012d**: Registering a click-TT URL MUST allow the display name to be omitted and use the visible default name.
 - **FR-013**: The source list MUST distinguish saved-but-unparsed sources from parsed sources.
 - **FR-014**: Parsed sources MUST show a concise summary of imported content.
 - **FR-015**: Parse failures MUST leave the saved source visible and show a recoverable error message.
 - **FR-016**: Permission-limited users MUST see only actions they are allowed to perform. Creating a workspace and adding, parsing, or validating sources require feature 007's scheduler access (`PLATFORM_ADMIN`, or `SCOPE_ADMIN` holding the scope); a `SCOPE_USER` sees a read-only view without create/add actions. Enforced at the API, not only hidden in the UI.
 - **FR-017**: The system MUST support deliberate creation of multiple workspaces for the same scope and season.
+- **FR-018**: Inferring gym capacities from a workspace MUST first sync the selected workspace's parsed sources and MUST raise stale inferred capacity rows while preserving reviewed/manual rows.
 
 ### Key Entities *(include if feature involves data)*
 

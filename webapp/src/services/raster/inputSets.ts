@@ -23,6 +23,12 @@ const INPUT_SET_SOURCE_TYPES = [
   "UPPER_LEAGUE_RASTER",
 ];
 
+export class DuplicateInputSetNameError extends Error {
+  constructor() {
+    super("Planning set name already exists for this scope and season.");
+  }
+}
+
 type SeasonGroup = {
   id?: string;
   ref?: { league?: string; name?: string };
@@ -140,10 +146,18 @@ export async function createInputSet(params: {
     select: { code: true },
   });
   const season = normalizeRasterSeason(params.season);
+  const name =
+    params.name?.trim() || `${scope?.code ?? params.scopeId} ${season}`;
+  const existing = await prisma.rasterInputSet.findFirst({
+    where: { scopeId: params.scopeId, season, name },
+    select: { id: true },
+  });
+  if (existing) throw new DuplicateInputSetNameError();
+
   const inputSet = await prisma.rasterInputSet.create({
     data: {
       ...params,
-      name: params.name?.trim() || `${scope?.code ?? params.scopeId} ${season}`,
+      name,
       season,
     },
   });

@@ -112,7 +112,17 @@ export async function inferHallCapacitiesFromInputSet(
   for (const row of inferred) {
     const stored = existing.get(capacityKey(row));
     if (stored) {
-      if (stored.capacity < row.capacity) needsReview += 1;
+      if (stored.capacity < row.capacity) {
+        if (stored.basis === HallCapacityBasis.INFERRED) {
+          await prisma.rasterHallCapacity.update({
+            where: { id: stored.id },
+            data: { capacity: row.capacity, updatedById },
+          });
+          count += 1;
+        } else {
+          needsReview += 1;
+        }
+      }
       continue;
     }
     await prisma.rasterHallCapacity.create({

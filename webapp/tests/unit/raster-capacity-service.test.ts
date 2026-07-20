@@ -188,6 +188,43 @@ describe("raster capacity service", () => {
     });
   });
 
+  it("raises stale inferred capacities", async () => {
+    prismaMock.rasterInputSet.findUnique.mockResolvedValue({
+      ...inputScope,
+      wishes: [],
+      seasonModelJson: JSON.stringify({
+        teams: [
+          {
+            id: "team-a",
+            clubId: "club-a",
+            hall: "1",
+            homeWeekday: "friday",
+            spielwochePref: "A",
+          },
+        ],
+      }),
+    } as never);
+    prismaMock.rasterHallCapacity.findMany.mockResolvedValue([
+      {
+        id: "capacity-1",
+        scopeId: "scope-owl",
+        clubId: "club-a",
+        hall: "1",
+        weekday: "FRIDAY",
+        capacity: 0,
+        basis: HallCapacityBasis.INFERRED,
+      },
+    ] as never);
+
+    await expect(
+      inferHallCapacitiesFromInputSet("input-1", "admin-1"),
+    ).resolves.toEqual({ count: 1, needsReview: 0, pruned: 0 });
+    expect(prismaMock.rasterHallCapacity.update).toHaveBeenCalledWith({
+      where: { id: "capacity-1" },
+      data: { capacity: 1, updatedById: "admin-1" },
+    });
+  });
+
   it("infers capacities from parsed wishes when the season model has no week preference", async () => {
     prismaMock.rasterInputSet.findUnique.mockResolvedValue({
       ...inputScope,
