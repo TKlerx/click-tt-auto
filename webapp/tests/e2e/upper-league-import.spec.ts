@@ -50,14 +50,30 @@ test("scheduler imports an upper-league raster PDF and sees the preview on mobil
   await page.setViewportSize({ width: 390, height: 844 });
   await loginWithPassword(page, email, password);
   await expectOnDashboard(page);
+  const inputSetResponse = await page.request.post(
+    `${appBasePath}/api/raster/input-sets`,
+    {
+      data: {
+        scope: importScope.code,
+        season,
+        name: `E2E upper import ${suffix}`,
+      },
+    },
+  );
+  expect(inputSetResponse.status()).toBe(201);
+  const inputSetBody = (await inputSetResponse.json()) as {
+    inputSet: { id: string };
+  };
   await page.goto(
-    `${appBasePath}/raster/import?scope=${importScope.code}&season=${encodeURIComponent(season)}`,
+    `${appBasePath}/raster/import?scope=${importScope.code}&season=${encodeURIComponent(season)}&workspace=${inputSetBody.inputSet.id}`,
   );
 
   const form = page
     .locator("form")
-    .filter({ hasText: "Upload upper-league raster PDF" });
-  await expect(form.getByRole("button", { name: "Upload upper-league PDF" })).toBeVisible();
+    .filter({ hasText: "Upper-league raster PDF" });
+  await expect(
+    form.getByRole("button", { name: "Upload raster PDF" }),
+  ).toBeVisible();
 
   const pdf = await readFile(fixture);
   const upload = await page.request.post(
@@ -66,6 +82,7 @@ test("scheduler imports an upper-league raster PDF and sees the preview on mobil
       multipart: {
         scopeCode: importScope.code,
         season,
+        inputSetId: inputSetBody.inputSet.id,
         sourceType: "UPPER_LEAGUE_RASTER",
         file: {
           name: "gruppen-und-raster-2026.pdf",
@@ -103,6 +120,20 @@ test("malformed upper-league uploads fail and non-matching clubs do not inject t
   await assignUserToScope(email, constraintScope);
   await loginWithPassword(page, email, password);
   await expectOnDashboard(page);
+  const inputSetResponse = await page.request.post(
+    `${appBasePath}/api/raster/input-sets`,
+    {
+      data: {
+        scope: constraintScope.code,
+        season,
+        name: `E2E upper ${suffix}`,
+      },
+    },
+  );
+  expect(inputSetResponse.status()).toBe(201);
+  const { inputSet } = (await inputSetResponse.json()) as {
+    inputSet: { id: string };
+  };
 
   const malformed = await page.request.post(
     `${appBasePath}/api/raster/sources/upload`,
@@ -110,6 +141,7 @@ test("malformed upper-league uploads fail and non-matching clubs do not inject t
       multipart: {
         scopeCode: constraintScope.code,
         season,
+        inputSetId: inputSet.id,
         sourceType: "UPPER_LEAGUE_RASTER",
         file: {
           name: "broken.pdf",
@@ -128,6 +160,7 @@ test("malformed upper-league uploads fail and non-matching clubs do not inject t
       multipart: {
         scopeCode: constraintScope.code,
         season,
+        inputSetId: inputSet.id,
         sourceType: "UPPER_LEAGUE_RASTER",
         file: {
           name: "gruppen-und-raster-2026.pdf",
@@ -139,19 +172,6 @@ test("malformed upper-league uploads fail and non-matching clubs do not inject t
   );
   await expectStatus(valid, 201);
 
-  const inputSetResponse = await page.request.post(
-    `${appBasePath}/api/raster/input-sets`,
-    {
-      data: {
-        scope: constraintScope.code,
-        season,
-        name: `E2E upper ${suffix}`,
-      },
-    },
-  );
-  const { inputSet } = (await inputSetResponse.json()) as {
-    inputSet: { id: string };
-  };
   const model = buildNoMatchModel();
   expect(
     await page.request

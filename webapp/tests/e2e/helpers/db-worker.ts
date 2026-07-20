@@ -27,6 +27,7 @@ type Operation =
   | "deactivatePlatformAdminsExcept"
   | "assignUserToScope"
   | "seedRasterScopeHierarchy"
+  | "seedRasterInputSet"
   | "seedRasterSource"
   | "seedRasterProjectionFixture"
   | "seedRasterCombinedReviewFixture"
@@ -364,12 +365,46 @@ async function main() {
       break;
     }
 
+    case "seedRasterInputSet": {
+      const input = await readJson<{
+        email: string;
+        scopeCode: string;
+        season?: string;
+        name: string;
+      }>();
+      const [user, scope] = await Promise.all([
+        prisma.user.findUnique({
+          where: { email: normalizeEmail(input.email) },
+          select: { id: true },
+        }),
+        prisma.scope.findUnique({
+          where: { code: input.scopeCode },
+          select: { id: true },
+        }),
+      ]);
+      if (!user) throw new Error(`User not found: ${input.email}`);
+      if (!scope) throw new Error(`Scope not found: ${input.scopeCode}`);
+
+      const inputSet = await prisma.rasterInputSet.create({
+        data: {
+          name: input.name,
+          scopeId: scope.id,
+          season: input.season ?? "2026/27",
+          createdById: user.id,
+        },
+        select: { id: true },
+      });
+      process.stdout.write(JSON.stringify(inputSet.id));
+      break;
+    }
+
     case "seedRasterSource": {
       const input = await readJson<{
         scopeCode: string;
         sourceType: string;
         sourceRef: string;
         displayName: string;
+        inputSetId?: string;
         season?: string;
         contentHash?: string | null;
         parsedJson?: unknown;
@@ -386,37 +421,36 @@ async function main() {
         );
       }
 
-      const source = await prisma.rasterSource.upsert({
-        where: {
-          scopeId_season_sourceType_sourceRef: {
-            scopeId: scope.id,
-            season,
-            sourceType: input.sourceType,
-            sourceRef: input.sourceRef,
-          },
-        },
-        update: {
-          displayName: input.displayName,
-          contentHash: input.contentHash ?? null,
-          parsedJson:
-            input.parsedJson === undefined
-              ? null
-              : JSON.stringify(input.parsedJson),
-        },
-        create: {
-          scopeId: scope.id,
-          season,
-          sourceType: input.sourceType,
-          sourceRef: input.sourceRef,
-          displayName: input.displayName,
-          contentHash: input.contentHash ?? null,
-          parsedJson:
-            input.parsedJson === undefined
-              ? null
-              : JSON.stringify(input.parsedJson),
-        },
-        select: { id: true },
-      });
+      const data = {
+        scopeId: scope.id,
+        inputSetId: input.inputSetId,
+        season,
+        sourceType: input.sourceType,
+        sourceRef: input.sourceRef,
+        displayName: input.displayName,
+        contentHash: input.contentHash ?? null,
+        parsedJson:
+          input.parsedJson === undefined
+            ? null
+            : JSON.stringify(input.parsedJson),
+      };
+      const source = input.inputSetId
+        ? await prisma.rasterSource.upsert({
+            where: {
+              inputSetId_sourceType_sourceRef: {
+                inputSetId: input.inputSetId,
+                sourceType: input.sourceType,
+                sourceRef: input.sourceRef,
+              },
+            },
+            update: data,
+            create: data,
+            select: { id: true },
+          })
+        : await prisma.rasterSource.create({
+            data,
+            select: { id: true },
+          });
 
       process.stdout.write(JSON.stringify(source.id));
       break;
@@ -448,6 +482,7 @@ async function main() {
       await prisma.rasterSource.createMany({
         data: [
           {
+            inputSetId: inputSet.id,
             scopeId: scope.id,
             season: "2026/27",
             sourceType: "GROUP_ASSIGNMENT",
@@ -515,6 +550,7 @@ async function main() {
             }),
           },
           {
+            inputSetId: inputSet.id,
             scopeId: scope.id,
             season: "2026/27",
             sourceType: "WISHES_PDF",

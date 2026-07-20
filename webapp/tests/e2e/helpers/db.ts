@@ -158,11 +158,21 @@ export function seedRasterSource(input: {
   sourceType: string;
   sourceRef: string;
   displayName: string;
+  inputSetId?: string;
   season?: string;
   contentHash?: string | null;
   parsedJson?: unknown;
 }) {
   return runDbWorker<typeof input, string>("seedRasterSource", input);
+}
+
+export function seedRasterInputSet(input: {
+  email: string;
+  scopeCode: string;
+  season?: string;
+  name: string;
+}) {
+  return runDbWorker<typeof input, string>("seedRasterInputSet", input);
 }
 
 export function seedRasterProjectionFixture(input: {

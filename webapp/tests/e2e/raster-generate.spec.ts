@@ -9,6 +9,7 @@ import {
 } from "./helpers/auth";
 import {
   assignUserToScope,
+  seedRasterInputSet,
   seedRasterProjectionFixture,
   seedLocalUser,
   seedRasterScopeHierarchy,
@@ -20,7 +21,7 @@ const season = "2026/27";
 const scope = { code: scopeCode, name: "Ostwestfalen-Lippe" };
 const rasterQuery = `scope=${scopeCode}&season=${encodeURIComponent(season)}`;
 
-test("OWL raster page shows inherited WTTV sources without refreshing them on reload", async ({
+test("OWL raster page shows workspace sources without refreshing them on reload", async ({
   page,
 }) => {
   const suffix = Date.now();
@@ -37,10 +38,17 @@ test("OWL raster page shows inherited WTTV sources without refreshing them on re
     mustChangePassword: false,
   });
   await assignUserToScope(email, scope);
+  const inputSetId = await seedRasterInputSet({
+    email,
+    scopeCode,
+    season,
+    name: `E2E source workspace ${suffix}`,
+  });
   await seedRasterSource({
-    scopeCode: "WTTV",
+    scopeCode,
+    inputSetId,
     sourceType: "GROUP_ASSIGNMENT",
-    sourceRef: `e2e://wttv-assignment-${suffix}`,
+    sourceRef: `e2e://owl-assignment-${suffix}`,
     displayName: sourceName,
     contentHash: `hash-${suffix}`,
     parsedJson: { groups: [] },
@@ -57,7 +65,7 @@ test("OWL raster page shows inherited WTTV sources without refreshing them on re
   await loginWithPassword(page, email, password);
   await expectOnDashboard(page);
 
-  await page.goto(`${appBasePath}/raster/import?${rasterQuery}`);
+  await page.goto(`${appBasePath}/raster/import?${rasterQuery}&workspace=${inputSetId}`);
   await expect(page.getByText(sourceName)).toBeVisible();
   expect(refreshRequests).toEqual([]);
 
@@ -210,21 +218,29 @@ test("admin can use the guided source workflow", async ({ page }) => {
 
   await loginWithPassword(page, email, password);
   await expectOnDashboard(page);
-  await page.goto(`${appBasePath}/raster/import?${rasterQuery}`);
+  const inputSetResponse = await page.request.post(
+    `${appBasePath}/api/raster/input-sets`,
+    {
+      data: { scope: scopeCode, season, name: `E2E flow ${suffix}` },
+    },
+  );
+  expect(inputSetResponse.status()).toBe(201);
+  const inputSetBody = (await inputSetResponse.json()) as {
+    inputSet: { id: string };
+  };
+  await page.goto(
+    `${appBasePath}/raster/import?${rasterQuery}&workspace=${inputSetBody.inputSet.id}`,
+  );
 
-  await page.getByText("Advanced: register external source").click();
   await page
-    .getByPlaceholder("Example: WTTV group assignment 2026")
-    .last()
+    .getByPlaceholder(`${scopeCode} group assignment ${season}`)
     .fill(urlName);
   await page
-    .getByPlaceholder(
-      "https://wttv.click-tt.de/.../leaguePage?championship=WTTV%2026/27",
-    )
+    .getByPlaceholder("https://wttv.click-tt.de/.../leaguePage")
     .fill(
       "https://wttv.click-tt.de/cgi-bin/WebObjects/nuLigaTTDE.woa/wa/leaguePage?championship=WTTV%2026/27",
     );
-  await page.getByRole("button", { name: "Save external source" }).click();
+  await page.getByRole("button", { name: "Save URL" }).click();
   await expect(page.getByText(urlName)).toBeVisible();
   await expect(page.getByText("Needs parse")).toBeVisible();
 
@@ -235,7 +251,7 @@ test("admin can use the guided source workflow", async ({ page }) => {
       buffer: Buffer.from("%PDF-1.4\n% e2e"),
     },
   ]);
-  await page.getByRole("button", { name: "Upload wish PDFs" }).click();
+  await page.getByRole("button", { name: "Upload PDFs" }).click();
   await expect(page.getByText(wishName)).toBeVisible();
 
   page.once("dialog", (dialog) => dialog.accept());

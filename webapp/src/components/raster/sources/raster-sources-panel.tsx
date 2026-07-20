@@ -17,12 +17,8 @@ type RasterSourceRow = {
   updatedAt: Date | string;
 };
 
-type RasterScopeOption = {
-  code: string;
-  name: string;
-};
-
 type RasterInputSetRow = {
+  id: string;
   name: string;
   seasonModelJson: string | null;
 };
@@ -43,7 +39,6 @@ type UpperLeagueReview = {
 export function RasterSourcesPanel({
   scopeCode,
   season,
-  scopes,
   sources,
   inputSet,
   upperLeagueReview,
@@ -51,7 +46,6 @@ export function RasterSourcesPanel({
 }: {
   scopeCode: string;
   season: string;
-  scopes: RasterScopeOption[];
   sources: RasterSourceRow[];
   inputSet?: RasterInputSetRow | null;
   upperLeagueReview?: UpperLeagueReview | null;
@@ -68,9 +62,14 @@ export function RasterSourcesPanel({
 
   async function submitLink(formData: FormData) {
     setMessage(null);
+    if (!inputSet) {
+      setMessage("Create a planning workspace first.");
+      return;
+    }
     const payload = {
-      scopeCode: String(formData.get("scopeCode") ?? ""),
+      scopeCode,
       season: String(formData.get("season") ?? ""),
+      inputSetId: inputSet.id,
       sourceType: String(formData.get("sourceType") ?? ""),
       sourceRef: String(formData.get("sourceRef") ?? ""),
       displayName: String(formData.get("displayName") ?? ""),
@@ -95,6 +94,10 @@ export function RasterSourcesPanel({
 
   async function uploadSource(formData: FormData) {
     setMessage(null);
+    if (!inputSet) {
+      setMessage("Create a planning workspace first.");
+      return;
+    }
     const response = await fetch(withBasePath("/api/raster/sources/upload"), {
       method: "POST",
       body: formData,
@@ -204,7 +207,115 @@ export function RasterSourcesPanel({
         <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
           Sources
         </h2>
+        <p className="mt-1 text-sm text-[var(--muted-foreground)]">
+          {scopeCode} · {season}
+          {inputSet ? ` · ${inputSet.name}` : ""}
+        </p>
       </div>
+      {canEdit && inputSet ? (
+        <div className="grid gap-3 border-b border-[var(--border)] p-4 md:grid-cols-3">
+          <form action={submitLink} className="grid gap-3">
+            <input name="season" type="hidden" value={season} />
+            <input name="sourceType" type="hidden" value="GROUP_ASSIGNMENT" />
+            <label className="grid gap-1 text-sm font-medium">
+              click-TT group URL
+              <input
+                className="h-10 rounded-md border border-[var(--border)] bg-transparent px-3 text-sm font-normal"
+                name="sourceRef"
+                placeholder="https://wttv.click-tt.de/.../leaguePage"
+                required
+              />
+            </label>
+            <label className="grid gap-1 text-sm font-medium">
+              Display name
+              <input
+                className="h-10 rounded-md border border-[var(--border)] bg-transparent px-3 text-sm font-normal"
+                name="displayName"
+                placeholder={`${scopeCode} group assignment ${season}`}
+                required
+              />
+            </label>
+            <button
+              className="h-10 rounded-md border border-[var(--border)] px-4 text-sm font-medium"
+              type="submit"
+            >
+              Save URL
+            </button>
+          </form>
+          <form action={uploadSource} className="grid gap-3">
+            <input name="scopeCode" type="hidden" value={scopeCode} />
+            <input name="season" type="hidden" value={season} />
+            <input name="inputSetId" type="hidden" value={inputSet.id} />
+            <input name="sourceType" type="hidden" value="WISHES_PDF" />
+            <label className="grid gap-1 text-sm font-medium">
+              Wish PDFs
+              <input
+                accept="application/pdf,.pdf"
+                className="h-10 rounded-md border border-[var(--border)] bg-transparent px-3 text-sm font-normal"
+                multiple
+                name="file"
+                required
+                type="file"
+              />
+            </label>
+            <label className="grid gap-1 text-sm font-medium">
+              Display name
+              <input
+                className="h-10 rounded-md border border-[var(--border)] bg-transparent px-3 text-sm font-normal"
+                name="displayName"
+                placeholder={`${scopeCode} wishes ${season}`}
+              />
+            </label>
+            <button
+              className="h-10 rounded-md border border-[var(--border)] px-4 text-sm font-medium"
+              type="submit"
+            >
+              Upload PDFs
+            </button>
+          </form>
+          <form action={uploadSource} className="grid gap-3">
+            <input name="scopeCode" type="hidden" value={scopeCode} />
+            <input name="season" type="hidden" value={season} />
+            <input name="inputSetId" type="hidden" value={inputSet.id} />
+            <input name="sourceType" type="hidden" value="UPPER_LEAGUE_RASTER" />
+            <label className="grid gap-1 text-sm font-medium">
+              Upper-league raster PDF
+              <input
+                accept="application/pdf,.pdf"
+                className="h-10 rounded-md border border-[var(--border)] bg-transparent px-3 text-sm font-normal"
+                name="file"
+                required
+                type="file"
+              />
+            </label>
+            <label className="grid gap-1 text-sm font-medium">
+              Display name
+              <input
+                className="h-10 rounded-md border border-[var(--border)] bg-transparent px-3 text-sm font-normal"
+                name="displayName"
+                placeholder={`${scopeCode} upper-league raster ${season}`}
+              />
+            </label>
+            <button
+              className="h-10 rounded-md border border-[var(--border)] px-4 text-sm font-medium"
+              type="submit"
+            >
+              Upload raster PDF
+            </button>
+          </form>
+          {message ? (
+            <p className="text-sm text-[var(--muted-foreground)] md:col-span-3">
+              {message}
+            </p>
+          ) : null}
+        </div>
+      ) : (
+        <p className="border-b border-[var(--border)] px-4 py-3 text-sm text-[var(--muted-foreground)]">
+          {canEdit
+            ? "Create a planning workspace before adding sources."
+            : "Read-only access: create, add, and parse actions are unavailable."}
+        </p>
+      )}
       <div className="divide-y divide-[var(--border)]">
         {sources.length ? (
           sources.map((source) => (
@@ -320,233 +431,6 @@ export function RasterSourcesPanel({
           </p>
         )}
       </div>
-      {canEdit ? (
-        <div className="space-y-4 border-t border-[var(--border)] p-4">
-          <form
-            action={uploadSource}
-            className="hidden gap-3 rounded-lg border border-[var(--border)] p-4 md:grid-cols-2"
-          >
-            <div className="md:col-span-2">
-              <h3 className="text-sm font-semibold">
-                1. Upload group assignment
-              </h3>
-              <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-                Upload one current group assignment file. Store it under a
-                parent scope if child scopes should inherit it.
-              </p>
-            </div>
-            <input name="season" type="hidden" value={season} />
-            <input name="sourceType" type="hidden" value="GROUP_ASSIGNMENT" />
-            <label className="grid gap-1 text-sm font-medium">
-              Store source under
-              <select
-                className="h-10 rounded-md border border-[var(--border)] bg-transparent px-3 text-sm font-normal"
-                defaultValue={scopeCode}
-                name="scopeCode"
-              >
-                {scopes.map((scope) => (
-                  <option key={scope.code} value={scope.code}>
-                    {scope.code} - {scope.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="grid gap-1 text-sm font-medium">
-              Display name
-              <input
-                className="h-10 rounded-md border border-[var(--border)] bg-transparent px-3 text-sm font-normal"
-                name="displayName"
-                placeholder="Example: WTTV group assignment 2026"
-                required
-              />
-            </label>
-            <label className="grid gap-1 text-sm font-medium md:col-span-2">
-              File
-              <input
-                className="h-10 rounded-md border border-[var(--border)] bg-transparent px-3 py-2 text-sm font-normal"
-                name="file"
-                required
-                type="file"
-              />
-            </label>
-            <button
-              className="h-10 rounded-md border border-[var(--border)] px-4 text-sm font-medium"
-              type="submit"
-            >
-              Upload group assignment
-            </button>
-          </form>
-          <form
-            action={uploadSource}
-            className="grid gap-3 rounded-lg border border-[var(--border)] p-4 md:grid-cols-2"
-          >
-            <div className="md:col-span-2">
-              <h3 className="text-sm font-semibold">Upload wish PDFs</h3>
-              <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-                Upload one or more wish PDFs. Each selected file becomes its own
-                wish source and will be combined during validation.
-              </p>
-            </div>
-            <input name="season" type="hidden" value={season} />
-            <input name="sourceType" type="hidden" value="WISHES_PDF" />
-            <label className="grid gap-1 text-sm font-medium">
-              Store source under
-              <select
-                className="h-10 rounded-md border border-[var(--border)] bg-transparent px-3 text-sm font-normal"
-                defaultValue={scopeCode}
-                name="scopeCode"
-              >
-                {scopes.map((scope) => (
-                  <option key={scope.code} value={scope.code}>
-                    {scope.code} - {scope.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="grid gap-1 text-sm font-medium">
-              Files
-              <input
-                accept="application/pdf,.pdf"
-                className="h-10 rounded-md border border-[var(--border)] bg-transparent px-3 text-sm font-normal"
-                multiple
-                name="file"
-                required
-                type="file"
-              />
-            </label>
-            <button
-              className="h-10 rounded-md border border-[var(--border)] px-4 text-sm font-medium"
-              type="submit"
-            >
-              Upload wish PDFs
-            </button>
-          </form>
-          <form
-            action={uploadSource}
-            className="grid gap-3 rounded-lg border border-[var(--border)] p-4 md:grid-cols-2"
-          >
-            <div className="md:col-span-2">
-              <h3 className="text-sm font-semibold">
-                Upload upper-league raster PDF
-              </h3>
-              <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-                Upload the published Gruppen-und-Raster PDF for this Bezirk&apos;s
-                fixed WTTV-level constraints.
-              </p>
-            </div>
-            <input name="season" type="hidden" value={season} />
-            <input name="sourceType" type="hidden" value="UPPER_LEAGUE_RASTER" />
-            <label className="grid gap-1 text-sm font-medium">
-              Store source under
-              <select
-                className="h-10 rounded-md border border-[var(--border)] bg-transparent px-3 text-sm font-normal"
-                defaultValue={scopeCode}
-                name="scopeCode"
-              >
-                {scopes.map((scope) => (
-                  <option key={scope.code} value={scope.code}>
-                    {scope.code} - {scope.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="grid gap-1 text-sm font-medium">
-              File
-              <input
-                accept="application/pdf,.pdf"
-                className="h-10 rounded-md border border-[var(--border)] bg-transparent px-3 text-sm font-normal"
-                name="file"
-                required
-                type="file"
-              />
-            </label>
-            <button
-              className="h-10 rounded-md border border-[var(--border)] px-4 text-sm font-medium"
-              type="submit"
-            >
-              Upload upper-league PDF
-            </button>
-          </form>
-          <details className="rounded-lg border border-[var(--border)] p-4">
-            <summary className="cursor-pointer text-sm font-semibold">
-              Advanced: register external source
-            </summary>
-            <form
-              action={submitLink}
-              className="mt-4 grid gap-3 md:grid-cols-2"
-            >
-              <input name="season" type="hidden" value={season} />
-              <p className="text-sm text-[var(--muted-foreground)] md:col-span-2">
-                Paste a normal click-TT league page URL instead of uploading a
-                file here.
-              </p>
-              <label className="grid gap-1 text-sm font-medium">
-                Store source under
-                <select
-                  className="h-10 rounded-md border border-[var(--border)] bg-transparent px-3 text-sm font-normal"
-                  defaultValue={scopeCode}
-                  name="scopeCode"
-                >
-                  {scopes.map((scope) => (
-                    <option key={scope.code} value={scope.code}>
-                      {scope.code} - {scope.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <input name="sourceType" type="hidden" value="GROUP_ASSIGNMENT" />
-              <label className="grid gap-1 text-sm font-medium md:col-span-2">
-                Display name
-                <input
-                  className="h-10 rounded-md border border-[var(--border)] bg-transparent px-3 text-sm font-normal"
-                  name="displayName"
-                  placeholder="Example: WTTV group assignment 2026"
-                  required
-                />
-              </label>
-              <label className="grid gap-1 text-sm font-medium md:col-span-2">
-                URL or document id
-                <input
-                  className="h-10 rounded-md border border-[var(--border)] bg-transparent px-3 text-sm font-normal"
-                  name="sourceRef"
-                  placeholder="https://wttv.click-tt.de/.../leaguePage?championship=WTTV%2026/27"
-                  required
-                />
-              </label>
-              <details className="space-y-3 md:col-span-2">
-                <summary className="cursor-pointer text-sm font-medium">
-                  Raw metadata
-                </summary>
-                <label className="mt-3 grid gap-1 text-sm font-medium">
-                  Content hash
-                  <input
-                    className="h-10 rounded-md border border-[var(--border)] bg-transparent px-3 text-sm font-normal"
-                    name="contentHash"
-                    placeholder="Optional checksum"
-                  />
-                </label>
-                <label className="grid gap-1 text-sm font-medium">
-                  Parsed JSON
-                  <textarea
-                    className="min-h-24 rounded-md border border-[var(--border)] bg-transparent p-3 text-sm font-normal"
-                    name="parsedJson"
-                    placeholder="Optional pre-parsed source payload"
-                  />
-                </label>
-              </details>
-              <button
-                className="h-10 rounded-md border border-[var(--border)] px-4 text-sm font-medium"
-                type="submit"
-              >
-                Save external source
-              </button>
-            </form>
-          </details>
-          {message ? (
-            <p className="text-sm text-[var(--muted-foreground)]">{message}</p>
-          ) : null}
-        </div>
-      ) : null}
     </section>
   );
 }

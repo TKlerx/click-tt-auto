@@ -58,6 +58,9 @@ describe("raster sources route", () => {
       },
     });
     prismaMock.scope.findFirst.mockResolvedValue({ id: "wttv" } as never);
+    prismaMock.rasterInputSet.findFirst.mockResolvedValue({
+      id: "input-1",
+    } as never);
     prismaMock.rasterSource.upsert.mockResolvedValue({
       id: "source-1",
     } as never);
@@ -67,6 +70,7 @@ describe("raster sources route", () => {
         method: "POST",
         body: JSON.stringify({
           scopeCode: "WTTV",
+          inputSetId: "input-1",
           sourceType: "GROUP_ASSIGNMENT",
           sourceRef: "https://example.test/groups.pdf",
           displayName: "WTTV groups",
@@ -80,10 +84,58 @@ describe("raster sources route", () => {
       expect.objectContaining({
         create: expect.objectContaining({
           scopeId: "wttv",
+          inputSetId: "input-1",
           season: "2026/27",
           sourceType: "GROUP_ASSIGNMENT",
         }),
       }),
     );
+  });
+
+  it("refuses source writes without a workspace", async () => {
+    requireApiUser.mockResolvedValue({
+      user: {
+        id: "admin-1",
+        role: Role.PLATFORM_ADMIN,
+        status: UserStatus.ACTIVE,
+      },
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/raster/sources", {
+        method: "POST",
+        body: JSON.stringify({
+          scopeCode: "WTTV",
+          sourceType: "GROUP_ASSIGNMENT",
+          sourceRef: "https://example.test/groups.pdf",
+          displayName: "WTTV groups",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(422);
+    expect(prismaMock.rasterSource.upsert).not.toHaveBeenCalled();
+  });
+
+  it("keeps scope users read-only for source writes", async () => {
+    requireApiUser.mockResolvedValue({
+      user: { id: "user-1", role: Role.SCOPE_USER, status: UserStatus.ACTIVE },
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/raster/sources", {
+        method: "POST",
+        body: JSON.stringify({
+          scopeCode: "WTTV",
+          inputSetId: "input-1",
+          sourceType: "GROUP_ASSIGNMENT",
+          sourceRef: "https://example.test/groups.pdf",
+          displayName: "WTTV groups",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    expect(prismaMock.rasterSource.upsert).not.toHaveBeenCalled();
   });
 });

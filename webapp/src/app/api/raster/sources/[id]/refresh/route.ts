@@ -25,6 +25,12 @@ export async function POST(
     "scheduler",
   );
   if (access !== true) return access.error;
+  if (!source.inputSetId) {
+    return NextResponse.json(
+      { error: "Select a planning workspace before parsing this source" },
+      { status: 409 },
+    );
+  }
 
   try {
     const refreshed = await refreshRasterSource(source.id);

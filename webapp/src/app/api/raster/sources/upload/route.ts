@@ -24,12 +24,13 @@ export async function POST(request: Request) {
   const formData = await request.formData();
   const scopeCode = String(formData.get("scopeCode") ?? "").trim();
   const season = normalizeRasterSeason(String(formData.get("season") ?? ""));
+  const inputSetId = String(formData.get("inputSetId") ?? "").trim();
   const sourceType = String(formData.get("sourceType") ?? "").trim();
   const displayName = String(formData.get("displayName") ?? "").trim();
   const files = formData
     .getAll("file")
     .filter((file): file is File => file instanceof File && file.size > 0);
-  if (!scopeCode || !sourceType || files.length === 0) {
+  if (!scopeCode || !inputSetId || !sourceType || files.length === 0) {
     return NextResponse.json(
       { error: "Invalid source upload" },
       { status: 422 },
@@ -48,15 +49,7 @@ export async function POST(request: Request) {
 
   const isRosterSource = normalizeSourceType(sourceType) === "ROSTER_CSV";
   const isBundleSource = normalizeSourceType(sourceType) === "RASTER_BUNDLE";
-  const isUpperLeagueSource =
-    normalizeSourceType(sourceType) === "UPPER_LEAGUE_RASTER";
-  const access = await assertRasterAccess(
-    auth.user,
-    scopeCode,
-    isRosterSource || isBundleSource || isUpperLeagueSource
-      ? "scheduler"
-      : "admin",
-  );
+  const access = await assertRasterAccess(auth.user, scopeCode, "scheduler");
   if (access !== true) return access.error;
 
   const scope = await prisma.scope.findFirst({
@@ -65,6 +58,16 @@ export async function POST(request: Request) {
   });
   if (!scope) {
     return NextResponse.json({ error: "Scope not found" }, { status: 404 });
+  }
+  const inputSet = await prisma.rasterInputSet.findFirst({
+    where: { id: inputSetId, scopeId: scope.id, season },
+    select: { id: true },
+  });
+  if (!inputSet) {
+    return NextResponse.json(
+      { error: "Planning workspace not found" },
+      { status: 404 },
+    );
   }
 
   const sources = [];
@@ -77,6 +80,7 @@ export async function POST(request: Request) {
       isBundleSource,
       isRosterSource,
       scope,
+      inputSetId: inputSet.id,
       season,
       userId: auth.user.id,
     });
@@ -105,6 +109,7 @@ async function processUploadedFile(params: {
   isBundleSource: boolean;
   isRosterSource: boolean;
   scope: UploadScope;
+  inputSetId: string;
   season: string;
   userId: string;
 }): Promise<UploadSource[] | NextResponse> {
@@ -133,6 +138,7 @@ async function processUploadedFile(params: {
           params.displayName,
           params.fileCount,
           params.scope,
+          params.inputSetId,
           params.season,
           params.userId,
         ),
@@ -150,6 +156,7 @@ async function processUploadedFile(params: {
           params.displayName,
           params.fileCount,
           params.scope.id,
+          params.inputSetId,
           params.season,
         ),
       ];
@@ -173,6 +180,7 @@ async function processUploadedFile(params: {
       params.displayName,
       params.fileCount,
       params.scope.id,
+      params.inputSetId,
       params.season,
     ),
   ];
@@ -184,12 +192,14 @@ async function importUpperLeagueRasterSource(
   displayName: string,
   fileCount: number,
   scopeId: string,
+  inputSetId: string,
   season: string,
 ) {
   const sourceRef = await saveFile(buffer, fileName);
   const parsed = await rasterIngest.parseUpperLeagueRasterPdf(getFilePath(sourceRef));
   return replaceRasterSource({
     scopeId,
+    inputSetId,
     season,
     sourceType: "UPPER_LEAGUE_RASTER",
     sourceRef,
@@ -203,6 +213,7 @@ async function processBundle(
   params: {
     displayName: string;
     scope: UploadScope;
+    inputSetId: string;
     season: string;
     userId: string;
   },
@@ -232,6 +243,7 @@ async function processBundle(
             params.displayName,
             bundle.files.length,
             params.scope,
+            params.inputSetId,
             params.season,
             params.userId,
           ),
@@ -248,6 +260,7 @@ async function processBundle(
           params.displayName,
           bundle.files.length,
           params.scope.id,
+          params.inputSetId,
           params.season,
         ),
       );
@@ -279,6 +292,7 @@ async function importRosterSource(
   displayName: string,
   fileCount: number,
   scope: UploadScope,
+  inputSetId: string,
   season: string,
   userId: string,
 ) {
@@ -294,6 +308,7 @@ async function importRosterSource(
   const sourceRef = await saveFile(buffer, fileName);
   return upsertRasterSource({
     scopeId: scope.id,
+    inputSetId,
     season,
     sourceType,
     sourceRef,
@@ -309,11 +324,13 @@ async function saveRasterSource(
   displayName: string,
   fileCount: number,
   scopeId: string,
+  inputSetId: string,
   season: string,
 ) {
   const sourceRef = await saveFile(buffer, fileName);
   return upsertRasterSource({
     scopeId,
+    inputSetId,
     season,
     sourceType,
     sourceRef,

@@ -9,7 +9,10 @@ import type { TeamRasterAssignmentRow } from "../../../../src/raster/ingest/clic
 import type { WishParseResult } from "../../../../src/raster/ingest/wishes-pdf.js";
 import { extractRelationalWishes } from "../../../../src/raster/ingest/wishes-freetext.js";
 import type { Team } from "../../../../src/raster/types.js";
-import { listRasterSourcesForScope } from "./sources";
+import {
+  adoptLegacyRasterSources,
+  listRasterSourcesForInputSet,
+} from "./sources";
 import { importParsedWishes } from "./wishes";
 import { reviewHallCapacitiesForInputSet } from "./capacity";
 
@@ -114,8 +117,7 @@ export async function listInputSets(
           sourceChangedSinceStart:
             (await prisma.rasterSource.count({
               where: {
-                scopeId: { in: scopeIds },
-                season: inputSet.season,
+                inputSetId: inputSet.id,
                 sourceType: { in: INPUT_SET_SOURCE_TYPES },
                 updatedAt: { gt: run.createdAt },
               },
@@ -130,12 +132,23 @@ export async function listInputSets(
 export async function createInputSet(params: {
   scopeId: string;
   season: string;
-  name: string;
+  name?: string;
   createdById: string;
 }) {
-  return prisma.rasterInputSet.create({
-    data: { ...params, season: normalizeRasterSeason(params.season) },
+  const scope = await prisma.scope.findUnique({
+    where: { id: params.scopeId },
+    select: { code: true },
   });
+  const season = normalizeRasterSeason(params.season);
+  const inputSet = await prisma.rasterInputSet.create({
+    data: {
+      ...params,
+      name: params.name?.trim() || `${scope?.code ?? params.scopeId} ${season}`,
+      season,
+    },
+  });
+  await adoptLegacyRasterSources(inputSet.id);
+  return inputSet;
 }
 
 export async function getInputSet(id: string) {
@@ -236,10 +249,7 @@ export async function syncInputSetSourceCaches(inputSetId: string) {
   });
   if (!inputSet) return null;
 
-  const sources = await listRasterSourcesForScope(
-    inputSet.scopeId,
-    inputSet.season,
-  );
+  const sources = (await listRasterSourcesForInputSet(inputSet.id)) ?? [];
   const groupSource = sources.find(
     (source) =>
       source.sourceType.toUpperCase() === "GROUP_ASSIGNMENT" &&

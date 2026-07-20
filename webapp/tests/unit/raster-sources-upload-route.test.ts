@@ -68,11 +68,15 @@ describe("raster source upload route", () => {
       code: "WTTV",
       name: "Westdeutscher Tischtennis-Verband",
     } as never);
+    prismaMock.rasterInputSet.findFirst.mockResolvedValue({
+      id: "input-1",
+    } as never);
     saveFile.mockResolvedValue("uploads/2026/07/source.pdf");
     upsertRasterSource.mockResolvedValue({ id: "source-1" });
 
     const formData = new FormData();
     formData.set("scopeCode", "WTTV");
+    formData.set("inputSetId", "input-1");
     formData.set("sourceType", "WISHES_PDF");
     formData.set("displayName", "WTTV wishes");
     formData.set("file", new File(["%PDF-1.4"], "wishes.pdf"));
@@ -88,6 +92,7 @@ describe("raster source upload route", () => {
     expect(saveFile).toHaveBeenCalledWith(expect.any(Buffer), "wishes.pdf");
     expect(upsertRasterSource).toHaveBeenCalledWith({
       scopeId: "wttv",
+      inputSetId: "input-1",
       season: "2026/27",
       sourceType: "WISHES_PDF",
       sourceRef: "uploads/2026/07/source.pdf",
@@ -108,6 +113,9 @@ describe("raster source upload route", () => {
       code: "OWL",
       name: "Ostwestfalen/Lippe",
     } as never);
+    prismaMock.rasterInputSet.findFirst.mockResolvedValue({
+      id: "input-1",
+    } as never);
     saveFile
       .mockResolvedValueOnce("uploads/2026/07/wishes-a.pdf")
       .mockResolvedValueOnce("uploads/2026/07/wishes-b.pdf");
@@ -117,6 +125,7 @@ describe("raster source upload route", () => {
 
     const formData = new FormData();
     formData.set("scopeCode", "OWL");
+    formData.set("inputSetId", "input-1");
     formData.set("sourceType", "WISHES_PDF");
     formData.append("file", new File(["%PDF-1.4 a"], "wishes-a.pdf"));
     formData.append("file", new File(["%PDF-1.4 b"], "wishes-b.pdf"));
@@ -134,6 +143,7 @@ describe("raster source upload route", () => {
     expect(saveFile).toHaveBeenCalledTimes(2);
     expect(upsertRasterSource).toHaveBeenNthCalledWith(1, {
       scopeId: "owl",
+      inputSetId: "input-1",
       season: "2026/27",
       sourceType: "WISHES_PDF",
       sourceRef: "uploads/2026/07/wishes-a.pdf",
@@ -141,6 +151,7 @@ describe("raster source upload route", () => {
     });
     expect(upsertRasterSource).toHaveBeenNthCalledWith(2, {
       scopeId: "owl",
+      inputSetId: "input-1",
       season: "2026/27",
       sourceType: "WISHES_PDF",
       sourceRef: "uploads/2026/07/wishes-b.pdf",
@@ -161,9 +172,13 @@ describe("raster source upload route", () => {
       code: "OWL",
       name: "Ostwestfalen/Lippe",
     } as never);
+    prismaMock.rasterInputSet.findFirst.mockResolvedValue({
+      id: "input-1",
+    } as never);
 
     const formData = new FormData();
     formData.set("scopeCode", "OWL");
+    formData.set("inputSetId", "input-1");
     formData.set("sourceType", "WISHES_PDF");
     formData.set("file", new File(["not a pdf"], "wishes.pdf"));
 
@@ -226,6 +241,9 @@ describe("raster source upload route", () => {
         code: "OWL",
         name: "Ostwestfalen/Lippe",
       } as never);
+    prismaMock.rasterInputSet.findFirst.mockResolvedValue({
+      id: "input-1",
+    } as never);
     saveFile.mockResolvedValue("uploads/gruppen.pdf");
     parseUpperLeagueRasterPdf.mockResolvedValue({
       sourceLabel: "gruppen.pdf",
@@ -235,6 +253,7 @@ describe("raster source upload route", () => {
 
     const formData = new FormData();
     formData.set("scopeCode", "OWL");
+    formData.set("inputSetId", "input-1");
     formData.set("sourceType", "UPPER_LEAGUE_RASTER");
     formData.set("file", new File(["%PDF-1.4"], "gruppen.pdf"));
 
@@ -251,6 +270,7 @@ describe("raster source upload route", () => {
     );
     expect(replaceRasterSource).toHaveBeenCalledWith({
       scopeId: "owl",
+      inputSetId: "input-1",
       season: "2026/27",
       sourceType: "UPPER_LEAGUE_RASTER",
       sourceRef: "uploads/gruppen.pdf",
@@ -279,11 +299,15 @@ describe("raster source upload route", () => {
         code: "OWL",
         name: "Ostwestfalen/Lippe",
       } as never);
+    prismaMock.rasterInputSet.findFirst.mockResolvedValue({
+      id: "input-1",
+    } as never);
     saveFile.mockResolvedValue("uploads/gruppen.pdf");
     parseUpperLeagueRasterPdf.mockRejectedValue(new Error("no readable entries"));
 
     const formData = new FormData();
     formData.set("scopeCode", "OWL");
+    formData.set("inputSetId", "input-1");
     formData.set("sourceType", "UPPER_LEAGUE_RASTER");
     formData.set("file", new File(["%PDF-1.4"], "gruppen.pdf"));
 
@@ -313,6 +337,9 @@ describe("raster source upload route", () => {
         code: "OWL",
         name: "Ostwestfalen/Lippe",
       } as never);
+    prismaMock.rasterInputSet.findFirst.mockResolvedValue({
+      id: "input-1",
+    } as never);
     importRasterRoster.mockResolvedValue({
       rosterId: "roster-1",
       teams: 1,
@@ -325,6 +352,7 @@ describe("raster source upload route", () => {
 
     const formData = new FormData();
     formData.set("scopeCode", "OWL");
+    formData.set("inputSetId", "input-1");
     formData.set("sourceType", "ROSTER_CSV");
     formData.set(
       "file",
@@ -357,6 +385,7 @@ describe("raster source upload route", () => {
     );
     expect(upsertRasterSource).toHaveBeenCalledWith({
       scopeId: "owl",
+      inputSetId: "input-1",
       season: "2026/27",
       sourceType: "ROSTER_CSV",
       sourceRef: "uploads/2026/07/roster.csv",
@@ -386,6 +415,9 @@ describe("raster source upload route", () => {
         code: "OWL",
         name: "Ostwestfalen/Lippe",
       } as never);
+    prismaMock.rasterInputSet.findFirst.mockResolvedValue({
+      id: "input-1",
+    } as never);
     importRasterRoster.mockResolvedValue({
       rosterId: "roster-1",
       teams: 1,
@@ -410,6 +442,7 @@ describe("raster source upload route", () => {
 
     const formData = new FormData();
     formData.set("scopeCode", "OWL");
+    formData.set("inputSetId", "input-1");
     formData.set("sourceType", "RASTER_BUNDLE");
     formData.set("file", new File([bundle], "bundle.zip"));
 
@@ -444,12 +477,16 @@ describe("raster source upload route", () => {
         code: "OWL",
         name: "Ostwestfalen/Lippe",
       } as never);
+    prismaMock.rasterInputSet.findFirst.mockResolvedValue({
+      id: "input-1",
+    } as never);
     const bundle = zipSync({
       "wishes.pdf": new TextEncoder().encode("%PDF-1.4"),
     });
 
     const formData = new FormData();
     formData.set("scopeCode", "OWL");
+    formData.set("inputSetId", "input-1");
     formData.set("sourceType", "RASTER_BUNDLE");
     formData.set("file", new File([bundle], "bundle.zip"));
 

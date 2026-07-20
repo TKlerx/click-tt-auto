@@ -9,7 +9,7 @@ const createInputSetBodySchema = z.object({
   scope: z.string().trim().min(1).optional(),
   district: z.string().trim().min(1).optional(),
   season: z.string().trim().optional(),
-  name: z.string().trim().min(1),
+  name: z.string().trim().optional(),
 });
 
 export async function GET(request: Request) {

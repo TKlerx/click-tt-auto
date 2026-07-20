@@ -51,6 +51,51 @@ export async function listRasterSourcesForScope(
   return listRasterSourcesForResolvedScope(scope, season, sourceType);
 }
 
+export function listRasterSourcesForInputSet(
+  inputSetId: string,
+  sourceType?: string,
+) {
+  return prisma.rasterSource.findMany({
+    where: {
+      inputSetId,
+      ...(sourceType ? { sourceType } : {}),
+    },
+    orderBy: [{ updatedAt: "desc" }, { displayName: "asc" }],
+  });
+}
+
+export async function listLegacyRasterSourcesForScope(
+  scopeId: string,
+  season = normalizeRasterSeason(undefined),
+) {
+  return prisma.rasterSource.findMany({
+    where: {
+      scopeId,
+      season: normalizeRasterSeason(season),
+      inputSetId: null,
+    },
+    orderBy: [{ updatedAt: "desc" }, { displayName: "asc" }],
+  });
+}
+
+export async function adoptLegacyRasterSources(inputSetId: string) {
+  const inputSet = await prisma.rasterInputSet.findUnique({
+    where: { id: inputSetId },
+    select: { id: true, scopeId: true, season: true },
+  });
+  if (!inputSet) return null;
+
+  await prisma.rasterSource.updateMany({
+    where: {
+      scopeId: inputSet.scopeId,
+      season: inputSet.season,
+      inputSetId: null,
+    },
+    data: { inputSetId: inputSet.id },
+  });
+  return inputSet;
+}
+
 function listRasterSourcesForResolvedScope(
   scope: {
     id: string;
@@ -77,6 +122,7 @@ function listRasterSourcesForResolvedScope(
 
 export async function upsertRasterSource(params: {
   scopeId: string;
+  inputSetId: string;
   season: string;
   sourceType: string;
   sourceRef: string;
@@ -86,9 +132,8 @@ export async function upsertRasterSource(params: {
 }) {
   return prisma.rasterSource.upsert({
     where: {
-      scopeId_season_sourceType_sourceRef: {
-        scopeId: params.scopeId,
-        season: normalizeRasterSeason(params.season),
+      inputSetId_sourceType_sourceRef: {
+        inputSetId: params.inputSetId,
         sourceType: params.sourceType,
         sourceRef: params.sourceRef,
       },
@@ -104,6 +149,7 @@ export async function upsertRasterSource(params: {
 
 export async function replaceRasterSource(params: {
   scopeId: string;
+  inputSetId?: string;
   season: string;
   sourceType: string;
   sourceRef: string;
@@ -114,7 +160,9 @@ export async function replaceRasterSource(params: {
   return prisma.$transaction(async (tx) => {
     await tx.rasterSource.deleteMany({
       where: {
-        scopeId: params.scopeId,
+        ...(params.inputSetId
+          ? { inputSetId: params.inputSetId }
+          : { scopeId: params.scopeId }),
         season: normalizeRasterSeason(params.season),
         sourceType: params.sourceType,
       },

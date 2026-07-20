@@ -68,8 +68,7 @@ describe("raster input set service", () => {
     expect(result[0]?.runs[0]?.sourceChangedSinceStart).toBe(true);
     expect(prismaMock.rasterSource.count).toHaveBeenCalledWith({
       where: {
-        scopeId: { in: ["scope-owl"] },
-        season: "2026/27",
+        inputSetId: "input-1",
         sourceType: {
           in: [
             "GROUP_ASSIGNMENT",
@@ -242,7 +241,7 @@ describe("raster input set service", () => {
     ]);
   });
 
-  it("syncs inherited source caches into input sets", async () => {
+  it("syncs selected workspace source caches into input sets", async () => {
     prismaMock.rasterInputSet.findUnique.mockResolvedValue({
       id: "input-1",
       scopeId: "owl",
@@ -295,6 +294,10 @@ describe("raster input set service", () => {
 
     await syncInputSetSourceCaches("input-1");
 
+    expect(prismaMock.rasterSource.findMany).toHaveBeenCalledWith({
+      where: { inputSetId: "input-1" },
+      orderBy: [{ updatedAt: "desc" }, { displayName: "asc" }],
+    });
     expect(prismaMock.rasterInputSet.update).toHaveBeenCalledWith({
       where: { id: "input-1" },
       data: {

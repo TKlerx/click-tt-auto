@@ -392,6 +392,17 @@
     }
   },
   "raster": {
+    "importUx": {
+      "context": "Contexto de importacao",
+      "workspace": "Area de planejamento",
+      "activeWorkspace": "Area ativa: {name}",
+      "createWorkspaceFirst": "Crie uma area de planejamento primeiro.",
+      "readOnly": "Somente leitura: criar, adicionar e analisar nao estao disponiveis.",
+      "saveUrl": "Salvar URL",
+      "uploadPdfs": "Enviar PDFs",
+      "needsParse": "Precisa analisar",
+      "parsed": "Analisado"
+    },
     "wishImports": {
       "title": "Revisão da importação de desejos",
       "empty": "Nenhum item para rever na importação de desejos.",
