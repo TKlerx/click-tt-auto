@@ -27,6 +27,7 @@ type Operation =
   | "deactivatePlatformAdminsExcept"
   | "assignUserToScope"
   | "seedRasterScopeHierarchy"
+  | "seedRasterInputSet"
   | "seedRasterSource"
   | "seedRasterProjectionFixture"
   | "seedRasterCombinedReviewFixture"
@@ -364,6 +365,39 @@ async function main() {
       break;
     }
 
+    case "seedRasterInputSet": {
+      const input = await readJson<{
+        email: string;
+        scopeCode: string;
+        season?: string;
+        name: string;
+      }>();
+      const [user, scope] = await Promise.all([
+        prisma.user.findUnique({
+          where: { email: normalizeEmail(input.email) },
+          select: { id: true },
+        }),
+        prisma.scope.findUnique({
+          where: { code: input.scopeCode },
+          select: { id: true },
+        }),
+      ]);
+      if (!user) throw new Error(`User not found: ${input.email}`);
+      if (!scope) throw new Error(`Scope not found: ${input.scopeCode}`);
+
+      const inputSet = await prisma.rasterInputSet.create({
+        data: {
+          name: input.name,
+          scopeId: scope.id,
+          season: input.season ?? "2026/27",
+          createdById: user.id,
+        },
+        select: { id: true },
+      });
+      process.stdout.write(JSON.stringify(inputSet.id));
+      break;
+    }
+
     case "seedRasterSource": {
       const input = await readJson<{
         scopeCode: string;
@@ -448,6 +482,7 @@ async function main() {
       await prisma.rasterSource.createMany({
         data: [
           {
+            inputSetId: inputSet.id,
             scopeId: scope.id,
             season: "2026/27",
             sourceType: "GROUP_ASSIGNMENT",
@@ -515,6 +550,7 @@ async function main() {
             }),
           },
           {
+            inputSetId: inputSet.id,
             scopeId: scope.id,
             season: "2026/27",
             sourceType: "WISHES_PDF",

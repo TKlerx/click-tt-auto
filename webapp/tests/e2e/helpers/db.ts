@@ -166,6 +166,15 @@ export function seedRasterSource(input: {
   return runDbWorker<typeof input, string>("seedRasterSource", input);
 }
 
+export function seedRasterInputSet(input: {
+  email: string;
+  scopeCode: string;
+  season?: string;
+  name: string;
+}) {
+  return runDbWorker<typeof input, string>("seedRasterInputSet", input);
+}
+
 export function seedRasterProjectionFixture(input: {
   email: string;
   suffix: string;

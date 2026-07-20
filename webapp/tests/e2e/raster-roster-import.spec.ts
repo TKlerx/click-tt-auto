@@ -41,12 +41,23 @@ test("imports the nuLiga roster export into PostgreSQL and re-imports it cleanly
   await loginWithPassword(page, email, password);
   await expectOnDashboard(page);
 
+  const inputSetResponse = await page.request.post(
+    `${appBasePath}/api/raster/input-sets`,
+    {
+      data: { scope: scopeCode, season: "2026/27", name: `Roster ${suffix}` },
+    },
+  );
+  expect(inputSetResponse.status()).toBe(201);
+  const inputSetBody = (await inputSetResponse.json()) as {
+    inputSet: { id: string };
+  };
   const csv = await readFile(fixture);
   const upload = async () =>
     page.request.post(`${appBasePath}/api/raster/sources/upload`, {
       multipart: {
         scopeCode,
         season: "2026/27",
+        inputSetId: inputSetBody.inputSet.id,
         sourceType: "ROSTER_CSV",
         displayName: `Tabellen ${suffix}`,
         file: {
