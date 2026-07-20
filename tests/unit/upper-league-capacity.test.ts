@@ -5,7 +5,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
 import { evaluate } from "../../src/raster/score/index.js";
-import type { Assignment, SeasonModel } from "../../src/raster/types.js";
+import type { Assignment, SeasonModel, Weekday } from "../../src/raster/types.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -21,7 +21,7 @@ const execFileAsync = promisify(execFile);
 function clubWithUpperLeagueTeam(options?: {
   upperLeagueCapacityRelevant?: boolean;
   upperLeagueRasterzahl?: number;
-  districtHomeWeekday?: string;
+  districtHomeWeekday?: Weekday;
 }): SeasonModel {
   return {
     clubs: [
