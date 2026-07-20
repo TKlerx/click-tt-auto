@@ -118,11 +118,9 @@ describe("parseUpperLeagueRasterPdf", () => {
       league.entries.map((entry) => ({ league: league.league, ...entry })),
     );
 
-    expect(rows).toEqual(
-      expect.arrayContaining(
-        publishedRasterzahlen.map((row) => expect.objectContaining(row)),
-      ),
-    );
+    for (const row of publishedRasterzahlen) {
+      expect(rows).toContainEqual(expect.objectContaining(row));
+    }
     expect(rows).toContainEqual(
       expect.objectContaining({
         league: "Verbandsliga 1 Erwachsene",

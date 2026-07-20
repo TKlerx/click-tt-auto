@@ -75,7 +75,7 @@ test("scheduler imports an upper-league raster PDF and sees the preview on mobil
       },
     },
   );
-  expect(upload.status()).toBe(201);
+  await expectStatus(upload, 201);
 
   await page.reload();
   await page.getByText("Parsed data: 31 leagues").click();
@@ -137,7 +137,7 @@ test("malformed upper-league uploads fail and non-matching clubs do not inject t
       },
     },
   );
-  expect(valid.status()).toBe(201);
+  await expectStatus(valid, 201);
 
   const inputSetResponse = await page.request.post(
     `${appBasePath}/api/raster/input-sets`,
@@ -235,4 +235,8 @@ function buildNoMatchModel() {
     absoluteConstraints: [],
     warnings: [],
   };
+}
+
+async function expectStatus(response: { status(): number; text(): Promise<string> }, status: number) {
+  expect(response.status(), await response.text()).toBe(status);
 }
