@@ -28,7 +28,8 @@ export default async function RasterImportPage({
   const inputSets = await listInputSets(context.scope.id, context.season);
   const selection = resolveWorkspaceSelection(inputSets, params.workspace);
   const inputSet = selection.selected;
-  if (inputSet) await adoptLegacyRasterSources(inputSet.id);
+  const canEdit = canUseRasterLevel(context.user, "scheduler");
+  if (inputSet && canEdit) await adoptLegacyRasterSources(inputSet.id);
   const sources = inputSet
     ? await listRasterSourcesForInputSet(inputSet.id)
     : [];
@@ -38,7 +39,6 @@ export default async function RasterImportPage({
         listUpperLeagueReview(inputSet.id),
       ])
     : [null, null];
-  const canEdit = canUseRasterLevel(context.user, "scheduler");
 
   return (
     <div className="space-y-4">

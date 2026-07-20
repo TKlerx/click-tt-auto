@@ -112,6 +112,37 @@ describe("raster step access", () => {
       expect(load).toHaveBeenCalled();
     },
   );
+
+  it("does not adopt legacy sources for read-only import viewers", async () => {
+    requireSession.mockResolvedValue({
+      id: "user-1",
+      role: Role.SCOPE_USER,
+    });
+    prisma.scope.findMany.mockResolvedValue([scope("OWL")]);
+    services.listInputSets.mockResolvedValue([
+      {
+        id: "input-1",
+        name: "OWL 2026/27",
+        scopeId: "scope-OWL",
+        season: "2026/27",
+        status: "DRAFT",
+        seasonModelJson: null,
+        _count: { wishes: 0, fixedRasterzahlen: 0, runs: 0 },
+      },
+    ]);
+    services.listRasterSourcesForInputSet.mockResolvedValue([]);
+    services.listUpperLeagueReview.mockResolvedValue(null);
+    services.listWishImportReview.mockResolvedValue(null);
+
+    await ImportPage({
+      searchParams: Promise.resolve({ scope: "OWL", season: "2026/27" }),
+    });
+
+    expect(services.adoptLegacyRasterSources).not.toHaveBeenCalled();
+    expect(services.listRasterSourcesForInputSet).toHaveBeenCalledWith(
+      "input-1",
+    );
+  });
 });
 
 function scope(code: string) {

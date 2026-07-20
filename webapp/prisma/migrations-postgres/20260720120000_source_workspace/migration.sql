@@ -5,6 +5,7 @@ DROP INDEX "RasterSource_scopeId_season_sourceType_sourceRef_key";
 CREATE UNIQUE INDEX "RasterSource_inputSetId_sourceType_sourceRef_key"
 ON "RasterSource"("inputSetId", "sourceType", "sourceRef");
 
+-- Intentional partial index; Prisma schema cannot represent this and may report drift.
 CREATE UNIQUE INDEX "RasterSource_legacy_scope_season_type_ref_key"
 ON "RasterSource"("scopeId", "season", "sourceType", "sourceRef")
 WHERE "inputSetId" IS NULL;
