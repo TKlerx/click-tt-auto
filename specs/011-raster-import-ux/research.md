@@ -12,7 +12,7 @@ The clarify sessions (2026-07-16, 2026-07-19) settled the product decisions. The
 
 ## R2 — Sources gain an owner (the migration)
 
-**Decision**: Add `inputSetId String?` to `RasterSource` (FK → `RasterInputSet`), and re-key source uniqueness from `(scopeId, season, sourceType, sourceRef)` to include the workspace. Nullable so pre-feature rows are valid until adopted (R3).
+**Decision**: Add `inputSetId String?` to `RasterSource` (FK → `RasterInputSet`), and re-key source uniqueness from `(scopeId, season, sourceType, sourceRef)` to include the workspace for owned rows. Nullable so pre-feature rows are valid until adopted (R3); PostgreSQL's unique-null behavior means the migration also keeps legacy dedupe for unowned rows with a partial unique index.
 
 **Rationale**: Today `RasterSource` is scope+season-keyed with no input-set link (verified in schema). FR-009a ("sources belong to the selected workspace") cannot hold without this. It is the first schema change across features 006–011, so it gets a real migration in `prisma/migrations-postgres/`.
 

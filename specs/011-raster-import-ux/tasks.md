@@ -6,13 +6,13 @@ Tests included (constitution II; spec has acceptance scenarios + measurable SCs)
 
 ## Phase 1: Setup
 
-- [ ] T001 Migration: add `RasterSource.inputSetId String?` FK → `RasterInputSet` with `onDelete: SetNull`, re-key uniqueness to `@@unique([inputSetId, sourceType, sourceRef])`, keep a `[scopeId, season]` index for the adoption query — in `webapp/prisma/schema.postgres.prisma` and a new `webapp/prisma/migrations-postgres/<timestamp>_source_workspace/migration.sql` (FR-009a, research R2). Additive, non-destructive; existing rows start with `inputSetId = null`.
+- [ ] T001 Migration: add `RasterSource.inputSetId String?` FK → `RasterInputSet` with `onDelete: SetNull`; add workspace-scoped uniqueness for owned rows; keep legacy dedupe for unowned rows with a PostgreSQL partial unique index on `(scopeId, season, sourceType, sourceRef) WHERE inputSetId IS NULL`; keep a `[scopeId, season]` index for the adoption query — in `webapp/prisma/schema.postgres.prisma` and a new `webapp/prisma/migrations-postgres/<timestamp>_source_workspace/migration.sql` (FR-009a, research R2). Additive, non-destructive; existing rows start with `inputSetId = null`.
 
 ## Phase 2: Foundational (blocking — ownership, workspace, context, roles)
 
 *All four stories depend on these. No UI story can be correct until sources own by workspace and the page resolves the selected workspace.*
 
-- [ ] T002 Source ownership in `webapp/src/services/raster/sources.ts`: `upsertRasterSource` sets `inputSetId` = the selected workspace; the page listing filters by `inputSetId` (not scope+season); add a legacy `inputSetId = null` query for adoption (FR-009a, S1, S6). Depends: T001.
+- [ ] T002 Source ownership in `webapp/src/services/raster/sources.ts` and consumers in `webapp/src/services/raster/inputSets.ts`: `upsertRasterSource` sets `inputSetId` = the selected workspace; page listing and `syncInputSetSourceCaches`/validation load sources by selected `inputSetId` (not scope+season), so runs and reviews cannot ingest sources from a different workspace; add a legacy `inputSetId = null` query for adoption (FR-009, FR-009a, S1, S4, S6). Depends: T001.
 - [ ] T003 [P] Workspace service in `webapp/src/services/raster/inputSets.ts`: list and create input sets for a (scope, season), with the name defaulting to scope + season (FR-005, FR-010a, FR-010b).
 - [ ] T004 Legacy adoption: on the first workspace **selection** for a (scope, season) — created, auto-selected, or first manually chosen — adopt its `inputSetId = null` sources into the selected workspace; idempotent, so later selections are no-ops. MUST cover a scope+season that already has multiple input sets (no create/auto-select event), where selecting one adopts the legacy sources — otherwise they stay hidden by the workspace filter (FR-009b, research R3). Depends: T002, T003.
 - [ ] T005 Page-context resolution in `webapp/src/app/(dashboard)/raster/import/page.tsx` (+ a small helper in `webapp/src/lib/raster/`): resolve `(scope, season, workspace)` with the workspace from `?workspace`, applying W1–W5 — none → prompt create, one → auto-select, many → selector, invalid/stale param or scope/season change → drop and re-apply (FR-007, FR-007a, FR-008, FR-008a). Depends: T003.
@@ -46,7 +46,7 @@ Tests included (constitution II; spec has acceptance scenarios + measurable SCs)
 
 **Independent test**: add a source from the visible top area and confirm the saved source + Parse action are immediately visible without scrolling.
 
-- [ ] T013 [P] [US3] Test `webapp/tests/integration/raster-source-parse-states.test.ts`: saved-but-unparsed is marked (FR-013), Parse is the prominent next action (FR-012b), parse shows a summary (FR-014), a parse failure keeps the source visible with a recoverable error (FR-015).
+- [ ] T013 [P] [US3] Test `webapp/tests/integration/raster-source-parse-states.test.ts`: saved-but-unparsed is marked (FR-013), Parse is the prominent next action (FR-012b), parse shows a summary (FR-014), a parse failure keeps the source visible with a recoverable error (FR-015), and cache refresh ignores parsed sources from other workspaces (FR-009).
 - [ ] T014 [US3] Restructure the import page: primary add-source area at the top (not a bottom advanced section), the newly saved source and its Parse next-action immediately visible, unparsed/parsed distinction + parsed summary, recoverable parse error (FR-011, FR-012, FR-012a, FR-012b, FR-013, FR-014, FR-015). Depends: T008.
 - [ ] T015 [P] [US3] i18n keys for source states / parse actions in `webapp/src/i18n/messages/{en,de,es,fr,pt}.json`.
 

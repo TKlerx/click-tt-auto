@@ -9,9 +9,9 @@ One migration. The workspace is an existing entity; the only schema change is gi
 | Field | Change |
 |---|---|
 | `inputSetId` | **NEW** `String?` FK → `RasterInputSet(id)`, `onDelete: SetNull` (R7). Nullable: pre-feature rows are unowned until adopted (R3). |
-| uniqueness | from `@@unique([scopeId, season, sourceType, sourceRef])` to a workspace-scoped key, e.g. `@@unique([inputSetId, sourceType, sourceRef])`; keep a scope+season index for the legacy/adoption query. |
+| uniqueness | from `@@unique([scopeId, season, sourceType, sourceRef])` to workspace-scoped uniqueness for owned rows. Because PostgreSQL allows multiple `NULL` values in unique keys, the migration MUST preserve legacy dedupe for unowned rows with a partial unique index such as `(scopeId, season, sourceType, sourceRef) WHERE inputSetId IS NULL`, plus an index for the legacy/adoption query. |
 
-Migration: additive column + FK + index; no destructive change. `inputSetId` starts null for every existing row; adoption (R3) fills it lazily in the app.
+Migration: additive column + FK + indexes; no destructive data change. `inputSetId` starts null for every existing row; adoption (R3) fills it lazily in the app.
 
 ## Reused as-is
 
@@ -34,7 +34,7 @@ A page-context value carried in the URL (`?workspace=<inputSetId>`, FR-008a), re
 
 - A source is created owned by the selected workspace (FR-009a): `upsertRasterSource` sets `inputSetId`.
 - Legacy sources (`inputSetId = null`) for a (scope, season) are adopted by the **first** workspace created/auto-selected there (FR-009b).
-- Listing sources for the page filters by `inputSetId` (the selected workspace), not scope+season.
+- Listing sources for the page and refreshing input-set caches/validation filters by `inputSetId` (the selected workspace), not scope+season.
 - Deleting a workspace sets its sources' `inputSetId` to null (re-adoptable), never deletes them (R7).
 
 ## Permissions (reused, feature 007)

@@ -11,7 +11,7 @@ Rework the Raster import page so scope and season act as page context, input set
 
 **Language/Version**: TypeScript 5.9 (strict), Next.js 16 App Router, React 19
 **Primary Dependencies**: Prisma 7 (PostgreSQL), next-intl, Tailwind 4 / shadcn, better-auth (via 007 access layer)
-**Storage**: PostgreSQL. **One migration**: add `inputSetId String?` FK from `RasterSource` to `RasterInputSet` and re-key source uniqueness to the workspace. `RasterInputSet` already has a `name` — it *is* the planning workspace; no new entity.
+**Storage**: PostgreSQL. **One migration**: add `inputSetId String?` FK from `RasterSource` to `RasterInputSet`, re-key owned source uniqueness to the workspace, and keep a partial legacy unique index for rows where `inputSetId IS NULL`. `RasterInputSet` already has a `name` — it *is* the planning workspace; no new entity.
 **Testing**: Vitest (unit/integration), Playwright (the import flow), existing raster route/service test patterns
 **Target Platform**: Linux server (Next.js webapp)
 **Project Type**: Web application (Next.js) — a UI + data-ownership feature, no `src/raster` pipeline change
@@ -53,7 +53,7 @@ webapp/src/
 ├── app/(dashboard)/raster/import/page.tsx        # restructure: context header, workspace selector,
 │                                                 #   top add-source area, save→parse states
 ├── components/raster/…                           # workspace selector, add-source panel, source cards
-├── services/raster/inputSets.ts                  # create/list workspaces (input sets) by scope+season
+├── services/raster/inputSets.ts                  # create/list workspaces; sync caches from selected workspace sources
 ├── services/raster/sources.ts                    # scope by inputSetId; adopt legacy null-owner sources
 ├── app/api/raster/sources/…                      # write endpoints gate on 007 scheduler access
 └── i18n/messages/{en,de,es,fr,pt}.json           # new UI strings

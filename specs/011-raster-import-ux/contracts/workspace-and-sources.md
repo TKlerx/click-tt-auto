@@ -33,7 +33,7 @@ Existing source write endpoints, extended to own by workspace and gate on 007.
 | S1 | a selected workspace + a click-TT URL or wish PDF | save the source with `inputSetId` = the selected workspace, without parsing (FR-009a, FR-012a) |
 | S2 | no workspace selected | the add action is unavailable/refused (FR-006a) |
 | S3 | a saved unparsed source | Parse is the prominent next action; the list marks it unparsed (FR-012b, FR-013) |
-| S4 | Parse invoked | run the existing parse (`refreshRasterSource`); on success show a content summary (FR-014); on failure keep the source visible with a recoverable error (FR-015) |
+| S4 | Parse invoked | run the existing parse (`refreshRasterSource`); on success show a content summary and refresh only the selected workspace's caches/validation from sources with that `inputSetId` (FR-009, FR-014); on failure keep the source visible with a recoverable error (FR-015) |
 | S5 | `SCOPE_USER` | read-only: sees sources, no add/parse (FR-016) |
 | S6 | listing the page's sources | filter by the selected `inputSetId`, not scope+season |
 
