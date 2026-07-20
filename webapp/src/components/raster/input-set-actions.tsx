@@ -1,7 +1,7 @@
 "use client";
 
 import { RefreshCw } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { withBasePath } from "@/lib/base-path";
 import { infeasibleScopeMessage } from "@/lib/raster/run-outcome";
@@ -63,6 +63,7 @@ export function CreateInputSetForm({
   season: string;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [message, setMessage] = useState<string | null>(null);
 
   async function createInputSet(formData: FormData) {
@@ -81,6 +82,13 @@ export function CreateInputSetForm({
         error?: string;
       };
       setMessage(body.error ?? `Failed (${response.status})`);
+      return;
+    }
+    const body = (await response.json()) as { inputSet?: { id?: string } };
+    if (body.inputSet?.id) {
+      const params = new URLSearchParams({ scope, season });
+      params.set("workspace", body.inputSet.id);
+      router.push(`${pathname}?${params.toString()}`);
       return;
     }
     setMessage("Created");

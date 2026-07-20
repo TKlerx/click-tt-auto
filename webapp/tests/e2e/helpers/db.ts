@@ -158,6 +158,7 @@ export function seedRasterSource(input: {
   sourceType: string;
   sourceRef: string;
   displayName: string;
+  inputSetId?: string;
   season?: string;
   contentHash?: string | null;
   parsedJson?: unknown;

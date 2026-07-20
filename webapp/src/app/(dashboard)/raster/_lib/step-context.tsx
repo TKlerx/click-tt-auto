@@ -10,6 +10,7 @@ export type RasterStepSearchParams = Promise<{
   scope?: string;
   district?: string;
   season?: string;
+  workspace?: string;
 }>;
 
 type RasterStepContext =

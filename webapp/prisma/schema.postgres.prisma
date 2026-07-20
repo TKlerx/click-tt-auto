@@ -320,20 +320,23 @@ model Scope {
 }
 
 model RasterSource {
-  id          String   @id @default(cuid())
+  id          String          @id @default(cuid())
   scopeId     String
-  season      String   @default("2026/27")
+  inputSetId  String?
+  season      String          @default("2026/27")
   sourceType  String
   sourceRef   String
   displayName String
   contentHash String?
   parsedJson  String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  scope       Scope    @relation(fields: [scopeId], references: [id], onDelete: Cascade)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  scope       Scope           @relation(fields: [scopeId], references: [id], onDelete: Cascade)
+  inputSet    RasterInputSet? @relation(fields: [inputSetId], references: [id], onDelete: SetNull)
 
-  @@unique([scopeId, season, sourceType, sourceRef])
+  @@unique([inputSetId, sourceType, sourceRef])
   @@index([scopeId, season, sourceType])
+  @@index([inputSetId])
 }
 
 model UserScopeAssignment {
@@ -632,6 +635,7 @@ model RasterInputSet {
   spannedScopes          RasterInputSetScope[]
   matchReviews           RasterMatchReview[]
   manualAssignmentDrafts RasterManualAssignmentDraft[]
+  rasterSources          RasterSource[]
 
   @@index([scopeId, season, createdAt])
   @@index([createdById])
@@ -649,7 +653,7 @@ model RasterInputSetScope {
 }
 
 model RasterWish {
-  id                  String           @id @default(cuid())
+  id                  String                  @id @default(cuid())
   inputSetId          String
   clubId              String
   clubName            String
@@ -661,29 +665,29 @@ model RasterWish {
   requestedRasterzahl String?
   notes               String?
   source              RasterWishSource
-  confidence          RasterConfidence @default(REVIEW)
-  origin              RasterWishOrigin @default(IMPORTED)
+  confidence          RasterConfidence        @default(REVIEW)
+  origin              RasterWishOrigin        @default(IMPORTED)
   reviewedAt          DateTime?
   reviewedById        String?
-  inputSet            RasterInputSet   @relation(fields: [inputSetId], references: [id], onDelete: Cascade)
-  reviewedBy          User?            @relation("RasterWishReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  inputSet            RasterInputSet          @relation(fields: [inputSetId], references: [id], onDelete: Cascade)
+  reviewedBy          User?                   @relation("RasterWishReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
   importedRows        RasterImportedWishRow[]
   conflicts           RasterWishConflict[]
 
+  @@unique([inputSetId, clubId, teamLabel])
   @@index([inputSetId])
   @@index([clubId])
   @@index([reviewedById])
-  @@unique([inputSetId, clubId, teamLabel])
 }
 
 model RasterWishImportBatch {
-  id          String                 @id @default(cuid())
+  id          String                  @id @default(cuid())
   inputSetId  String
   startedById String
-  startedAt   DateTime               @default(now())
+  startedAt   DateTime                @default(now())
   sourceKind  RasterWishImportKind
-  inputSet    RasterInputSet         @relation(fields: [inputSetId], references: [id], onDelete: Cascade)
-  startedBy   User                   @relation("RasterWishImportStarter", fields: [startedById], references: [id], onDelete: Restrict)
+  inputSet    RasterInputSet          @relation(fields: [inputSetId], references: [id], onDelete: Cascade)
+  startedBy   User                    @relation("RasterWishImportStarter", fields: [startedById], references: [id], onDelete: Restrict)
   rows        RasterImportedWishRow[]
 
   @@index([inputSetId, startedAt])
@@ -720,7 +724,7 @@ model RasterImportedWishRow {
 }
 
 model RasterWishConflict {
-  id                String                 @id @default(cuid())
+  id                String                  @id @default(cuid())
   inputSetId        String
   wishId            String
   importedRowId     String
@@ -732,10 +736,10 @@ model RasterWishConflict {
   decidedValueJson  String?
   decidedById       String?
   decidedAt         DateTime?
-  inputSet         RasterInputSet          @relation(fields: [inputSetId], references: [id], onDelete: Cascade)
-  wish             RasterWish              @relation(fields: [wishId], references: [id], onDelete: Cascade)
-  importedRow      RasterImportedWishRow   @relation(fields: [importedRowId], references: [id], onDelete: Cascade)
-  decidedBy        User?                   @relation("RasterWishConflictDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+  inputSet          RasterInputSet          @relation(fields: [inputSetId], references: [id], onDelete: Cascade)
+  wish              RasterWish              @relation(fields: [wishId], references: [id], onDelete: Cascade)
+  importedRow       RasterImportedWishRow   @relation(fields: [importedRowId], references: [id], onDelete: Cascade)
+  decidedBy         User?                   @relation("RasterWishConflictDecider", fields: [decidedById], references: [id], onDelete: SetNull)
 
   @@unique([wishId, importedRowId])
   @@index([inputSetId, decision])
@@ -939,15 +943,15 @@ model RasterTeamRoster {
 }
 
 model RasterRosterTeam {
-  id            String           @id @default(cuid())
-  rosterId      String
-  vereinNr      String
-  vereinName    String
-  altersklasse  String
-  mannschaftNr  String
-  liga          String
-  gruppe        String
-  roster        RasterTeamRoster @relation(fields: [rosterId], references: [id], onDelete: Cascade)
+  id           String           @id @default(cuid())
+  rosterId     String
+  vereinNr     String
+  vereinName   String
+  altersklasse String
+  mannschaftNr String
+  liga         String
+  gruppe       String
+  roster       RasterTeamRoster @relation(fields: [rosterId], references: [id], onDelete: Cascade)
 
   @@unique([rosterId, vereinNr, altersklasse, mannschaftNr])
   @@index([rosterId, vereinNr])

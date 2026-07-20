@@ -392,6 +392,17 @@
     }
   },
   "raster": {
+    "importUx": {
+      "context": "Importkontext",
+      "workspace": "Planungsarbeitsbereich",
+      "activeWorkspace": "Aktiver Arbeitsbereich: {name}",
+      "createWorkspaceFirst": "Erstellen Sie zuerst einen Planungsarbeitsbereich.",
+      "readOnly": "Nur Lesezugriff: Erstellen, Hinzufugen und Parsen sind nicht verfugbar.",
+      "saveUrl": "URL speichern",
+      "uploadPdfs": "PDFs hochladen",
+      "needsParse": "Muss geparst werden",
+      "parsed": "Geparst"
+    },
     "wishImports": {
       "title": "Prüfung des Wunsch-Imports",
       "empty": "Keine Einträge zur Prüfung des Wunsch-Imports.",

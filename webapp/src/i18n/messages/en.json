@@ -392,6 +392,17 @@
     }
   },
   "raster": {
+    "importUx": {
+      "context": "Import context",
+      "workspace": "Planning workspace",
+      "activeWorkspace": "Active workspace: {name}",
+      "createWorkspaceFirst": "Create a planning workspace before adding sources.",
+      "readOnly": "Read-only access: create, add, and parse actions are unavailable.",
+      "saveUrl": "Save URL",
+      "uploadPdfs": "Upload PDFs",
+      "needsParse": "Needs parse",
+      "parsed": "Parsed"
+    },
     "wishImports": {
       "title": "Wish import review",
       "empty": "No wish import review items.",

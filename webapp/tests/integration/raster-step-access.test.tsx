@@ -18,7 +18,11 @@ const { prisma } = vi.hoisted(() => ({
 const services = vi.hoisted(() => ({
   listHallCapacities: vi.fn(),
   listInputSets: vi.fn(),
+  listRasterSourcesForInputSet: vi.fn(),
   listRasterSourcesForScope: vi.fn(),
+  listUpperLeagueReview: vi.fn(),
+  listWishImportReview: vi.fn(),
+  adoptLegacyRasterSources: vi.fn(),
   listScenarios: vi.fn(),
   reviewHallCapacitiesForInputSet: vi.fn(),
 }));
@@ -36,7 +40,7 @@ const steps = [
   {
     name: "import",
     page: ImportPage,
-    load: services.listRasterSourcesForScope,
+    load: services.listRasterSourcesForInputSet,
   },
   { name: "review", page: ReviewPage, load: services.listHallCapacities },
   { name: "run", page: RunPage, load: services.listInputSets },
@@ -65,6 +69,7 @@ describe("raster step access", () => {
       expect(collectText(result).join(" ")).toContain("not authorized");
       expect(services.listInputSets).not.toHaveBeenCalled();
       expect(services.listHallCapacities).not.toHaveBeenCalled();
+      expect(services.listRasterSourcesForInputSet).not.toHaveBeenCalled();
       expect(services.listRasterSourcesForScope).not.toHaveBeenCalled();
       expect(services.listScenarios).not.toHaveBeenCalled();
     },
@@ -78,9 +83,26 @@ describe("raster step access", () => {
         role: Role.PLATFORM_ADMIN,
       });
       prisma.scope.findMany.mockResolvedValue([scope("OWL")]);
-      services.listInputSets.mockResolvedValue([]);
+      services.listInputSets.mockResolvedValue(
+        load === services.listRasterSourcesForInputSet
+          ? [
+              {
+                id: "input-1",
+                name: "OWL 2026/27",
+                scopeId: "scope-OWL",
+                season: "2026/27",
+                status: "DRAFT",
+                seasonModelJson: null,
+                _count: { wishes: 0, fixedRasterzahlen: 0, runs: 0 },
+              },
+            ]
+          : [],
+      );
       services.listHallCapacities.mockResolvedValue([]);
+      services.listRasterSourcesForInputSet.mockResolvedValue([]);
       services.listRasterSourcesForScope.mockResolvedValue([]);
+      services.listUpperLeagueReview.mockResolvedValue(null);
+      services.listWishImportReview.mockResolvedValue(null);
       services.listScenarios.mockResolvedValue([]);
 
       await page({

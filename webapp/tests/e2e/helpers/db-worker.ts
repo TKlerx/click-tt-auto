@@ -370,6 +370,7 @@ async function main() {
         sourceType: string;
         sourceRef: string;
         displayName: string;
+        inputSetId?: string;
         season?: string;
         contentHash?: string | null;
         parsedJson?: unknown;
@@ -386,37 +387,36 @@ async function main() {
         );
       }
 
-      const source = await prisma.rasterSource.upsert({
-        where: {
-          scopeId_season_sourceType_sourceRef: {
-            scopeId: scope.id,
-            season,
-            sourceType: input.sourceType,
-            sourceRef: input.sourceRef,
-          },
-        },
-        update: {
-          displayName: input.displayName,
-          contentHash: input.contentHash ?? null,
-          parsedJson:
-            input.parsedJson === undefined
-              ? null
-              : JSON.stringify(input.parsedJson),
-        },
-        create: {
-          scopeId: scope.id,
-          season,
-          sourceType: input.sourceType,
-          sourceRef: input.sourceRef,
-          displayName: input.displayName,
-          contentHash: input.contentHash ?? null,
-          parsedJson:
-            input.parsedJson === undefined
-              ? null
-              : JSON.stringify(input.parsedJson),
-        },
-        select: { id: true },
-      });
+      const data = {
+        scopeId: scope.id,
+        inputSetId: input.inputSetId,
+        season,
+        sourceType: input.sourceType,
+        sourceRef: input.sourceRef,
+        displayName: input.displayName,
+        contentHash: input.contentHash ?? null,
+        parsedJson:
+          input.parsedJson === undefined
+            ? null
+            : JSON.stringify(input.parsedJson),
+      };
+      const source = input.inputSetId
+        ? await prisma.rasterSource.upsert({
+            where: {
+              inputSetId_sourceType_sourceRef: {
+                inputSetId: input.inputSetId,
+                sourceType: input.sourceType,
+                sourceRef: input.sourceRef,
+              },
+            },
+            update: data,
+            create: data,
+            select: { id: true },
+          })
+        : await prisma.rasterSource.create({
+            data,
+            select: { id: true },
+          });
 
       process.stdout.write(JSON.stringify(source.id));
       break;

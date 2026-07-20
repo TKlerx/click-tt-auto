@@ -3,7 +3,9 @@ import { z } from "zod";
 import { requireApiUser } from "@/lib/route-auth";
 import { assertRasterAccess, resolveRasterScope } from "@/lib/raster/access";
 import { normalizeRasterSeason } from "@/lib/raster/season";
+import { prisma } from "@/lib/db";
 import {
+  listRasterSourcesForInputSet,
   listRasterSourcesForScope,
   upsertRasterSource,
 } from "@/services/raster";
@@ -11,6 +13,7 @@ import {
 const sourceBodySchema = z.object({
   scopeCode: z.string().trim().min(1),
   season: z.string().trim().optional(),
+  inputSetId: z.string().trim().min(1),
   sourceType: z.string().trim().min(1),
   sourceRef: z.string().trim().min(1),
   displayName: z.string().trim().min(1),
@@ -25,6 +28,7 @@ export async function GET(request: Request) {
   const search = new URL(request.url).searchParams;
   const scopeCode = search.get("scope")?.trim();
   const season = normalizeRasterSeason(search.get("season"));
+  const inputSetId = search.get("workspace")?.trim();
   if (!scopeCode) {
     return NextResponse.json({ error: "scope is required" }, { status: 400 });
   }
@@ -34,6 +38,25 @@ export async function GET(request: Request) {
   const scope = await resolveRasterScope(scopeCode);
   if (!scope) {
     return NextResponse.json({ error: "Scope not found" }, { status: 404 });
+  }
+
+  if (inputSetId) {
+    const inputSet = await prisma.rasterInputSet.findFirst({
+      where: { id: inputSetId, scopeId: scope.id, season },
+      select: { id: true },
+    });
+    if (!inputSet) {
+      return NextResponse.json(
+        { error: "Planning workspace not found" },
+        { status: 404 },
+      );
+    }
+    return NextResponse.json({
+      sources: await listRasterSourcesForInputSet(
+        inputSet.id,
+        search.get("sourceType")?.trim() || undefined,
+      ),
+    });
   }
 
   return NextResponse.json({
@@ -71,10 +94,26 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Scope not found" }, { status: 404 });
   }
 
+  const inputSet = await prisma.rasterInputSet.findFirst({
+    where: {
+      id: parsed.data.inputSetId,
+      scopeId: scope.id,
+      season: normalizeRasterSeason(parsed.data.season),
+    },
+    select: { id: true },
+  });
+  if (!inputSet) {
+    return NextResponse.json(
+      { error: "Planning workspace not found" },
+      { status: 404 },
+    );
+  }
+
   return NextResponse.json(
     {
       source: await upsertRasterSource({
         scopeId: scope.id,
+        inputSetId: inputSet.id,
         season: normalizeRasterSeason(parsed.data.season),
         sourceType: parsed.data.sourceType,
         sourceRef: parsed.data.sourceRef,

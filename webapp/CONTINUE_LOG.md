@@ -454,8 +454,8 @@
 
 - Branch snapshot refreshed for `011-route-refactor`.
 - Latest non-continuity commit: ec1ca03 fix(e2e): stabilize production-style auth tests.
-- Active specs: 011-route-refactor.
-- Next focus: no next task.
+- Active specs: 011-raster-import-ux.
+- Next focus: watch validation/CI after pushing.
 
 ## 2026-04-01 22:44:23
 
@@ -1635,3 +1635,9 @@
 ## 2026-07-09 21:06:39
 
 - Included `AI_TESTING.md` in PR #9 and referenced it from `AGENTS.md`.
+## 2026-07-20 14:27:58
+
+- Branch snapshot refreshed for `011-raster-import-ux`.
+- Latest non-continuity commit: 1e8fc27 Fix 011 review gaps.
+- Active specs: 011-route-refactor.
+- Next focus: no next task.

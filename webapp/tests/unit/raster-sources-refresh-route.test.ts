@@ -37,6 +37,7 @@ describe("raster source refresh route", () => {
     });
     prismaMock.rasterSource.findUnique.mockResolvedValue({
       id: "source-1",
+      inputSetId: "input-1",
       scope: { code: "WTTV" },
     } as never);
     refreshRasterSource.mockResolvedValue({ id: "source-1" });

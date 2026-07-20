@@ -1,33 +1,55 @@
 # Continue
 
-<!-- continuity:fingerprint=bce7c5190f15dcacfdb95670101b8335064447a6c5e1d221d6cdb932887410b1 -->
+<!-- continuity:fingerprint=4035a18e9443fb5eb50b047d5449c21b766e058f064058fca911de6f24804b38 -->
 
 ## Current Snapshot
 
-- Updated: 2026-07-09 21:06:39
-- Branch: `codex/cli-downloads`
+- Updated: 2026-07-20 14:27:58
+- Branch: `011-raster-import-ux`
 
 ## Recent Non-Continuity Commits
 
-- b15235a Add release and Postgres ops tooling (#7)
-- a20b568 chore: enforce text conventions and split validation hooks (#6)
-- 115543e feat: add exception-aware supply-chain audit
-- 5f786d8 chore: refresh specs overview
-- 8492b6b feat: add ops health dashboard (#5)
+- 1e8fc27 Fix 011 review gaps
+- 86523ef Remediate 011 after analyze: legacy adoption for existing multi-workspace data
+- 6fee9a4 Task feature 011: raster import UX
+- 4572fd2 Plan feature 011: raster import UX
+- 724500c Clarify feature 011: legacy sources, selection state, roles, context change
 
 ## Git Status
 
-- M AGENTS.md
-- M CONTINUE.md
-- M CONTINUE_LOG.md
-- ?? AI_TESTING.md
+- M prisma/schema.postgres.prisma
+-  M src/app/(dashboard)/raster/_lib/step-context.tsx
+-  M src/app/(dashboard)/raster/import/page.tsx
+-  M src/app/api/raster/input-sets/route.ts
+-  M src/app/api/raster/sources/[id]/refresh/route.ts
+-  M src/app/api/raster/sources/route.ts
+-  M src/app/api/raster/sources/upload/route.ts
+-  M src/components/raster/input-set-actions.tsx
+-  M src/components/raster/sources/raster-sources-panel.tsx
+-  M src/i18n/messages/de.json
+-  M src/i18n/messages/en.json
+-  M src/i18n/messages/es.json
+-  M src/i18n/messages/fr.json
+-  M src/i18n/messages/pt.json
+-  M src/services/raster/inputSets.ts
+-  M src/services/raster/sources.ts
+-  M tests/e2e/helpers/db-worker.ts
+-  M tests/e2e/helpers/db.ts
+-  M tests/integration/raster-step-access.test.tsx
+-  M tests/unit/raster-input-sets-service.test.ts
+-  M tests/unit/raster-sources-refresh-route.test.ts
+-  M tests/unit/raster-sources-route.test.ts
+-  M tests/unit/raster-sources-upload-route.test.ts
+- ?? prisma/migrations-postgres/20260720120000_source_workspace/
+- ?? src/lib/raster/workspace-selection.ts
+- ?? tests/e2e/raster-import-ux.spec.ts
+- ?? tests/integration/raster-source-workspace.test.ts
+- ?? tests/unit/raster/workspace-selection.test.ts
 
 ## Active Specs
 
-- No active spec folders detected.
+- 011-raster-import-ux
 
 ## Next Recommended Actions
 
-1. Amend and push the AI testing guidance into PR #9.
-2. Watch PR #9 CI.
-3. Deploy with `CLI_RELEASES_BUILD_DURING_DEPLOY=docker` or `true`, or provide `CLI_RELEASES_SOURCE_DIR`, so `data/cli-releases` is populated.
+1. 011-raster-import-ux: implemented; watch validation/CI after pushing.

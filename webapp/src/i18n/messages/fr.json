@@ -392,6 +392,17 @@
     }
   },
   "raster": {
+    "importUx": {
+      "context": "Contexte d'import",
+      "workspace": "Espace de planification",
+      "activeWorkspace": "Espace actif : {name}",
+      "createWorkspaceFirst": "Creez d'abord un espace de planification.",
+      "readOnly": "Lecture seule : creer, ajouter et analyser ne sont pas disponibles.",
+      "saveUrl": "Enregistrer l'URL",
+      "uploadPdfs": "Televerser les PDFs",
+      "needsParse": "Analyse requise",
+      "parsed": "Analyse"
+    },
     "wishImports": {
       "title": "Révision de l'import des souhaits",
       "empty": "Aucun élément à réviser pour l'import des souhaits.",
