@@ -32,6 +32,12 @@ type UpperLeagueReview = {
   matched: Array<{ clubId: string; label: string; rasterzahl: number }>;
   unmatched: Array<{ clubId: string; label: string }>;
   excludedNoHall: Array<{ clubId: string; label: string }>;
+  invalidRasterzahl: Array<{
+    clubId: string;
+    label: string;
+    rasterzahl: number;
+    size: number;
+  }>;
 };
 
 export function RasterSourcesPanel({
@@ -574,10 +580,10 @@ function UpperLeaguePreview({
             </tr>
           </thead>
           <tbody>
-            {leagues.map((league) => (
+            {leagues.map((league, index) => (
               <tr
                 className="border-t border-[var(--border)]"
-                key={league.league}
+                key={`${league.league ?? "league"}-${index}`}
               >
                 <td className="py-2 pr-3">{league.league}</td>
                 <td className="py-2 pr-3">{league.size}</td>
@@ -599,7 +605,7 @@ function UpperLeaguePreview({
 
 function UpperLeagueMatchReview({ review }: { review: UpperLeagueReview }) {
   return (
-    <div className="grid gap-3 text-xs md:grid-cols-3">
+    <div className="grid gap-3 text-xs md:grid-cols-4">
       <UpperLeagueReviewList
         rows={review.matched.map((row) => ({
           label: `${row.clubId} / ${row.label}`,
@@ -619,6 +625,13 @@ function UpperLeagueMatchReview({ review }: { review: UpperLeagueReview }) {
         }))}
         title={`Excluded no hall (${review.excludedNoHall.length})`}
       />
+      <UpperLeagueReviewList
+        rows={(review.invalidRasterzahl ?? []).map((row) => ({
+          label: `${row.clubId} / ${row.label}`,
+          detail: `${row.rasterzahl}/${row.size}`,
+        }))}
+        title={`Invalid Rasterzahl (${review.invalidRasterzahl?.length ?? 0})`}
+      />
     </div>
   );
 }
@@ -635,8 +648,8 @@ function UpperLeagueReviewList({
       <h4 className="font-medium">{title}</h4>
       {rows.length ? (
         <ul className="mt-2 grid gap-1 text-[var(--muted-foreground)]">
-          {rows.slice(0, 8).map((row) => (
-            <li className="flex justify-between gap-2" key={row.label}>
+          {rows.slice(0, 8).map((row, index) => (
+            <li className="flex justify-between gap-2" key={`${row.label}-${index}`}>
               <span className="break-words">{row.label}</span>
               {row.detail ? <span>{row.detail}</span> : null}
             </li>

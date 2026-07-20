@@ -98,6 +98,7 @@ describe("upper-league injection", () => {
       matched: [{ clubId: "tura-elsen", label: "Erwachsene", rasterzahl: 5 }],
       unmatched: [{ clubId: "tura-elsen", label: "Damen" }],
       excludedNoHall: [],
+      invalidRasterzahl: [],
     });
   });
 
@@ -142,6 +143,48 @@ describe("upper-league injection", () => {
     ]);
   });
 
+  it("skips impossible fixed Rasterzahlen before they reach the solver", async () => {
+    prismaMock.rasterSource.findFirst.mockResolvedValue({
+      parsedJson: JSON.stringify({
+        sourceLabel: "gruppen.pdf",
+        leagues: [
+          {
+            league: "Verbandsliga 1 Erwachsene",
+            size: 4,
+            entries: [{ rasterzahl: 4, team: "TuRa Elsen" }],
+          },
+        ],
+      }),
+    } as never);
+    prismaMock.rasterWish.findMany.mockResolvedValue([
+      {
+        id: "wish-upper",
+        clubId: "tura-elsen",
+        clubName: "TuRa Elsen",
+        teamLabel: "Erwachsene",
+        homeWeekday: "SATURDAY",
+        hall: "1",
+      },
+    ] as never);
+
+    const result = await buildUpperLeagueInjection({
+      inputSetId: "input-1",
+      scopeId: "scope-owl",
+      season: "2026/27",
+      model,
+    });
+
+    expect(result.teams).toEqual([]);
+    expect(result.coverage.invalidRasterzahl).toEqual([
+      {
+        clubId: "tura-elsen",
+        label: "Erwachsene",
+        rasterzahl: 4,
+        size: 4,
+      },
+    ]);
+  });
+
   it("merges injected teams as input-only and replaces prior injections", async () => {
     const merged = mergeInjection(
       {
@@ -167,7 +210,13 @@ describe("upper-league injection", () => {
             teamIds: ["upper-new"],
           },
         ],
-        coverage: { importPresent: true, matched: [], unmatched: [], excludedNoHall: [] },
+        coverage: {
+          importPresent: true,
+          matched: [],
+          unmatched: [],
+          excludedNoHall: [],
+          invalidRasterzahl: [],
+        },
       },
     );
 

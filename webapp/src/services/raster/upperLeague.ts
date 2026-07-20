@@ -39,6 +39,12 @@ export type UpperLeagueCoverage = {
   matched: Array<{ clubId: string; label: string; rasterzahl: number }>;
   unmatched: Array<{ clubId: string; label: string }>;
   excludedNoHall: Array<{ clubId: string; label: string }>;
+  invalidRasterzahl: Array<{
+    clubId: string;
+    label: string;
+    rasterzahl: number;
+    size: number;
+  }>;
 };
 
 type InjectionParams = {
@@ -117,6 +123,7 @@ export async function buildUpperLeagueInjection(params: InjectionParams) {
     matched: [],
     unmatched: [],
     excludedNoHall: [],
+    invalidRasterzahl: [],
   };
   if (!source?.parsedJson) return { teams: [], groups: [], coverage };
 
@@ -142,6 +149,20 @@ export async function buildUpperLeagueInjection(params: InjectionParams) {
       const label = teamLabel(league.league, match.suffix);
       const key = teamKey(match.club.id, label);
       matchedKeys.add(key);
+      const rasterSize = numericRasterSize(league.size);
+      if (
+        !rasterSize ||
+        entry.rasterzahl < 1 ||
+        entry.rasterzahl > rasterSize
+      ) {
+        coverage.invalidRasterzahl.push({
+          clubId: match.club.id,
+          label,
+          rasterzahl: entry.rasterzahl,
+          size: league.size,
+        });
+        continue;
+      }
       const wish = wishByTeam.get(key);
       if (!wish?.hall || !wish.homeWeekday) {
         coverage.excludedNoHall.push({ clubId: match.club.id, label });
@@ -245,6 +266,15 @@ function looksUpperLeagueRelevant(label: string) {
 
 function teamKey(clubId: string | null | undefined, label: string | null | undefined) {
   return `${clubId ?? ""}\0${(label ?? "").trim().toLowerCase()}`;
+}
+
+function numericRasterSize(size: number) {
+  if (!Number.isInteger(size) || size < 5 || size > 14) return null;
+  if (size <= 6) return 6;
+  if (size <= 8) return 8;
+  if (size <= 10) return 10;
+  if (size <= 12) return 12;
+  return 14;
 }
 
 function slug(value: string) {

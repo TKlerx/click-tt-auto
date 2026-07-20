@@ -443,13 +443,6 @@
       "combined": "Combined",
       "spannedScopes": "Spanned scopes"
     },
-    "upperLeague": {
-      "uploadTitle": "Upload upper-league raster PDF",
-      "matched": "Matched",
-      "unmatched": "Unmatched",
-      "excludedNoHall": "Excluded: no gym",
-      "importAbsent": "No upper-league raster import"
-    },
     "steps": {
       "import": "Import data",
       "review": "Review data",

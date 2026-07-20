@@ -22,6 +22,12 @@ type UpperLeagueCoverage = {
   matched: Array<{ clubId: string; label: string; rasterzahl: number }>;
   unmatched: Array<{ clubId: string; label: string }>;
   excludedNoHall: Array<{ clubId: string; label: string }>;
+  invalidRasterzahl: Array<{
+    clubId: string;
+    label: string;
+    rasterzahl: number;
+    size: number;
+  }>;
 };
 
 export type CoverageRecord = {
@@ -94,11 +100,13 @@ export function computeCoverageRecord(input: {
   const scopesWithoutInputSet = [
     ...new Set(input.scopesWithoutInputSet ?? []),
   ].sort();
-  const upperLeague = model.upperLeague ?? {
+  const upperLeague = {
     importPresent: true,
     matched: [],
     unmatched: [],
     excludedNoHall: [],
+    invalidRasterzahl: [],
+    ...model.upperLeague,
   };
   const complete =
     spannedAll &&
@@ -108,7 +116,8 @@ export function computeCoverageRecord(input: {
     capacityGaps.length === 0 &&
     upperLeague.importPresent &&
     upperLeague.unmatched.length === 0 &&
-    upperLeague.excludedNoHall.length === 0;
+    upperLeague.excludedNoHall.length === 0 &&
+    upperLeague.invalidRasterzahl.length === 0;
 
   return {
     complete,

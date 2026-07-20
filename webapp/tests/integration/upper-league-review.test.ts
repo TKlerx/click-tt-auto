@@ -71,6 +71,7 @@ describe("upper-league import review", () => {
       matched: [{ clubId: "club-a", label: "Erwachsene", rasterzahl: 5 }],
       unmatched: [{ clubId: "club-a", label: "Damen" }],
       excludedNoHall: [{ clubId: "club-b", label: "Erwachsene" }],
+      invalidRasterzahl: [],
     });
   });
 });

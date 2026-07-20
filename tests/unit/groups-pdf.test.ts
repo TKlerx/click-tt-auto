@@ -4,6 +4,7 @@ import { extractPdfText } from "../../src/raster/ingest/pdf-text.js";
 import {
   parseGroupsPdf,
   parseUpperLeagueRasterPdf,
+  parseUpperLeagueRasterText,
 } from "../../src/raster/ingest/groups-pdf.js";
 import type { Team } from "../../src/raster/types.js";
 
@@ -112,6 +113,43 @@ describe("parseGroupsPdf reads the published Rasterzahlen", () => {
 });
 
 describe("parseUpperLeagueRasterPdf", () => {
+  it("keeps vacant raster slots in the league size", () => {
+    const result = parseUpperLeagueRasterText(`
+      Verbandsliga 1 Erwachsene
+        1  TuRa Elsen  Sa. 17.30 Uhr
+        2  xxx
+        3  xxx
+        4  xxx
+        5  xxx
+        6  xxx
+        7  xxx
+        8  xxx
+        9  xxx
+        10  TTV Lage  Sa. 18.30 Uhr
+    `);
+
+    expect(result).toEqual([
+      {
+        league: "Verbandsliga 1 Erwachsene",
+        size: 10,
+        entries: [
+          {
+            rasterzahl: 1,
+            team: "TuRa Elsen",
+            homeWeekday: "saturday",
+            startTime: "17.30",
+          },
+          {
+            rasterzahl: 10,
+            team: "TTV Lage",
+            homeWeekday: "saturday",
+            startTime: "18.30",
+          },
+        ],
+      },
+    ]);
+  });
+
   it("returns league entries with home day, time, vacancies skipped, and stable numbers", async () => {
     const result = await parseUpperLeagueRasterPdf(fixture);
     const rows = result.leagues.flatMap((league) =>

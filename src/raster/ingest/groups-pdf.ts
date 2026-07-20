@@ -61,11 +61,11 @@ export async function parseUpperLeagueRasterPdf(
 export function parseUpperLeagueRasterText(text: string): ParsedUpperLeague[] {
   return leagueBlocks(text)
     .map((block) => {
-      const entries = parseEntries(text.slice(block.start, block.end));
+      const parsed = parseLeagueSection(text.slice(block.start, block.end));
       return {
         league: block.league,
-        size: entries.length,
-        entries
+        size: parsed.size,
+        entries: parsed.entries
       };
     })
     .filter((league) => league.entries.length);
@@ -153,7 +153,10 @@ function leagueBlocks(text: string): LeagueBlock[] {
   });
 }
 
-function parseEntries(section: string): ParsedUpperLeagueEntry[] {
+function parseLeagueSection(section: string): {
+  size: number;
+  entries: ParsedUpperLeagueEntry[];
+} {
   const starts = [...section.matchAll(entryStart)].map((match) => ({
     number: Number(match[1]),
     contentStart: (match.index ?? 0) + match[0].length,
@@ -179,7 +182,10 @@ function parseEntries(section: string): ParsedUpperLeagueEntry[] {
         : {})
     });
   }
-  return entries;
+  return {
+    size: Math.max(0, ...starts.map((start) => start.number)),
+    entries
+  };
 }
 
 function normalizeSpace(value: string) {
