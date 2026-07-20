@@ -21,6 +21,9 @@ const ingestScrapeUrl = pathToFileURL(
 const ingestWishesPdfUrl = pathToFileURL(
   `${repoRoot}/src/raster/ingest/wishes-pdf.ts`,
 ).href;
+const ingestGroupsPdfUrl = pathToFileURL(
+  `${repoRoot}/src/raster/ingest/groups-pdf.ts`,
+).href;
 const ingestRosterCsvUrl = pathToFileURL(
   `${repoRoot}/src/raster/ingest/roster-csv.ts`,
 ).href;
@@ -99,7 +102,7 @@ async function parseUpperLeagueRasterPdf(
   filePath: string,
 ): Promise<ParsedUpperLeagueImport> {
   return runRasterTs<ParsedUpperLeagueImport>(`
-    const { parseUpperLeagueRasterPdf } = await import(${JSON.stringify(ingestIndexUrl)});
+    const { parseUpperLeagueRasterPdf } = await import(${JSON.stringify(ingestGroupsPdfUrl)});
     emit(await parseUpperLeagueRasterPdf(${JSON.stringify(filePath)}));
   `);
 }
