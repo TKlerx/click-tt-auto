@@ -54,6 +54,25 @@ export function CoverageDetail({
               .join(", ")}
           </p>
         ) : null}
+        {coverage.upperLeague?.importPresent === false ? (
+          <p>Upper-league raster import missing.</p>
+        ) : null}
+        {coverage.upperLeague?.unmatched.length ? (
+          <p>
+            Upper-league unmatched:{" "}
+            {coverage.upperLeague.unmatched
+              .map((row) => `${row.clubId}/${row.label}`)
+              .join(", ")}
+          </p>
+        ) : null}
+        {coverage.upperLeague?.excludedNoHall.length ? (
+          <p>
+            Upper-league missing hall/day:{" "}
+            {coverage.upperLeague.excludedNoHall
+              .map((row) => `${row.clubId}/${row.label}`)
+              .join(", ")}
+          </p>
+        ) : null}
       </div>
     </section>
   );

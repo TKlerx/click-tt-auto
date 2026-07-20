@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { prismaMock } from "@/lib/__mocks__/db";
 import { startOptimizationRun } from "@/services/raster/runs";
 
-const { buildCoverageRecordForInputSet } = vi.hoisted(() => ({
+const { buildCoverageRecordForInputSet, applyUpperLeagueInjectionToInputSet } = vi.hoisted(() => ({
   buildCoverageRecordForInputSet: vi.fn().mockResolvedValue({
     complete: true,
     spannedScopes: ["scope-owl"],
@@ -11,6 +11,7 @@ const { buildCoverageRecordForInputSet } = vi.hoisted(() => ({
     wishGaps: [],
     capacityGaps: [],
   }),
+  applyUpperLeagueInjectionToInputSet: vi.fn(),
 }));
 
 vi.mock("@/lib/db", () => ({
@@ -19,6 +20,10 @@ vi.mock("@/lib/db", () => ({
 
 vi.mock("@/lib/raster/coverage", () => ({
   buildCoverageRecordForInputSet,
+}));
+
+vi.mock("@/services/raster/upperLeague", () => ({
+  applyUpperLeagueInjectionToInputSet,
 }));
 
 describe("raster runs service", () => {
@@ -70,5 +75,6 @@ describe("raster runs service", () => {
     ).toBeLessThan(
       prismaMock.rasterOptimizationRun.create.mock.invocationCallOrder[0],
     );
+    expect(applyUpperLeagueInjectionToInputSet).toHaveBeenCalledWith("input-1");
   });
 });

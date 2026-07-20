@@ -102,6 +102,29 @@ export async function upsertRasterSource(params: {
   });
 }
 
+export async function replaceRasterSource(params: {
+  scopeId: string;
+  season: string;
+  sourceType: string;
+  sourceRef: string;
+  displayName: string;
+  contentHash?: string;
+  parsedJson?: string;
+}) {
+  return prisma.$transaction(async (tx) => {
+    await tx.rasterSource.deleteMany({
+      where: {
+        scopeId: params.scopeId,
+        season: normalizeRasterSeason(params.season),
+        sourceType: params.sourceType,
+      },
+    });
+    return tx.rasterSource.create({
+      data: { ...params, season: normalizeRasterSeason(params.season) },
+    });
+  });
+}
+
 export async function refreshRasterSource(id: string) {
   const source = await prisma.rasterSource.findUnique({
     where: { id },
@@ -168,6 +191,12 @@ async function parseSource(sourceType: string, sourceRef: string) {
         value: {
           assignments: await rasterIngest.readAssignmentTable(file.path),
         },
+      };
+    }
+    if (normalizedType === "UPPER_LEAGUE_RASTER") {
+      return {
+        contentHash: file.contentHash,
+        value: await rasterIngest.parseUpperLeagueRasterPdf(file.path),
       };
     }
     throw new Error(`Unsupported raster source type: ${sourceType}`);

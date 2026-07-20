@@ -13,6 +13,13 @@ import { listRasterSourcesForScope } from "./sources";
 import { importParsedWishes } from "./wishes";
 import { reviewHallCapacitiesForInputSet } from "./capacity";
 
+const INPUT_SET_SOURCE_TYPES = [
+  "GROUP_ASSIGNMENT",
+  "WISHES_PDF",
+  "ROSTER_CSV",
+  "UPPER_LEAGUE_RASTER",
+];
+
 type SeasonGroup = {
   id?: string;
   ref?: { league?: string; name?: string };
@@ -96,17 +103,20 @@ export async function listInputSets(
   return Promise.all(
     inputSets.map(async (inputSet) => {
       const spannedScopes = inputSet.spannedScopes ?? [];
-      if (spannedScopes.length < 2) return inputSet;
-      const scopeIds = spannedScopes.map((scope) => scope.scopeId);
+      const scopeIds =
+        spannedScopes.length > 1
+          ? spannedScopes.map((scope) => scope.scopeId)
+          : [inputSet.scopeId];
+      const rawRuns = inputSet.runs ?? [];
       const runs = await Promise.all(
-        inputSet.runs.map(async (run) => ({
+        rawRuns.map(async (run) => ({
           ...run,
           sourceChangedSinceStart:
-            (run.status === "PENDING" || run.status === "RUNNING") &&
             (await prisma.rasterSource.count({
               where: {
                 scopeId: { in: scopeIds },
                 season: inputSet.season,
+                sourceType: { in: INPUT_SET_SOURCE_TYPES },
                 updatedAt: { gt: run.createdAt },
               },
             })) > 0,

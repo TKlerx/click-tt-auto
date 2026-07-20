@@ -5,7 +5,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
 import { evaluate } from "../../src/raster/score/index.js";
-import type { Assignment, SeasonModel } from "../../src/raster/types.js";
+import type { Assignment, SeasonModel, Weekday } from "../../src/raster/types.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -20,6 +20,8 @@ const execFileAsync = promisify(execFile);
  */
 function clubWithUpperLeagueTeam(options?: {
   upperLeagueCapacityRelevant?: boolean;
+  upperLeagueRasterzahl?: number;
+  districtHomeWeekday?: Weekday;
 }): SeasonModel {
   return {
     clubs: [
@@ -42,7 +44,7 @@ function clubWithUpperLeagueTeam(options?: {
         homeWeekday: "friday",
         hall: "1",
         // The number the WTTV planner published in the Gruppen-und-Raster PDF.
-        rasterzahl: { kind: "fixed", value: 1 },
+        rasterzahl: { kind: "fixed", value: options?.upperLeagueRasterzahl ?? 1 },
         confidence: "ok",
         ...(options?.upperLeagueCapacityRelevant === false
           ? { capacityRelevant: false }
@@ -53,7 +55,7 @@ function clubWithUpperLeagueTeam(options?: {
         clubId: "tura-elsen",
         label: "II",
         group: { league: "Bezirksliga", name: "Bezirksliga 1" },
-        homeWeekday: "friday",
+        homeWeekday: options?.districtHomeWeekday ?? "friday",
         hall: "1",
         rasterzahl: { kind: "assignable" },
         confidence: "ok",
@@ -180,6 +182,18 @@ describe("upper-league Rasterzahl occupies hall capacity", () => {
     expect(assignment["bezirksliga-tura-elsen-ii"]).not.toBe(1);
     // Scored by the TypeScript evaluator rather than the solver, so the two
     // agree independently that nothing overruns the hall.
+    expect(evaluate(model, assignment).overUsages).toEqual([]);
+  }, 120_000);
+
+  it("solves a vacated 10-slot upper league with a fixed top Rasterzahl", async () => {
+    const model = clubWithUpperLeagueTeam({
+      districtHomeWeekday: "thursday",
+      upperLeagueRasterzahl: 10,
+    });
+
+    const assignment = await solve(model);
+
+    expect(assignment["verbandsliga-tura-elsen-i"]).toBe(10);
     expect(evaluate(model, assignment).overUsages).toEqual([]);
   }, 120_000);
 });

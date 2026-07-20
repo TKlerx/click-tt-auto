@@ -5,8 +5,12 @@ import { normalizeRasterSeason } from "@/lib/raster/season";
 import { rasterIngest } from "@/lib/raster/pipeline";
 import { isZip, readRasterBundle } from "@/lib/raster/bundle";
 import { prisma } from "@/lib/db";
-import { saveFile } from "@/lib/file-storage";
-import { importRasterRoster, upsertRasterSource } from "@/services/raster";
+import { getFilePath, saveFile } from "@/lib/file-storage";
+import {
+  importRasterRoster,
+  replaceRasterSource,
+  upsertRasterSource,
+} from "@/services/raster";
 
 type UploadScope = { id: string; code: string; name: string };
 type UploadSource = Awaited<ReturnType<typeof upsertRasterSource>>;
@@ -44,10 +48,14 @@ export async function POST(request: Request) {
 
   const isRosterSource = normalizeSourceType(sourceType) === "ROSTER_CSV";
   const isBundleSource = normalizeSourceType(sourceType) === "RASTER_BUNDLE";
+  const isUpperLeagueSource =
+    normalizeSourceType(sourceType) === "UPPER_LEAGUE_RASTER";
   const access = await assertRasterAccess(
     auth.user,
     scopeCode,
-    isRosterSource || isBundleSource ? "scheduler" : "admin",
+    isRosterSource || isBundleSource || isUpperLeagueSource
+      ? "scheduler"
+      : "admin",
   );
   if (access !== true) return access.error;
 
@@ -100,11 +108,16 @@ async function processUploadedFile(params: {
   season: string;
   userId: string;
 }): Promise<UploadSource[] | NextResponse> {
+  const normalizedSourceType = normalizeSourceType(params.sourceType);
   const buffer = Buffer.from(await params.file.arrayBuffer());
   if (params.isBundleSource || isZip(buffer)) {
     return processBundle(buffer, params);
   }
-  if (params.sourceType.toUpperCase().endsWith("_PDF") && !isPdf(buffer)) {
+  if (
+    (normalizedSourceType.endsWith("_PDF") ||
+      normalizedSourceType === "UPPER_LEAGUE_RASTER") &&
+    !isPdf(buffer)
+  ) {
     return NextResponse.json(
       { error: `${params.file.name || "Uploaded file"} is not a PDF.` },
       { status: 422 },
@@ -116,7 +129,7 @@ async function processUploadedFile(params: {
         await importRosterSource(
           buffer,
           params.file.name || "source.csv",
-          normalizeSourceType(params.sourceType),
+          normalizedSourceType,
           params.displayName,
           params.fileCount,
           params.scope,
@@ -126,6 +139,30 @@ async function processUploadedFile(params: {
       ];
     } catch (error) {
       return rosterError(error);
+    }
+  }
+  if (normalizedSourceType === "UPPER_LEAGUE_RASTER") {
+    try {
+      return [
+        await importUpperLeagueRasterSource(
+          buffer,
+          params.file.name || "source.pdf",
+          params.displayName,
+          params.fileCount,
+          params.scope.id,
+          params.season,
+        ),
+      ];
+    } catch (error) {
+      return NextResponse.json(
+        {
+          error:
+            error instanceof Error
+              ? error.message
+              : "Upper-league raster import failed.",
+        },
+        { status: 422 },
+      );
     }
   }
   return [
@@ -139,6 +176,26 @@ async function processUploadedFile(params: {
       params.season,
     ),
   ];
+}
+
+async function importUpperLeagueRasterSource(
+  buffer: Buffer,
+  fileName: string,
+  displayName: string,
+  fileCount: number,
+  scopeId: string,
+  season: string,
+) {
+  const sourceRef = await saveFile(buffer, fileName);
+  const parsed = await rasterIngest.parseUpperLeagueRasterPdf(getFilePath(sourceRef));
+  return replaceRasterSource({
+    scopeId,
+    season,
+    sourceType: "UPPER_LEAGUE_RASTER",
+    sourceRef,
+    displayName: sourceDisplayName(displayName, fileName, fileCount),
+    parsedJson: JSON.stringify(parsed),
+  });
 }
 
 async function processBundle(

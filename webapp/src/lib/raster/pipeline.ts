@@ -5,6 +5,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import type { TeamRasterAssignmentRow } from "../../../../src/raster/ingest/clicktt-assignments.js";
+import type { ParsedUpperLeagueImport } from "../../../../src/raster/ingest/groups-pdf.js";
 import type { RosterCsvParseResult } from "../../../../src/raster/ingest/roster-csv.js";
 import type { WishParseResult } from "../../../../src/raster/ingest/wishes-pdf.js";
 import type { Assignment, SeasonModel } from "../../../../src/raster/types.js";
@@ -19,6 +20,9 @@ const ingestScrapeUrl = pathToFileURL(
 ).href;
 const ingestWishesPdfUrl = pathToFileURL(
   `${repoRoot}/src/raster/ingest/wishes-pdf.ts`,
+).href;
+const ingestGroupsPdfUrl = pathToFileURL(
+  `${repoRoot}/src/raster/ingest/groups-pdf.ts`,
 ).href;
 const ingestRosterCsvUrl = pathToFileURL(
   `${repoRoot}/src/raster/ingest/roster-csv.ts`,
@@ -91,6 +95,15 @@ async function readAssignmentTable(
   return runRasterTs<TeamRasterAssignmentRow[]>(`
     const { readAssignmentTable } = await import(${JSON.stringify(ingestIndexUrl)});
     emit(await readAssignmentTable(${JSON.stringify(filePath)}));
+  `);
+}
+
+async function parseUpperLeagueRasterPdf(
+  filePath: string,
+): Promise<ParsedUpperLeagueImport> {
+  return runRasterTs<ParsedUpperLeagueImport>(`
+    const { parseUpperLeagueRasterPdf } = await import(${JSON.stringify(ingestGroupsPdfUrl)});
+    emit(await parseUpperLeagueRasterPdf(${JSON.stringify(filePath)}));
   `);
 }
 
@@ -223,6 +236,7 @@ export const rasterIngest = {
   parseCsvLine,
   parseRosterCsvBytes,
   parseWishesPdf,
+  parseUpperLeagueRasterPdf,
   readAssignmentTable,
   buildSeasonModelFromAssignments,
   scrapeClickTtAssignments,

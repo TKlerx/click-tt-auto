@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { buildCoverageRecordForInputSet } from "@/lib/raster/coverage";
 import type { RunSettingsInput } from "@/lib/raster/schemas";
 import { syncInputSetSourceCaches } from "./inputSets";
+import { applyUpperLeagueInjectionToInputSet } from "./upperLeague";
 
 export async function listOptimizationRuns(inputSetId: string) {
   return prisma.rasterOptimizationRun.findMany({
@@ -65,6 +66,7 @@ export async function startOptimizationRun(params: {
   settings: RunSettingsInput;
 }) {
   await syncInputSetSourceCaches(params.inputSetId);
+  await applyUpperLeagueInjectionToInputSet(params.inputSetId);
   const coverage = await buildCoverageRecordForInputSet(params.inputSetId);
   return prisma.$transaction(async (tx) => {
     const unresolvedWishConflicts =
