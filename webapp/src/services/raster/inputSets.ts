@@ -13,6 +13,12 @@ import { listRasterSourcesForScope } from "./sources";
 import { importParsedWishes } from "./wishes";
 import { reviewHallCapacitiesForInputSet } from "./capacity";
 
+const INPUT_SET_SOURCE_TYPES = [
+  "GROUP_ASSIGNMENT",
+  "WISHES_PDF",
+  "UPPER_LEAGUE_RASTER",
+];
+
 type SeasonGroup = {
   id?: string;
   ref?: { league?: string; name?: string };
@@ -109,6 +115,7 @@ export async function listInputSets(
               where: {
                 scopeId: { in: scopeIds },
                 season: inputSet.season,
+                sourceType: { in: INPUT_SET_SOURCE_TYPES },
                 updatedAt: { gt: run.createdAt },
               },
             })) > 0,

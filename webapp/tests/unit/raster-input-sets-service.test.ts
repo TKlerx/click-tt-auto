@@ -70,6 +70,9 @@ describe("raster input set service", () => {
       where: {
         scopeId: { in: ["scope-owl"] },
         season: "2026/27",
+        sourceType: {
+          in: ["GROUP_ASSIGNMENT", "WISHES_PDF", "UPPER_LEAGUE_RASTER"],
+        },
         updatedAt: { gt: new Date("2026-07-19T10:00:00Z") },
       },
     });
