@@ -95,6 +95,47 @@ export default async function RasterReviewPage({
             />
           </div>
         ) : null}
+        <details
+          className="mt-3 border-t border-[var(--border)] pt-3"
+          open={
+            !!capacityReview &&
+            (capacityReview.aliasCandidates.length > 0 ||
+              capacityReview.blockingCount > 0)
+          }
+        >
+          <summary className="cursor-pointer text-sm font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
+            Gym capacities
+          </summary>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            {canEdit ? (
+              <InferCapacitiesButton
+                inputSetId={inputSet.id}
+                label="Recheck capacities"
+              />
+            ) : null}
+          </div>
+          {capacityReview ? (
+            <div className="my-3 grid gap-3">
+              <p className="text-sm text-[var(--muted-foreground)]">
+                {capacityReview.inferredCount} inferred,{" "}
+                {capacityReview.missingCount} missing,{" "}
+                {capacityReview.insufficientCount} lower than inferred,{" "}
+                {capacityReview.higherCount} higher than inferred.
+              </p>
+              <ClubAliasReview
+                canEdit={canEdit}
+                candidates={capacityReview.aliasCandidates}
+                inputSetId={inputSet.id}
+                wishClubOptions={capacityReview.wishClubOptions}
+              />
+            </div>
+          ) : null}
+          <CapacityTable
+            canEdit={canEdit}
+            scope={context.scope.code}
+            rows={capacities}
+          />
+        </details>
         <GroupPlanningReview
           groups={extractPlanningGroups(
             inputSet.id,
@@ -112,47 +153,6 @@ export default async function RasterReviewPage({
           />
         ) : null}
       </section>
-      <details
-        className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4"
-        open={
-          !!capacityReview &&
-          (capacityReview.aliasCandidates.length > 0 ||
-            capacityReview.blockingCount > 0)
-        }
-      >
-        <summary className="cursor-pointer text-sm font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
-          Gym capacities
-        </summary>
-        <div className="mt-3 flex flex-wrap items-center gap-3">
-          {canEdit ? (
-            <InferCapacitiesButton
-              inputSetId={inputSet.id}
-              label="Recheck capacities"
-            />
-          ) : null}
-        </div>
-        {capacityReview ? (
-          <div className="my-3 grid gap-3">
-            <p className="text-sm text-[var(--muted-foreground)]">
-              {capacityReview.inferredCount} inferred,{" "}
-              {capacityReview.missingCount} missing,{" "}
-              {capacityReview.insufficientCount} lower than inferred,{" "}
-              {capacityReview.higherCount} higher than inferred.
-            </p>
-            <ClubAliasReview
-              canEdit={canEdit}
-              candidates={capacityReview.aliasCandidates}
-              inputSetId={inputSet.id}
-              wishClubOptions={capacityReview.wishClubOptions}
-            />
-          </div>
-        ) : null}
-        <CapacityTable
-          canEdit={canEdit}
-          scope={context.scope.code}
-          rows={capacities}
-        />
-      </details>
     </div>
   );
 }

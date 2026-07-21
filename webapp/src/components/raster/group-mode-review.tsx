@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { withBasePath } from "@/lib/base-path";
 
 export type GroupModeReviewRow = {
@@ -199,6 +199,8 @@ export function GroupPlanningReview({
     initialMatchValues(groups),
   );
   const [messages, setMessages] = useState<Record<string, string>>({});
+  const [savingGroups, setSavingGroups] = useState<Record<string, boolean>>({});
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     setStatuses(initialStatuses(groups));
@@ -207,12 +209,18 @@ export function GroupPlanningReview({
     setMatchValues(initialMatchValues(groups));
   }, [groups]);
 
+  function refreshSoon() {
+    if (refreshTimer.current) clearTimeout(refreshTimer.current);
+    refreshTimer.current = setTimeout(() => router.refresh(), 600);
+  }
+
   async function save(
     group: GroupPlanningReviewRow,
     planningStatus: "include" | "exclude",
   ) {
-    setSavingId(group.groupId);
+    setSavingGroups((current) => ({ ...current, [group.groupId]: true }));
     setStatuses((current) => ({ ...current, [group.groupId]: planningStatus }));
+    setMessages((current) => ({ ...current, [group.groupId]: "Saving..." }));
     try {
       const response = await fetch(
         withBasePath(
@@ -230,15 +238,20 @@ export function GroupPlanningReview({
         };
         throw new Error(body.error ?? "Group review update failed");
       }
-      router.refresh();
+      setMessages((current) => ({ ...current, [group.groupId]: "Saved" }));
+      refreshSoon();
     } catch (error) {
       setStatuses((current) => ({
         ...current,
         [group.groupId]: group.planningStatus ?? "",
       }));
+      setMessages((current) => ({
+        ...current,
+        [group.groupId]: error instanceof Error ? error.message : "Save failed",
+      }));
       window.alert(error instanceof Error ? error.message : "Save failed");
     } finally {
-      setSavingId(null);
+      setSavingGroups((current) => ({ ...current, [group.groupId]: false }));
     }
   }
 
@@ -392,6 +405,7 @@ export function GroupPlanningReview({
         {groups.map((group) => {
           const status = statuses[group.groupId] ?? group.planningStatus ?? "";
           const needsReview = groupNeedsDecision(group, status);
+          const savingGroup = savingGroups[group.groupId] === true;
           return (
             <details
               className={`rounded-md border p-3 ${
@@ -416,13 +430,19 @@ export function GroupPlanningReview({
                       : "0 missing"}
                   </span>
                   <span>
-                    {savingId === group.groupId
+                    {savingGroup
                       ? "saving"
                       : statusLabel(status, group.missingTeams)}
+                    {messages[group.groupId] &&
+                    messages[group.groupId] !== "Saving..." ? (
+                      <span className="block text-xs text-[var(--muted-foreground)]">
+                        {messages[group.groupId]}
+                      </span>
+                    ) : null}
                   </span>
                   <button
                     className="h-9 rounded-md border border-[var(--border)] px-3 text-sm font-medium"
-                    disabled={savingId === group.groupId}
+                    disabled={savingGroup}
                     onClick={(event) => {
                       event.preventDefault();
                       void save(group, "include");
@@ -433,7 +453,7 @@ export function GroupPlanningReview({
                   </button>
                   <button
                     className="h-9 rounded-md border border-[var(--border)] px-3 text-sm font-medium"
-                    disabled={savingId === group.groupId}
+                    disabled={savingGroup}
                     onClick={(event) => {
                       event.preventDefault();
                       void save(group, "exclude");
