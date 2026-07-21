@@ -41,7 +41,7 @@ export function MatchReviewPanel({
         setMessage(body.error ?? `Save failed (${response.status})`);
         return;
       }
-      setMessage("Match review saved");
+      setMessage("Acknowledgement saved");
       router.refresh();
     } finally {
       setBusy(false);
@@ -58,8 +58,8 @@ export function MatchReviewPanel({
       {outstanding.length ? (
         <div className="mt-3 grid gap-2">
           <p className="text-sm text-[var(--muted-foreground)]">
-            Review these source-to-model matches before running. Changed source
-            data only reopens the affected teams.
+            Acknowledge these source-to-model matches before running. Changed
+            source data only reopens the affected teams.
           </p>
           {canEdit ? (
             <button
@@ -70,7 +70,7 @@ export function MatchReviewPanel({
               }
               type="button"
             >
-              {busy ? <BusyLabel label="Saving" /> : "Mark all reviewed"}
+              {busy ? <BusyLabel label="Saving" /> : "Acknowledge all"}
             </button>
           ) : null}
           {outstanding.map((record) => (
@@ -96,7 +96,7 @@ export function MatchReviewPanel({
                   onClick={() => void mark([record.recordId])}
                   type="button"
                 >
-                  Mark reviewed
+                  Acknowledge
                 </button>
               ) : null}
             </div>

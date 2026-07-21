@@ -195,7 +195,7 @@ test("unmatched upper-league sources do not inject teams", async ({ page }) => {
     .first()
     .click();
   await expect(page.getByText(/Inferred \d+; \d+ need review/)).toBeVisible();
-  await page.getByRole("button", { name: "Mark all reviewed" }).click();
+  await page.getByRole("button", { name: "Acknowledge all" }).click();
   await expect(page.getByText("Source matches (0 outstanding)")).toBeVisible();
   await page.getByRole("link", { name: /^Run optimizer/ }).click();
   await page.getByRole("button", { name: "Validate" }).click();
