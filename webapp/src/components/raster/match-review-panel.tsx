@@ -78,10 +78,15 @@ export function MatchReviewPanel({
               className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-[var(--border)] px-3 py-2 text-sm"
               key={record.recordId}
             >
-              <span>
-                {record.label}{" "}
+              <span className="grid gap-1">
+                <span>
+                  {record.label}{" "}
+                  <span className="text-[var(--muted-foreground)]">
+                    {record.reason === "changed" ? "changed" : "not reviewed"}
+                  </span>
+                </span>
                 <span className="text-[var(--muted-foreground)]">
-                  {record.reason === "changed" ? "changed" : "not reviewed"}
+                  {record.detail}
                 </span>
               </span>
               {canEdit ? (

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { rasterMatchFingerprint } from "@/lib/raster/match-review";
+import {
+  deriveMatchReviewState,
+  rasterMatchFingerprint,
+} from "@/lib/raster/match-review";
 
 describe("raster match review fingerprint", () => {
   it("ignores whitespace, diacritics and object ordering churn", () => {
@@ -48,5 +51,33 @@ describe("raster match review fingerprint", () => {
     expect(rasterMatchFingerprint({ ...base, ...patch })).not.toBe(
       rasterMatchFingerprint(base),
     );
+  });
+
+  it("shows club and slot details for review rows", () => {
+    expect(
+      deriveMatchReviewState(
+        JSON.stringify({
+          teams: [
+            {
+              id: "team-1",
+              clubId: "ttc-koln",
+              clubName: "TTC Köln",
+              label: "Erwachsene",
+              wishMatchId: "wish-1",
+              homeWeekday: "FRIDAY",
+              hall: "1",
+              startTime: "19:30",
+              spielwochePref: "A",
+            },
+          ],
+        }),
+        [],
+      ),
+    ).toMatchObject([
+      {
+        label: "TTC Köln / Erwachsene",
+        detail: "home FRIDAY, hall 1, 19:30, week A, matched wish data",
+      },
+    ]);
   });
 });
