@@ -96,7 +96,7 @@ export function MatchReviewPanel({
                   onClick={() => void mark([record.recordId])}
                   type="button"
                 >
-                  Review
+                  Mark reviewed
                 </button>
               ) : null}
             </div>
