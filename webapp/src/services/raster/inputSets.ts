@@ -305,6 +305,9 @@ export async function syncInputSetSourceCaches(inputSetId: string) {
       const skippedGroups = [...groupSizes.entries()].filter(
         ([, size]) => !supportedSizes.has(size),
       );
+      const manualWishMatches = manualWishMatchesByTeamId(
+        inputSet.seasonModelJson,
+      );
       const model =
         await rasterIngest.buildSeasonModelFromAssignments(
           supportedAssignments,
@@ -315,7 +318,12 @@ export async function syncInputSetSourceCaches(inputSetId: string) {
         await importWishesIfChanged(inputSet, parsedWishes, data.wishesJson);
         importedWishes = true;
       }
-      await applyActiveWishDetails(model, inputSet.id, parsedWishes);
+      await applyActiveWishDetails(
+        model,
+        inputSet.id,
+        parsedWishes,
+        manualWishMatches,
+      );
       const existingReviews = groupReviewsByKey(inputSet.seasonModelJson);
       model.groups = model.groups.map((group) => ({
         ...group,
@@ -419,6 +427,7 @@ async function applyActiveWishDetails(
   model: SeasonModelWithClubs,
   inputSetId: string,
   parsedWishes: WishParseResult[],
+  manualWishMatches = new Map<string, string>(),
 ) {
   const wishClubById = new Map(
     parsedWishes
@@ -449,22 +458,14 @@ async function applyActiveWishDetails(
       teamIdentityKey(team.clubId, team.label),
     );
     if (!wishTeam) return team;
-    return {
-      ...team,
-      homeWeekday: wishTeam.homeWeekday.toLowerCase(),
-      ...(wishTeam.hall ? { hall: wishTeam.hall } : {}),
-      ...(wishTeam.startTime ? { startTime: wishTeam.startTime } : {}),
-      ...(wishTeam.spielwochePref
-        ? { spielwochePref: wishTeam.spielwochePref }
-        : {}),
-      ...(wishTeam.requestedRasterzahl
-        ? { requestedRasterzahl: JSON.parse(wishTeam.requestedRasterzahl) }
-        : {}),
-      wishMatchId: wishTeam.id,
-      wishMatchSource: team.wishMatchSource ?? "auto",
-      confidence: wishTeam.confidence === "OK" ? "ok" : "review",
-      capacityRelevant: true,
-    };
+    return applyWishToTeam(team, wishTeam, team.wishMatchSource ?? "auto");
+  });
+
+  const activeWishById = new Map(activeWishes.map((wish) => [wish.id, wish]));
+  model.teams = (model.teams ?? []).map((team) => {
+    const wishId = manualWishMatches.get(team.id);
+    const wish = wishId ? activeWishById.get(wishId) : undefined;
+    return wish ? applyWishToTeam(team, wish, "manual") : team;
   });
   model.wishes = (model.clubs ?? []).flatMap((club) =>
     extractRelationalWishes(
@@ -473,6 +474,65 @@ async function applyActiveWishDetails(
       (model.teams ?? []) as Team[],
     ),
   );
+}
+
+function applyWishToTeam(
+  team: SeasonModelTeam,
+  wishTeam: {
+    id: string;
+    clubId: string;
+    homeWeekday: string;
+    hall?: string | null;
+    startTime?: string | null;
+    spielwochePref?: string | null;
+    requestedRasterzahl?: string | null;
+    confidence?: string | null;
+  },
+  wishMatchSource: "auto" | "manual",
+) {
+  return {
+    ...team,
+    clubId: wishTeam.clubId,
+    homeWeekday: wishTeam.homeWeekday.toLowerCase(),
+    ...(wishTeam.hall ? { hall: wishTeam.hall } : {}),
+    ...(wishTeam.startTime ? { startTime: wishTeam.startTime } : {}),
+    ...(wishTeam.spielwochePref
+      ? { spielwochePref: wishTeam.spielwochePref }
+      : {}),
+    ...(wishTeam.requestedRasterzahl
+      ? { requestedRasterzahl: JSON.parse(wishTeam.requestedRasterzahl) }
+      : {}),
+    wishMatchId: wishTeam.id,
+    wishMatchSource,
+    confidence: wishTeam.confidence === "OK" ? "ok" : "review",
+    capacityRelevant: true,
+  };
+}
+
+function manualWishMatchesByTeamId(seasonModelJson?: string | null) {
+  const matches = new Map<string, string>();
+  if (!seasonModelJson) return matches;
+  try {
+    const model = JSON.parse(seasonModelJson) as {
+      teams?: Array<{
+        id?: string;
+        wishMatchId?: string;
+        wishMatchSource?: string;
+      }>;
+    };
+    for (const team of model.teams ?? []) {
+      if (
+        team.id &&
+        team.wishMatchId &&
+        team.wishMatchSource === "manual"
+      ) {
+        matches.set(team.id, team.wishMatchId);
+      }
+    }
+  } catch {
+    return matches;
+  }
+  return matches;
 }
 
 function teamIdentityKey(
