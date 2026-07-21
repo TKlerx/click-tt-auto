@@ -375,8 +375,12 @@ export function GroupPlanningReview({
     <details className="mt-3 border-t border-[var(--border)] pt-3">
       <summary className="cursor-pointer text-sm font-semibold">
         Group planning and wish matches (
-        {groups.filter((group) => group.missingTeams > 0).length} incomplete /{" "}
-        {groups.length} total)
+        {
+          groups.filter((group) =>
+            groupNeedsDecision(group, group.planningStatus ?? ""),
+          ).length
+        }{" "}
+        incomplete / {groups.length} total)
       </summary>
       <div className="mt-2 space-y-2">
         <p className="mt-1 text-sm text-[var(--muted-foreground)]">
@@ -386,7 +390,8 @@ export function GroupPlanningReview({
           visible here and can be included again once their wishes arrive.
         </p>
         {groups.map((group) => {
-          const needsReview = group.missingTeams > 0;
+          const status = statuses[group.groupId] ?? group.planningStatus ?? "";
+          const needsReview = groupNeedsDecision(group, status);
           return (
             <details
               className={`rounded-md border p-3 ${
@@ -405,16 +410,15 @@ export function GroupPlanningReview({
                     }
                   >
                     {needsReview
-                      ? `Needs review: ${group.missingTeams}`
+                      ? group.missingTeams > 0
+                        ? `Needs review: ${group.missingTeams}`
+                        : "Needs decision"
                       : "0 missing"}
                   </span>
                   <span>
                     {savingId === group.groupId
                       ? "saving"
-                      : statusLabel(
-                          statuses[group.groupId],
-                          group.missingTeams,
-                        )}
+                      : statusLabel(status, group.missingTeams)}
                   </span>
                   <button
                     className="h-9 rounded-md border border-[var(--border)] px-3 text-sm font-medium"
@@ -572,6 +576,13 @@ function statusLabel(status: "include" | "exclude" | "", missingTeams: number) {
   if (status === "exclude") return "excluded, deferred";
   if (status === "include") return "included";
   return missingTeams > 0 ? "add wishes or exclude" : "undecided";
+}
+
+function groupNeedsDecision(
+  group: GroupPlanningReviewRow,
+  status: "include" | "exclude" | "",
+) {
+  return group.missingTeams > 0 || !status;
 }
 
 function initialStatuses(groups: GroupPlanningReviewRow[]) {
