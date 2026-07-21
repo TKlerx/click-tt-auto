@@ -428,7 +428,9 @@
         "overwrites": "Overwrites your edit",
         "sourceChanged": "Source changed"
       },
+      "toReview": "{count, plural, one {# to review} other {# to review}}",
       "addedCount": "{count, plural, one {# added wish, not yet reviewed} other {# added wishes, not yet reviewed}}",
+      "addedInfoCount": "{count, plural, one {# wish imported cleanly} other {# wishes imported cleanly}}",
       "settledCount": "{count, plural, one {# settled match} other {# settled matches}}",
       "noopMatch": "No change",
       "acceptedMatch": "Decided: {decision}",

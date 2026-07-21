@@ -428,7 +428,9 @@
         "overwrites": "Sobrepõe a sua alteração",
         "sourceChanged": "Origem alterada"
       },
+      "toReview": "{count, plural, one {# a rever} other {# a rever}}",
       "addedCount": "{count, plural, one {# desejo adicionado, ainda por rever} other {# desejos adicionados, ainda por rever}}",
+      "addedInfoCount": "{count, plural, one {# desejo importado sem conflito} other {# desejos importados sem conflito}}",
       "settledCount": "{count, plural, one {# correspondência resolvida} other {# correspondências resolvidas}}",
       "noopMatch": "Sem alterações",
       "acceptedMatch": "Decidido: {decision}",

@@ -99,13 +99,12 @@ export function WishImportReviewPanel({
   const visibleMissing = showMissing ? review.missingWishes : [];
   const { overwrites: overwriteConflicts, sourceChanged: sourceConflicts } =
     partitionConflicts(review.conflicts);
+  const actionableCount =
+    review.conflicts.length +
+    review.unmatchedRows.length +
+    visibleMissing.length;
   const counts: Record<Filter, number> = {
-    all:
-      review.conflicts.length +
-      review.addedWishes.length +
-      review.unmatchedRows.length +
-      review.settledMatches.length +
-      visibleMissing.length,
+    all: actionableCount,
     overwrites: overwriteConflicts.length,
     sourceChanged: sourceConflicts.length,
     added: review.addedWishes.length,
@@ -113,7 +112,11 @@ export function WishImportReviewPanel({
     missing: visibleMissing.length,
     settled: review.settledMatches.length,
   };
-  if (!counts.all) {
+  if (
+    !actionableCount &&
+    !review.addedWishes.length &&
+    !review.settledMatches.length
+  ) {
     return (
       <p className="rounded-lg border border-[var(--border)] bg-[var(--panel)] px-4 py-3 text-sm text-[var(--muted-foreground)]">
         {t("empty")}
@@ -122,9 +125,12 @@ export function WishImportReviewPanel({
   }
 
   return (
-    <details className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
+    <details
+      className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4"
+      open={actionableCount > 0}
+    >
       <summary className="cursor-pointer text-sm font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
-        {t("title")} ({counts.all})
+        {t("title")} ({t("toReview", { count: actionableCount })})
       </summary>
       <div
         className="mt-3 flex flex-wrap gap-2"
@@ -172,7 +178,7 @@ export function WishImportReviewPanel({
       {shows("added") && review.addedWishes.length ? (
         <div className="mt-4 grid gap-2">
           <p className="text-sm text-[var(--muted-foreground)]">
-            {t("addedCount", { count: review.addedWishes.length })}
+            {t("addedInfoCount", { count: review.addedWishes.length })}
           </p>
           {review.addedWishes.map((wish) => (
             <div
