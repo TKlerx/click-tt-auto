@@ -122,10 +122,13 @@ export function WishImportReviewPanel({
   }
 
   return (
-    <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
-      <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
-        {t("title")}
-      </h2>
+    <details
+      className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4"
+      open
+    >
+      <summary className="cursor-pointer text-sm font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
+        {t("title")} ({counts.all})
+      </summary>
       <div
         className="mt-3 flex flex-wrap gap-2"
         role="group"
@@ -279,7 +282,7 @@ export function WishImportReviewPanel({
       {message ? (
         <p className="mt-2 text-sm text-[var(--muted-foreground)]">{message}</p>
       ) : null}
-    </section>
+    </details>
   );
 }
 
