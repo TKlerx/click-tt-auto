@@ -8,6 +8,7 @@ import subprocess
 import tempfile
 import time
 import shutil
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, cast
@@ -493,11 +494,7 @@ def _raster_solver_command(
         os.environ.get("RASTER_SOLVER_SCRIPT") or repo_root / "scripts" / "solve-raster-cpsat.py"
     )
     return [
-        "uv",
-        "run",
-        "--project",
-        str(Path(__file__).resolve().parents[2]),
-        "python",
+        sys.executable,
         str(solver_script),
         *common,
         "--time-limit",

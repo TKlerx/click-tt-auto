@@ -47,7 +47,9 @@ from starter_worker.main import (
 class WorkerTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory()
-        if self._testMethodName.startswith("test_combined_raster_model_"):
+        if self._testMethodName.startswith(
+            ("test_combined_raster_model_", "test_raster_solver_", "test_worker_runtime_")
+        ):
             return
         self.database_url = ensure_worker_database()
         truncate_all(self.database_url)
@@ -479,7 +481,7 @@ class WorkerTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, result.stderr)
 
-    def test_raster_solver_uses_worker_uv_project(self) -> None:
+    def test_raster_solver_uses_worker_python(self) -> None:
         completed = subprocess.CompletedProcess(
             args=[],
             returncode=0,
@@ -494,7 +496,7 @@ class WorkerTests(unittest.TestCase):
             _solve_raster_model({"clubs": [], "teams": [], "groups": []}, {})
 
         command = run.call_args.args[0]
-        self.assertEqual(command[:4], ["uv", "run", "--project", str(Path(__file__).parents[1])])
+        self.assertEqual(command[0], sys.executable)
 
     def test_raster_solver_can_use_initial_heuristic(self) -> None:
         completed = subprocess.CompletedProcess(
