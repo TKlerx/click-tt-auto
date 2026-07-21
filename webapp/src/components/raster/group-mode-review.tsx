@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { withBasePath } from "@/lib/base-path";
 
 export type GroupModeReviewRow = {
@@ -196,6 +196,14 @@ export function GroupPlanningReview({
   const [matchValues, setMatchValues] = useState<Record<string, string>>(() =>
     initialMatchValues(groups),
   );
+  const [messages, setMessages] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    setStatuses(initialStatuses(groups));
+    setMatchCandidates(initialMatchCandidates(groups));
+    setWeekValues(initialWeekValues(groups));
+    setMatchValues(initialMatchValues(groups));
+  }, [groups]);
 
   async function save(
     group: GroupPlanningReviewRow,
@@ -274,11 +282,18 @@ export function GroupPlanningReview({
   async function applyWish(group: GroupPlanningReviewRow, teamId: string) {
     const team = group.teams.find((candidate) => candidate.id === teamId);
     const candidates = matchCandidates[teamId] ?? team?.wishCandidates ?? [];
-    const wishId = candidates.find(
+    const selected = candidates.find(
       (candidate) => candidateText(candidate) === matchValues[teamId],
-    )?.id;
-    if (!wishId) return;
+    );
+    if (!selected) {
+      setMessages((current) => ({
+        ...current,
+        [teamId]: "Choose a PDF match from the list",
+      }));
+      return;
+    }
     setSavingId(teamId);
+    setMessages((current) => ({ ...current, [teamId]: "Applying..." }));
     try {
       const response = await fetch(
         withBasePath(
@@ -287,7 +302,7 @@ export function GroupPlanningReview({
         {
           method: "PATCH",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ wishId }),
+          body: JSON.stringify({ wishId: selected.id }),
         },
       );
       if (!response.ok) {
@@ -296,6 +311,7 @@ export function GroupPlanningReview({
         };
         throw new Error(body.error ?? "Wish match failed");
       }
+      setMessages((current) => ({ ...current, [teamId]: "Applied" }));
       router.refresh();
     } catch (error) {
       setMatchValues((current) => ({
@@ -312,7 +328,10 @@ export function GroupPlanningReview({
           ),
         ),
       }));
-      window.alert(error instanceof Error ? error.message : "Save failed");
+      setMessages((current) => ({
+        ...current,
+        [teamId]: error instanceof Error ? error.message : "Save failed",
+      }));
     } finally {
       setSavingId(null);
     }
@@ -478,8 +497,11 @@ export function GroupPlanningReview({
                             onClick={() => void applyWish(group, team.id)}
                             type="button"
                           >
-                            Apply
+                            {savingId === team.id ? "Applying" : "Apply"}
                           </button>
+                        </div>
+                        <div className="mt-1 min-h-4 text-[var(--muted-foreground)]">
+                          {messages[team.id] ?? ""}
                         </div>
                       </td>
                       <td className="py-2 pr-3">
