@@ -112,4 +112,45 @@ describe("raster evaluation", () => {
       expect.objectContaining({ kind: "derby-late" })
     );
   });
+
+  it("does not apply derby hard constraints between imported unplanned teams", () => {
+    const model: SeasonModel = {
+      clubs: [
+        {
+          id: "elsen",
+          name: "TuRa Elsen",
+          venues: [{ hall: "1", name: "Halle" }],
+          notes: ""
+        }
+      ],
+      teams: [
+        {
+          id: "elsen-2",
+          clubId: "elsen",
+          label: "Erwachsene II",
+          homeWeekday: "friday",
+          hall: "1",
+          planned: false,
+          rasterzahl: { kind: "fixed", value: 11 },
+          confidence: "ok"
+        },
+        {
+          id: "elsen-3",
+          clubId: "elsen",
+          label: "Erwachsene III",
+          homeWeekday: "friday",
+          hall: "1",
+          planned: false,
+          rasterzahl: { kind: "fixed", value: 5 },
+          confidence: "ok"
+        }
+      ],
+      groups: [{ ref: { league: "LL", name: "LL" }, size: 12, teamIds: ["elsen-2", "elsen-3"] }],
+      wishes: [],
+      absoluteConstraints: [],
+      warnings: []
+    };
+
+    expect(evaluate(model, {}).hardViolations).toHaveLength(0);
+  });
 });

@@ -335,6 +335,8 @@ def main() -> None:
                 right = teams[right_id]
                 if left["clubId"] != right["clubId"]:
                     continue
+                if left.get("planned") is False and right.get("planned") is False:
+                    continue
                 allowed = []
                 is_st4 = model.new_bool_var(f"same_club_st4_{left_id}_{right_id}")
                 for a in raster_values_for_group(group):

@@ -89,6 +89,7 @@ export function evaluate(
         const rightRz = assignment[rightId];
         if (!right || rightRz === undefined || left.clubId !== right.clubId)
           continue;
+        if (left.planned === false && right.planned === false) continue;
         if (leftRz === bye || rightRz === bye) continue;
         const spieltag = derbySpieltag(rasterSize, leftRz, rightRz);
         if (spieltag !== undefined && spieltag > 4)
