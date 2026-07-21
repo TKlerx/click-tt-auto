@@ -22,6 +22,10 @@
 - Q: Which users may create workspaces and add/parse sources? → A: Feature 007's scheduler level — `PLATFORM_ADMIN`, or `SCOPE_ADMIN` holding the scope; `SCOPE_USER` gets a read-only view (FR-016).
 - Q: When the user changes scope or season while a workspace is selected? → A: Reset the selection and re-apply the auto-select rule for the new context (FR-007a).
 
+### Session 2026-07-21
+
+- Q: How should club identity mismatches between the season model and wish/capacity imports be handled when fuzzy matching misses real aliases? → A: Review must be exhaustive for unresolved capacity-relevant model clubs. The system may preselect one strong suggestion, but must still show an empty manual selector when no unique suggestion exists, so future naming variants are not hidden.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Import sources in current context (Priority: P1)
@@ -135,6 +139,7 @@ A raster planner can create a second planning workspace for the same scope and s
 - **FR-017**: The system MUST support deliberate creation of multiple workspaces for the same scope and season.
 - **FR-018**: Inferring gym capacities from a workspace MUST first sync the selected workspace's parsed sources and MUST raise stale inferred capacity rows while preserving reviewed/manual rows.
 - **FR-019**: Manual review choices, including team-to-wish PDF matches and A/B week preferences, MUST survive validation, optimizer run startup, and any parsed-source cache sync for the same workspace, as long as any referenced matched wish still exists.
+- **FR-020**: Gym-capacity club mapping review MUST surface every unresolved capacity-relevant season-model club whose club id is not already linked to a wish-import club id. A unique strong match MAY be preselected, but lack of a unique match MUST still produce a manual review row with an empty searchable target selector. The review MUST NOT rely on a finite list of known spelling variants, and MUST NOT hide unresolved clubs merely because their teams are currently marked `capacityRelevant: false`; only groups explicitly marked `exclude` may suppress their teams from this mapping review.
 
 ### Key Entities *(include if feature involves data)*
 
