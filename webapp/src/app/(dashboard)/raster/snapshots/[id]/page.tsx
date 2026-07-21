@@ -93,7 +93,13 @@ export default async function RasterSnapshotPage({
       <CoverageDetail coverageJson={snapshot.run?.coverageJson} />
 
       <section className="grid gap-3 md:grid-cols-4">
-        <Metric label="Optimality" value={snapshot.optimality} />
+        <Metric
+          label="Optimality"
+          value={displaySnapshotOptimality(
+            snapshot.optimality,
+            snapshot.run?.settings,
+          )}
+        />
         <Metric label="Conflicts" value={snapshot.totalConflicts} />
         <Metric label="Total excess" value={snapshot.totalExcess} />
         <Metric label="Max slot excess" value={snapshot.maxExcess} />
@@ -326,6 +332,16 @@ function isUpperLeague(league?: string) {
   return /\b(?:verbandsliga|landesliga|oberliga|nrw-liga)\b/i.test(
     league ?? "",
   );
+}
+
+function displaySnapshotOptimality(optimality: string, settings?: string | null) {
+  if (optimality !== "PROVEN_OPTIMAL") return optimality;
+  try {
+    const parsed = JSON.parse(settings ?? "{}") as { strategy?: unknown };
+    return parsed.strategy === "initial_heuristic" ? "FEASIBLE" : optimality;
+  } catch {
+    return optimality;
+  }
 }
 
 function summarizeConflictClubs(

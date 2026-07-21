@@ -546,7 +546,9 @@ export function InputSetRunActions({
                   <CombinedBadge combined={combined} />
                   <IncompleteBadge complete={run.coverageComplete} />
                 </span>
-                <span>{runOutcomeLabel(run.outcome, run.status)}</span>
+                <span>
+                  {runOutcomeLabel(run.outcome, run.status, run.settings)}
+                </span>
                 <span className="text-[var(--muted-foreground)]">
                   {runStrategyLabel(run.settings)}
                 </span>
@@ -829,10 +831,17 @@ function runStateLabel(run: Pick<RasterRunRow, "outcome" | "status">) {
   return run.status;
 }
 
-function runOutcomeLabel(outcome: string | null | undefined, status: string) {
+function runOutcomeLabel(
+  outcome: string | null | undefined,
+  status: string,
+  settings?: string | null,
+) {
   if (outcome === "INFEASIBLE") return "No feasible assignment";
   if (outcome === "FAILED") return "Software failure";
   if (outcome === "CANCELLED") return "Cancelled";
+  if (outcome === "PROVEN_OPTIMAL" && runStrategyLabel(settings) === "Initial heuristic") {
+    return "Feasible";
+  }
   if (outcome === "PROVEN_OPTIMAL") return "Proven optimal";
   if (outcome === "FEASIBLE") return "Feasible";
   return runStatusLabel(status);
