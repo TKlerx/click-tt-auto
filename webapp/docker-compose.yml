@@ -151,6 +151,7 @@ services:
       && node webapp/server.js"
 
   worker:
+    profiles: ["worker"]
     image: ${WORKER_IMAGE_NAME:-click-tt-worker}:latest
     build:
       context: ..
