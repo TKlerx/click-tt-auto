@@ -134,7 +134,7 @@ A raster planner can create a second planning workspace for the same scope and s
 - **FR-016**: Permission-limited users MUST see only actions they are allowed to perform. Creating a workspace and adding, parsing, or validating sources require feature 007's scheduler access (`PLATFORM_ADMIN`, or `SCOPE_ADMIN` holding the scope); a `SCOPE_USER` sees a read-only view without create/add actions. Enforced at the API, not only hidden in the UI.
 - **FR-017**: The system MUST support deliberate creation of multiple workspaces for the same scope and season.
 - **FR-018**: Inferring gym capacities from a workspace MUST first sync the selected workspace's parsed sources and MUST raise stale inferred capacity rows while preserving reviewed/manual rows.
-- **FR-019**: Manual team-to-wish PDF matches made during review MUST survive validation, optimizer run startup, and any parsed-source cache sync for the same workspace, as long as the matched wish still exists.
+- **FR-019**: Manual review choices, including team-to-wish PDF matches and A/B week preferences, MUST survive validation, optimizer run startup, and any parsed-source cache sync for the same workspace, as long as any referenced matched wish still exists.
 
 ### Key Entities *(include if feature involves data)*
 
