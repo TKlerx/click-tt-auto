@@ -400,6 +400,13 @@ async function findCapacityAliasReview(
       wishClubName: wish.clubName,
     });
   }
+  candidates.sort((a, b) => {
+    if (a.confirmed !== b.confirmed) return a.confirmed ? 1 : -1;
+    return (
+      a.modelClubName.localeCompare(b.modelClubName) ||
+      a.modelClubId.localeCompare(b.modelClubId)
+    );
+  });
   return { aliasCandidates: candidates, wishClubOptions };
 }
 
