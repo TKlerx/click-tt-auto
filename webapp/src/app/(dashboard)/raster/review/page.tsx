@@ -1,4 +1,5 @@
 import { CapacityTable } from "@/components/raster/capacity/capacity-table";
+import { ClubAliasReview } from "@/components/raster/capacity/club-alias-review";
 import { InferCapacitiesButton } from "@/components/raster/capacity/infer-capacities-button";
 import { MatchReviewPanel } from "@/components/raster/match-review-panel";
 import { WishImportReviewPanel } from "@/components/raster/wish-import-review-panel";
@@ -111,7 +112,14 @@ export default async function RasterReviewPage({
           />
         ) : null}
       </section>
-      <details className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
+      <details
+        className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4"
+        open={
+          !!capacityReview &&
+          (capacityReview.aliasCandidates.length > 0 ||
+            capacityReview.blockingCount > 0)
+        }
+      >
         <summary className="cursor-pointer text-sm font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
           Gym capacities
         </summary>
@@ -131,51 +139,12 @@ export default async function RasterReviewPage({
               {capacityReview.insufficientCount} lower than inferred,{" "}
               {capacityReview.higherCount} higher than inferred.
             </p>
-            {capacityReview.aliasCandidates.length ? (
-              <details className="rounded-md border border-[var(--border)] p-3">
-                <summary className="cursor-pointer text-sm font-medium">
-                  Suspected club aliases (
-                  {capacityReview.aliasCandidates.length})
-                </summary>
-                <div className="mt-3 overflow-x-auto">
-                  <table className="w-full text-left text-sm">
-                    <thead className="text-xs uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
-                      <tr>
-                        <th className="px-2 py-2">Season model</th>
-                        <th className="px-2 py-2">Wish import</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {capacityReview.aliasCandidates.map((candidate) => (
-                        <tr
-                          className="border-t border-[var(--border)]"
-                          key={`${candidate.modelClubId}-${candidate.wishClubId}`}
-                        >
-                          <td className="px-2 py-2">
-                            <span className="font-medium">
-                              {candidate.modelClubName}
-                            </span>
-                            <br />
-                            <span className="text-[var(--muted-foreground)]">
-                              {candidate.modelClubId}
-                            </span>
-                          </td>
-                          <td className="px-2 py-2">
-                            <span className="font-medium">
-                              {candidate.wishClubName}
-                            </span>
-                            <br />
-                            <span className="text-[var(--muted-foreground)]">
-                              {candidate.wishClubId}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </details>
-            ) : null}
+            <ClubAliasReview
+              canEdit={canEdit}
+              candidates={capacityReview.aliasCandidates}
+              inputSetId={inputSet.id}
+              wishClubOptions={capacityReview.wishClubOptions}
+            />
           </div>
         ) : null}
         <CapacityTable

@@ -38,6 +38,7 @@ export type HallCapacityReview = {
   higherCount: number;
   blockingCount: number;
   aliasCandidates: HallCapacityAliasCandidate[];
+  wishClubOptions: HallCapacityWishClubOption[];
   rows: HallCapacityReviewRow[];
 };
 
@@ -46,6 +47,11 @@ export type HallCapacityAliasCandidate = {
   modelClubName: string;
   wishClubId: string;
   wishClubName: string;
+};
+
+export type HallCapacityWishClubOption = {
+  clubId: string;
+  clubName: string;
 };
 
 export async function listHallCapacities(scopeId: string) {
@@ -159,9 +165,9 @@ export async function inferHallCapacitiesFromInputSet(
 export async function reviewHallCapacitiesForInputSet(
   inputSetId: string,
 ): Promise<HallCapacityReview> {
-  const [inferred, aliasCandidates] = await Promise.all([
+  const [inferred, aliasReview] = await Promise.all([
     inferCapacityRows(inputSetId),
-    findCapacityAliasCandidates(inputSetId),
+    findCapacityAliasReview(inputSetId),
   ]);
   const existing = await existingCapacityMap(inferred);
   let missingCount = 0;
@@ -216,7 +222,8 @@ export async function reviewHallCapacitiesForInputSet(
     insufficientCount,
     higherCount,
     blockingCount: missingCount + insufficientCount,
-    aliasCandidates,
+    aliasCandidates: aliasReview.aliasCandidates,
+    wishClubOptions: aliasReview.wishClubOptions,
     rows,
   };
 }
@@ -325,9 +332,9 @@ async function inferCapacityRows(
   return [...inferred.values()];
 }
 
-async function findCapacityAliasCandidates(
+async function findCapacityAliasReview(
   inputSetId: string,
-): Promise<HallCapacityAliasCandidate[]> {
+) {
   const inputSet = await prisma.rasterInputSet.findUnique({
     where: { id: inputSetId },
     select: {
@@ -335,10 +342,18 @@ async function findCapacityAliasCandidates(
       wishes: { select: { clubId: true, clubName: true } },
     },
   });
-  if (!inputSet?.seasonModelJson) return [];
+  if (!inputSet?.seasonModelJson) {
+    return { aliasCandidates: [], wishClubOptions: [] };
+  }
   const model = JSON.parse(inputSet.seasonModelJson) as {
     clubs?: Array<{ id?: string; name?: string }>;
+    clubAliases?: Array<{ sourceClubId?: string; targetClubId?: string }>;
   };
+  const confirmed = new Set(
+    (model.clubAliases ?? []).map(
+      (alias) => `${alias.sourceClubId}\0${alias.targetClubId}`,
+    ),
+  );
   const wishesByName = new Map<string, { clubId: string; clubName: string }>();
   for (const wish of inputSet.wishes) {
     if (!wish.clubName) continue;
@@ -347,6 +362,9 @@ async function findCapacityAliasCandidates(
       clubName: wish.clubName,
     });
   }
+  const wishClubOptions = [...wishesByName.values()].sort((a, b) =>
+    a.clubName.localeCompare(b.clubName),
+  );
 
   const candidates: HallCapacityAliasCandidate[] = [];
   const seen = new Set<string>();
@@ -355,7 +373,7 @@ async function findCapacityAliasCandidates(
     const wish = wishesByName.get(capacityClubNameKey(club.name));
     if (!wish || wish.clubId === club.id) continue;
     const key = [club.id, wish.clubId].join("\0");
-    if (seen.has(key)) continue;
+    if (seen.has(key) || confirmed.has(key)) continue;
     seen.add(key);
     candidates.push({
       modelClubId: club.id,
@@ -364,7 +382,7 @@ async function findCapacityAliasCandidates(
       wishClubName: wish.clubName,
     });
   }
-  return candidates;
+  return { aliasCandidates: candidates, wishClubOptions };
 }
 
 function capacityClubNameKey(value: string) {

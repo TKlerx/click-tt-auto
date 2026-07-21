@@ -58,10 +58,17 @@ type SeasonModelTeam = {
   spielwochePrefSource?: "auto" | "manual";
   confidence?: "ok" | "review";
 };
+type ClubAliasMapping = {
+  sourceClubId: string;
+  sourceClubName?: string;
+  targetClubId: string;
+  targetClubName?: string;
+};
 type SeasonModelWithClubs = {
   clubs?: SeasonModelClub[];
   teams?: SeasonModelTeam[];
   wishes?: unknown[];
+  clubAliases?: ClubAliasMapping[];
 };
 
 export async function listInputSets(
@@ -314,10 +321,12 @@ export async function syncInputSetSourceCaches(inputSetId: string) {
       const manualWeekPrefs = manualWeekPrefsByTeamId(
         inputSet.seasonModelJson,
       );
+      const clubAliases = clubAliasesFromModel(inputSet.seasonModelJson);
       const model =
         await rasterIngest.buildSeasonModelFromAssignments(
           supportedAssignments,
         );
+      applyClubAliasesToModel(model, clubAliases);
       alignParsedWishClubIds(model, parsedWishes);
       if (wishSources.length) {
         data.wishesJson = stringifyWishSources(wishSources, parsedWishes);
@@ -341,6 +350,7 @@ export async function syncInputSetSourceCaches(inputSetId: string) {
           existingReviews.get(groupKey(group))?.planningStatus,
       }));
       applyPlanningStatusToTeamCapacity(model);
+      (model as SeasonModelWithClubs).clubAliases = clubAliases;
       model.warnings.push(
         ...skippedGroups.map(
           ([group, size]) =>
@@ -737,6 +747,38 @@ export async function updateTeamWishFields(
   return updateSeasonModel(inputSetId, model);
 }
 
+export async function updateClubAliasMapping(
+  inputSetId: string,
+  sourceClubId: string,
+  targetClubId: string,
+) {
+  const inputSet = await getInputSet(inputSetId);
+  if (!inputSet?.seasonModelJson) return null;
+  const targetWish = await prisma.rasterWish.findFirst({
+    where: { inputSetId, clubId: targetClubId },
+    select: { clubId: true, clubName: true },
+  });
+  if (!targetWish) return null;
+
+  const model = seasonModelSchema.parse(JSON.parse(inputSet.seasonModelJson));
+  const typedModel = model as unknown as SeasonModelWithClubs;
+  const sourceClub = typedModel.clubs?.find((club) => club.id === sourceClubId);
+  if (!sourceClub) return null;
+  const aliases = clubAliasesFromModel(inputSet.seasonModelJson).filter(
+    (alias) => alias.sourceClubId !== sourceClubId,
+  );
+  aliases.push({
+    sourceClubId,
+    sourceClubName: sourceClub.name,
+    targetClubId: targetWish.clubId,
+    targetClubName: targetWish.clubName,
+  });
+  applyClubAliasesToModel(typedModel, aliases);
+  typedModel.clubAliases = aliases;
+
+  return updateSeasonModel(inputSetId, model);
+}
+
 function groupsWithMissingWishData(model: SeasonModelInput) {
   const teams = new Map(
     (model.teams as Array<{ id?: string; capacityRelevant?: boolean }>).map(
@@ -777,6 +819,58 @@ function applyPlanningStatusToTeamCapacity(model: {
     if (status === "include" && team.wishMatchId)
       return { ...team, capacityRelevant: true };
     return team;
+  });
+}
+
+function clubAliasesFromModel(seasonModelJson?: string | null) {
+  if (!seasonModelJson) return [];
+  try {
+    const model = JSON.parse(seasonModelJson) as {
+      clubAliases?: ClubAliasMapping[];
+    };
+    return (model.clubAliases ?? []).filter(
+      (alias) => alias.sourceClubId && alias.targetClubId,
+    );
+  } catch {
+    return [];
+  }
+}
+
+function applyClubAliasesToModel(
+  model: SeasonModelWithClubs,
+  aliases: ClubAliasMapping[],
+) {
+  const aliasBySource = new Map(
+    aliases.map((alias) => [alias.sourceClubId, alias]),
+  );
+  if (!aliasBySource.size) return;
+
+  model.clubs = (model.clubs ?? []).flatMap((club) => {
+    const alias = aliasBySource.get(club.id);
+    if (!alias) return [club];
+    if ((model.clubs ?? []).some((item) => item.id === alias.targetClubId)) {
+      return [];
+    }
+    return [
+      {
+        ...club,
+        id: alias.targetClubId,
+        name: alias.targetClubName ?? club.name,
+      },
+    ];
+  });
+  model.teams = (model.teams ?? []).map((team) => ({
+    ...team,
+    clubId: aliasBySource.get(team.clubId)?.targetClubId ?? team.clubId,
+  }));
+  model.wishes = (model.wishes ?? []).map((wish) => {
+    if (!wish || typeof wish !== "object" || !("clubId" in wish)) return wish;
+    const row = wish as Record<string, unknown>;
+    const clubId = typeof row.clubId === "string" ? row.clubId : "";
+    return {
+      ...row,
+      clubId: aliasBySource.get(clubId)?.targetClubId ?? clubId,
+    };
   });
 }
 

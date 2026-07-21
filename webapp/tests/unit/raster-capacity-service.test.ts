@@ -105,6 +105,7 @@ describe("raster capacity service", () => {
       higherCount: 1,
       blockingCount: 0,
       aliasCandidates: [],
+      wishClubOptions: [],
       rows: [
         {
           id: undefined,
@@ -174,6 +175,7 @@ describe("raster capacity service", () => {
       higherCount: 0,
       blockingCount: 1,
       aliasCandidates: [],
+      wishClubOptions: [],
       rows: [
         {
           id: "capacity-1",
@@ -289,6 +291,16 @@ describe("raster capacity service", () => {
           modelClubName: "Spfr. Berlebeck-Heiligenkirchen",
           wishClubId: "sportfreunde-berlebeck-heiligenkirchen-e-v-42634",
           wishClubName: "Sportfreunde Berlebeck-Heiligenkirchen e.V.",
+        },
+      ],
+      wishClubOptions: [
+        {
+          clubId: "fc-b-hne-1929-42518",
+          clubName: "FC Bühne 1929",
+        },
+        {
+          clubId: "sportfreunde-berlebeck-heiligenkirchen-e-v-42634",
+          clubName: "Sportfreunde Berlebeck-Heiligenkirchen e.V.",
         },
       ],
       rows: [
