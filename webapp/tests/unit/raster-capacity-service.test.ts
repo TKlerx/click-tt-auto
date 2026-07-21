@@ -104,6 +104,7 @@ describe("raster capacity service", () => {
       insufficientCount: 0,
       higherCount: 1,
       blockingCount: 0,
+      aliasCandidates: [],
       rows: [
         {
           id: undefined,
@@ -172,6 +173,7 @@ describe("raster capacity service", () => {
       insufficientCount: 1,
       higherCount: 0,
       blockingCount: 1,
+      aliasCandidates: [],
       rows: [
         {
           id: "capacity-1",
@@ -223,6 +225,84 @@ describe("raster capacity service", () => {
       where: { id: "capacity-1" },
       data: { capacity: 1, updatedById: "admin-1" },
     });
+  });
+
+  it("surfaces suspected club aliases without applying them", async () => {
+    prismaMock.rasterInputSet.findUnique.mockResolvedValue({
+      ...inputScope,
+      seasonModelJson: JSON.stringify({
+        clubs: [
+          { id: "fc-bu-hne", name: "FC Bühne" },
+          {
+            id: "spfr-berlebeck-heiligenkirchen",
+            name: "Spfr. Berlebeck-Heiligenkirchen",
+          },
+        ],
+        teams: [
+          {
+            clubId: "fc-bu-hne",
+            hall: "1",
+            homeWeekday: "friday",
+            spielwochePref: "A",
+          },
+          {
+            clubId: "spfr-berlebeck-heiligenkirchen",
+            hall: "1",
+            homeWeekday: "friday",
+            spielwochePref: "A",
+          },
+        ],
+      }),
+      wishes: [
+        {
+          clubId: "fc-b-hne-1929-42518",
+          clubName: "FC Bühne 1929",
+          teamLabel: "Erwachsene",
+          hall: "1",
+          homeWeekday: "FRIDAY",
+          spielwochePref: "A",
+        },
+        {
+          clubId: "sportfreunde-berlebeck-heiligenkirchen-e-v-42634",
+          clubName: "Sportfreunde Berlebeck-Heiligenkirchen e.V.",
+          teamLabel: "Erwachsene",
+          hall: "1",
+          homeWeekday: "FRIDAY",
+          spielwochePref: "A",
+        },
+      ],
+    } as never);
+    prismaMock.rasterHallCapacity.findMany.mockResolvedValue([] as never);
+
+    await expect(
+      reviewHallCapacitiesForInputSet("input-1"),
+    ).resolves.toMatchObject({
+      aliasCandidates: [
+        {
+          modelClubId: "fc-bu-hne",
+          modelClubName: "FC Bühne",
+          wishClubId: "fc-b-hne-1929-42518",
+          wishClubName: "FC Bühne 1929",
+        },
+        {
+          modelClubId: "spfr-berlebeck-heiligenkirchen",
+          modelClubName: "Spfr. Berlebeck-Heiligenkirchen",
+          wishClubId: "sportfreunde-berlebeck-heiligenkirchen-e-v-42634",
+          wishClubName: "Sportfreunde Berlebeck-Heiligenkirchen e.V.",
+        },
+      ],
+      rows: [
+        expect.objectContaining({ clubId: "fc-bu-hne" }),
+        expect.objectContaining({
+          clubId: "spfr-berlebeck-heiligenkirchen",
+        }),
+        expect.objectContaining({ clubId: "fc-b-hne-1929-42518" }),
+        expect.objectContaining({
+          clubId: "sportfreunde-berlebeck-heiligenkirchen-e-v-42634",
+        }),
+      ],
+    });
+    expect(prismaMock.rasterHallCapacity.deleteMany).not.toHaveBeenCalled();
   });
 
   it("infers capacities from parsed wishes when the season model has no week preference", async () => {

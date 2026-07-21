@@ -164,6 +164,7 @@ describe("raster step access", () => {
       insufficientCount: 0,
       higherCount: 0,
       blockingCount: 0,
+      aliasCandidates: [],
       rows: [],
     });
     services.listWishImportReview.mockResolvedValue(null);

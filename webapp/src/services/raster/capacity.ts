@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { rasterScopeWhere } from "@/lib/raster/access";
+import { normalizeClubName } from "@/lib/raster/club-matching";
 import type { CapacityCsvRowInput } from "@/lib/raster/schemas";
 import {
   HallCapacityBasis,
@@ -36,7 +37,15 @@ export type HallCapacityReview = {
   insufficientCount: number;
   higherCount: number;
   blockingCount: number;
+  aliasCandidates: HallCapacityAliasCandidate[];
   rows: HallCapacityReviewRow[];
+};
+
+export type HallCapacityAliasCandidate = {
+  modelClubId: string;
+  modelClubName: string;
+  wishClubId: string;
+  wishClubName: string;
 };
 
 export async function listHallCapacities(scopeId: string) {
@@ -150,7 +159,10 @@ export async function inferHallCapacitiesFromInputSet(
 export async function reviewHallCapacitiesForInputSet(
   inputSetId: string,
 ): Promise<HallCapacityReview> {
-  const inferred = await inferCapacityRows(inputSetId);
+  const [inferred, aliasCandidates] = await Promise.all([
+    inferCapacityRows(inputSetId),
+    findCapacityAliasCandidates(inputSetId),
+  ]);
   const existing = await existingCapacityMap(inferred);
   let missingCount = 0;
   let insufficientCount = 0;
@@ -204,6 +216,7 @@ export async function reviewHallCapacitiesForInputSet(
     insufficientCount,
     higherCount,
     blockingCount: missingCount + insufficientCount,
+    aliasCandidates,
     rows,
   };
 }
@@ -310,6 +323,55 @@ async function inferCapacityRows(
     });
   }
   return [...inferred.values()];
+}
+
+async function findCapacityAliasCandidates(
+  inputSetId: string,
+): Promise<HallCapacityAliasCandidate[]> {
+  const inputSet = await prisma.rasterInputSet.findUnique({
+    where: { id: inputSetId },
+    select: {
+      seasonModelJson: true,
+      wishes: { select: { clubId: true, clubName: true } },
+    },
+  });
+  if (!inputSet?.seasonModelJson) return [];
+  const model = JSON.parse(inputSet.seasonModelJson) as {
+    clubs?: Array<{ id?: string; name?: string }>;
+  };
+  const wishesByName = new Map<string, { clubId: string; clubName: string }>();
+  for (const wish of inputSet.wishes) {
+    if (!wish.clubName) continue;
+    wishesByName.set(capacityClubNameKey(wish.clubName), {
+      clubId: wish.clubId,
+      clubName: wish.clubName,
+    });
+  }
+
+  const candidates: HallCapacityAliasCandidate[] = [];
+  const seen = new Set<string>();
+  for (const club of model.clubs ?? []) {
+    if (!club.id || !club.name) continue;
+    const wish = wishesByName.get(capacityClubNameKey(club.name));
+    if (!wish || wish.clubId === club.id) continue;
+    const key = [club.id, wish.clubId].join("\0");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    candidates.push({
+      modelClubId: club.id,
+      modelClubName: club.name,
+      wishClubId: wish.clubId,
+      wishClubName: wish.clubName,
+    });
+  }
+  return candidates;
+}
+
+function capacityClubNameKey(value: string) {
+  return normalizeClubName(value)
+    .replace(/^sportfreunde/, "spfr")
+    .replace(/\d/g, "")
+    .replace(/ev$/, "");
 }
 
 function addCapacitySlot(
