@@ -5,6 +5,7 @@ import {
   syncInputSetSourceCaches,
   updateGroupPlanningStatus,
   updateGroupRasterMode,
+  updateTeamWishFields,
   validateInputSet,
 } from "@/services/raster";
 import { InputSetStatus } from "../../generated/prisma/enums";
@@ -245,6 +246,30 @@ describe("raster input set service", () => {
     ]);
   });
 
+  it("marks manual week preferences for source sync preservation", async () => {
+    prismaMock.rasterInputSet.findUnique.mockResolvedValue({
+      id: "input-1",
+      status: InputSetStatus.DRAFT,
+      seasonModelJson: JSON.stringify(model),
+      _count: { wishes: 1, fixedRasterzahlen: 0 },
+    } as never);
+    prismaMock.rasterInputSet.update.mockResolvedValue({} as never);
+
+    await updateTeamWishFields("input-1", "t1", { spielwochePref: "B" });
+
+    const saved = JSON.parse(
+      prismaMock.rasterInputSet.update.mock.calls[0]?.[0].data
+        .seasonModelJson as string,
+    );
+    expect(saved.teams).toEqual([
+      expect.objectContaining({
+        id: "t1",
+        spielwochePref: "B",
+        spielwochePrefSource: "manual",
+      }),
+    ]);
+  });
+
   it("syncs selected workspace source caches into input sets", async () => {
     prismaMock.rasterInputSet.findUnique.mockResolvedValue({
       id: "input-1",
@@ -447,6 +472,12 @@ describe("raster input set service", () => {
       startTime: "20:00",
     });
   });
+});
+
+describe("raster input set sync preservation", () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
 
   it("preserves manual wish matches while syncing source caches", async () => {
     const parsedWish = {
@@ -494,6 +525,8 @@ describe("raster input set service", () => {
             label: "Erwachsene",
             wishMatchId: "wish-bergheim",
             wishMatchSource: "manual",
+            spielwochePref: "B",
+            spielwochePrefSource: "manual",
           },
         ],
         groups: [],
@@ -550,6 +583,8 @@ describe("raster input set service", () => {
       teams: Array<{
         id: string;
         clubId?: string;
+        spielwochePref?: string;
+        spielwochePrefSource?: string;
         wishMatchId?: string;
         wishMatchSource?: string;
       }>;
@@ -560,6 +595,8 @@ describe("raster input set service", () => {
       ),
     ).toMatchObject({
       clubId: "sportverein-1930-bergheim",
+      spielwochePref: "B",
+      spielwochePrefSource: "manual",
       wishMatchId: "wish-bergheim",
       wishMatchSource: "manual",
     });

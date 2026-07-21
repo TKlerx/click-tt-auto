@@ -55,6 +55,7 @@ type SeasonModelTeam = {
   requestedRasterzahl?: number[];
   wishMatchId?: string;
   wishMatchSource?: "auto" | "manual";
+  spielwochePrefSource?: "auto" | "manual";
   confidence?: "ok" | "review";
 };
 type SeasonModelWithClubs = {
@@ -310,6 +311,9 @@ export async function syncInputSetSourceCaches(inputSetId: string) {
       const manualWishMatches = manualWishMatchesByTeamId(
         inputSet.seasonModelJson,
       );
+      const manualWeekPrefs = manualWeekPrefsByTeamId(
+        inputSet.seasonModelJson,
+      );
       const model =
         await rasterIngest.buildSeasonModelFromAssignments(
           supportedAssignments,
@@ -325,6 +329,7 @@ export async function syncInputSetSourceCaches(inputSetId: string) {
         inputSet.id,
         parsedWishes,
         manualWishMatches,
+        manualWeekPrefs,
       );
       const existingReviews = groupReviewsByKey(inputSet.seasonModelJson);
       model.groups = model.groups.map((group) => ({
@@ -430,6 +435,7 @@ async function applyActiveWishDetails(
   inputSetId: string,
   parsedWishes: WishParseResult[],
   manualWishMatches = new Map<string, string>(),
+  manualWeekPrefs = new Map<string, "A" | "B">(),
 ) {
   const wishClubById = new Map(
     parsedWishes
@@ -468,6 +474,12 @@ async function applyActiveWishDetails(
     const wishId = manualWishMatches.get(team.id);
     const wish = wishId ? activeWishById.get(wishId) : undefined;
     return wish ? applyWishToTeam(team, wish, "manual") : team;
+  });
+  model.teams = (model.teams ?? []).map((team) => {
+    const spielwochePref = manualWeekPrefs.get(team.id);
+    return spielwochePref
+      ? { ...team, spielwochePref, spielwochePrefSource: "manual" }
+      : team;
   });
   model.wishes = (model.clubs ?? []).flatMap((club) =>
     extractRelationalWishes(
@@ -535,6 +547,32 @@ function manualWishMatchesByTeamId(seasonModelJson?: string | null) {
     return matches;
   }
   return matches;
+}
+
+function manualWeekPrefsByTeamId(seasonModelJson?: string | null) {
+  const prefs = new Map<string, "A" | "B">();
+  if (!seasonModelJson) return prefs;
+  try {
+    const model = JSON.parse(seasonModelJson) as {
+      teams?: Array<{
+        id?: string;
+        spielwochePref?: string;
+        spielwochePrefSource?: string;
+      }>;
+    };
+    for (const team of model.teams ?? []) {
+      if (
+        team.id &&
+        (team.spielwochePref === "A" || team.spielwochePref === "B") &&
+        team.spielwochePrefSource === "manual"
+      ) {
+        prefs.set(team.id, team.spielwochePref);
+      }
+    }
+  } catch {
+    return prefs;
+  }
+  return prefs;
 }
 
 function teamIdentityKey(
@@ -672,8 +710,10 @@ export async function updateTeamWishFields(
     }
     if (fields.spielwochePref === null) {
       delete next.spielwochePref;
+      delete next.spielwochePrefSource;
     } else if (fields.spielwochePref) {
       next.spielwochePref = fields.spielwochePref;
+      next.spielwochePrefSource = "manual";
     }
     return next;
   });
