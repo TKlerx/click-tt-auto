@@ -429,6 +429,7 @@ describe("raster capacity service", () => {
             clubId: "model-club",
             hall: "1",
             homeWeekday: "friday",
+            capacityRelevant: false,
           },
         ],
       }),
@@ -462,8 +463,10 @@ describe("raster capacity service", () => {
       ...inputScope,
       seasonModelJson: JSON.stringify({
         clubs: [{ id: "excluded-club", name: "Excluded Club" }],
+        groups: [{ planningStatus: "exclude", teamIds: ["team-1"] }],
         teams: [
           {
+            id: "team-1",
             clubId: "excluded-club",
             hall: "1",
             homeWeekday: "friday",

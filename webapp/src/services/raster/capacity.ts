@@ -351,7 +351,8 @@ async function findCapacityAliasReview(
   }
   const model = JSON.parse(inputSet.seasonModelJson) as {
     clubs?: Array<{ id?: string; name?: string }>;
-    teams?: Array<{ clubId?: string; capacityRelevant?: boolean }>;
+    groups?: Array<{ planningStatus?: string; teamIds?: string[] }>;
+    teams?: Array<{ id?: string; clubId?: string }>;
     clubAliases?: Array<{
       sourceClubId?: string;
       sourceClubName?: string;
@@ -374,9 +375,14 @@ async function findCapacityAliasReview(
     a.clubName.localeCompare(b.clubName),
   );
   const wishClubIds = new Set(wishClubOptions.map((wish) => wish.clubId));
+  const excludedTeamIds = new Set(
+    (model.groups ?? [])
+      .filter((group) => group.planningStatus === "exclude")
+      .flatMap((group) => group.teamIds ?? []),
+  );
   const capacityClubIds = new Set(
     (model.teams ?? [])
-      .filter((team) => team.capacityRelevant !== false)
+      .filter((team) => !team.id || !excludedTeamIds.has(team.id))
       .map((team) => team.clubId)
       .filter((clubId): clubId is string => Boolean(clubId)),
   );
