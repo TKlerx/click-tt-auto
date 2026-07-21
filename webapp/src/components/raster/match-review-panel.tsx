@@ -51,7 +51,7 @@ export function MatchReviewPanel({
   if (!records.length) return null;
 
   return (
-    <details className="mt-3 border-t border-[var(--border)] pt-3" open>
+    <details className="mt-3 border-t border-[var(--border)] pt-3">
       <summary className="cursor-pointer text-sm font-medium">
         Source matches ({outstanding.length} outstanding)
       </summary>

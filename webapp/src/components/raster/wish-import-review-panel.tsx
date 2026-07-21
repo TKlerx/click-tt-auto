@@ -122,10 +122,7 @@ export function WishImportReviewPanel({
   }
 
   return (
-    <details
-      className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4"
-      open
-    >
+    <details className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
       <summary className="cursor-pointer text-sm font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
         {t("title")} ({counts.all})
       </summary>

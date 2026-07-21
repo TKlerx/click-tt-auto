@@ -112,10 +112,12 @@ export function GroupModeReview({ groups }: { groups: GroupModeReviewRow[] }) {
   if (!groups.length) return null;
 
   return (
-    <div className="mt-3 space-y-2 border-t border-[var(--border)] pt-3">
-      <div>
+    <details className="mt-3 border-t border-[var(--border)] pt-3">
+      <summary className="cursor-pointer text-sm font-semibold">
+        Six-team group mode ({groups.length})
+      </summary>
+      <div className="mt-3 space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h3 className="text-sm font-semibold">Six-team group mode</h3>
           <button
             className="h-9 rounded-md border border-[var(--border)] px-3 text-sm font-medium"
             disabled={savingId !== null}
@@ -129,50 +131,50 @@ export function GroupModeReview({ groups }: { groups: GroupModeReviewRow[] }) {
           Choose whether each 6-team group uses the normal 6er schedule or a 6er
           Doppelrunde, then validate again.
         </p>
+        {groups.map((group) => (
+          <div
+            key={`${group.inputSetId}:${group.groupId}`}
+            className="grid grid-cols-[minmax(10rem,1fr)_12rem_5rem_7rem] items-center gap-3 text-sm"
+          >
+            <span>{group.label}</span>
+            <select
+              data-group-id={group.groupId}
+              data-input-set-id={group.inputSetId}
+              data-raster-group-mode=""
+              className="h-9 rounded-md border border-[var(--border)] bg-[var(--background)] px-2 text-sm"
+              value={values[group.groupId] ?? group.rasterMode ?? ""}
+              disabled={savingId === group.groupId || savingId === "__all__"}
+              onChange={(event) => {
+                const value = event.currentTarget.value;
+                if (value === "single" || value === "double" || value === "") {
+                  setValues((current) => ({
+                    ...current,
+                    [group.groupId]: value,
+                  }));
+                }
+              }}
+            >
+              <option value="" disabled>
+                Select mode
+              </option>
+              <option value="single">Normal 6er</option>
+              <option value="double">6er Doppelrunde</option>
+            </select>
+            <button
+              className="h-9 rounded-md border border-[var(--border)] px-2 text-xs font-medium"
+              disabled={savingId === group.groupId || savingId === "__all__"}
+              onClick={() => void save(group)}
+              type="button"
+            >
+              Save
+            </button>
+            <span className="text-xs text-[var(--muted-foreground)]">
+              {messages[group.groupId] ?? ""}
+            </span>
+          </div>
+        ))}
       </div>
-      {groups.map((group) => (
-        <div
-          key={`${group.inputSetId}:${group.groupId}`}
-          className="grid grid-cols-[minmax(10rem,1fr)_12rem_5rem_7rem] items-center gap-3 text-sm"
-        >
-          <span>{group.label}</span>
-          <select
-            data-group-id={group.groupId}
-            data-input-set-id={group.inputSetId}
-            data-raster-group-mode=""
-            className="h-9 rounded-md border border-[var(--border)] bg-[var(--background)] px-2 text-sm"
-            value={values[group.groupId] ?? group.rasterMode ?? ""}
-            disabled={savingId === group.groupId || savingId === "__all__"}
-            onChange={(event) => {
-              const value = event.currentTarget.value;
-              if (value === "single" || value === "double" || value === "") {
-                setValues((current) => ({
-                  ...current,
-                  [group.groupId]: value,
-                }));
-              }
-            }}
-          >
-            <option value="" disabled>
-              Select mode
-            </option>
-            <option value="single">Normal 6er</option>
-            <option value="double">6er Doppelrunde</option>
-          </select>
-          <button
-            className="h-9 rounded-md border border-[var(--border)] px-2 text-xs font-medium"
-            disabled={savingId === group.groupId || savingId === "__all__"}
-            onClick={() => void save(group)}
-            type="button"
-          >
-            Save
-          </button>
-          <span className="text-xs text-[var(--muted-foreground)]">
-            {messages[group.groupId] ?? ""}
-          </span>
-        </div>
-      ))}
-    </div>
+    </details>
   );
 }
 

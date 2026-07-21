@@ -111,11 +111,11 @@ export default async function RasterReviewPage({
           />
         ) : null}
       </section>
-      <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
-        <div className="mb-3 flex flex-wrap items-center gap-3">
-          <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
-            Gym capacities
-          </h2>
+      <details className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
+        <summary className="cursor-pointer text-sm font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
+          Gym capacities
+        </summary>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
           {canEdit ? (
             <InferCapacitiesButton
               inputSetId={inputSet.id}
@@ -124,7 +124,7 @@ export default async function RasterReviewPage({
           ) : null}
         </div>
         {capacityReview ? (
-          <p className="mb-3 text-sm text-[var(--muted-foreground)]">
+          <p className="my-3 text-sm text-[var(--muted-foreground)]">
             {capacityReview.inferredCount} inferred,{" "}
             {capacityReview.missingCount} missing,{" "}
             {capacityReview.insufficientCount} lower than inferred,{" "}
@@ -136,7 +136,7 @@ export default async function RasterReviewPage({
           scope={context.scope.code}
           rows={capacities}
         />
-      </section>
+      </details>
     </div>
   );
 }
