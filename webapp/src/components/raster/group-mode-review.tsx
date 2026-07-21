@@ -383,45 +383,62 @@ export function GroupPlanningReview({
           change a PDF match after a mistaken selection. Excluded groups stay
           visible here and can be included again once their wishes arrive.
         </p>
-        {groups.map((group) => (
-          <details
-            className="rounded-md border border-[var(--border)] p-3"
-            key={`${group.inputSetId}:${group.groupId}`}
-          >
-            <summary className="cursor-pointer">
-              <span className="grid grid-cols-[minmax(10rem,1fr)_8rem_7rem_7rem_7rem] items-center gap-3">
-                <span>{group.label}</span>
-                <span>{group.missingTeams} missing</span>
-                <span>
-                  {savingId === group.groupId
-                    ? "saving"
-                    : statusLabel(statuses[group.groupId], group.missingTeams)}
+        {groups.map((group) => {
+          const needsReview = group.missingTeams > 0;
+          return (
+            <details
+              className={`rounded-md border p-3 ${
+                needsReview
+                  ? "border-[var(--primary)] bg-[var(--primary)]/5"
+                  : "border-[var(--border)]"
+              }`}
+              key={`${group.inputSetId}:${group.groupId}`}
+            >
+              <summary className="cursor-pointer">
+                <span className="grid grid-cols-[minmax(10rem,1fr)_8rem_7rem_7rem_7rem] items-center gap-3">
+                  <span>{group.label}</span>
+                  <span
+                    className={
+                      needsReview ? "font-semibold text-[var(--primary)]" : ""
+                    }
+                  >
+                    {needsReview
+                      ? `Needs review: ${group.missingTeams}`
+                      : "0 missing"}
+                  </span>
+                  <span>
+                    {savingId === group.groupId
+                      ? "saving"
+                      : statusLabel(
+                          statuses[group.groupId],
+                          group.missingTeams,
+                        )}
+                  </span>
+                  <button
+                    className="h-9 rounded-md border border-[var(--border)] px-3 text-sm font-medium"
+                    disabled={savingId === group.groupId}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      void save(group, "include");
+                    }}
+                    type="button"
+                  >
+                    Include
+                  </button>
+                  <button
+                    className="h-9 rounded-md border border-[var(--border)] px-3 text-sm font-medium"
+                    disabled={savingId === group.groupId}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      void save(group, "exclude");
+                    }}
+                    type="button"
+                  >
+                    Exclude
+                  </button>
                 </span>
-                <button
-                  className="h-9 rounded-md border border-[var(--border)] px-3 text-sm font-medium"
-                  disabled={savingId === group.groupId}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    void save(group, "include");
-                  }}
-                  type="button"
-                >
-                  Include
-                </button>
-                <button
-                  className="h-9 rounded-md border border-[var(--border)] px-3 text-sm font-medium"
-                  disabled={savingId === group.groupId}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    void save(group, "exclude");
-                  }}
-                  type="button"
-                >
-                  Exclude
-                </button>
-              </span>
-            </summary>
-            <div className="mt-3 overflow-auto">
+              </summary>
+              <div className="mt-3 overflow-auto">
               <table className="w-full min-w-[56rem] text-left text-xs">
                 <thead className="text-[var(--muted-foreground)]">
                   <tr>
@@ -534,7 +551,8 @@ export function GroupPlanningReview({
               </table>
             </div>
           </details>
-        ))}
+          );
+        })}
       </div>
     </details>
   );
