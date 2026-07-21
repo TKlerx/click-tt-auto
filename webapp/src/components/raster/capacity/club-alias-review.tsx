@@ -116,12 +116,13 @@ export function ClubAliasReview({
                     disabled={!canEdit || busyId !== null}
                     list={`club-alias-targets-${candidate.modelClubId}`}
                     value={targets[candidate.modelClubId] ?? ""}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      const value = event.currentTarget.value;
                       setTargets((current) => ({
                         ...current,
-                        [candidate.modelClubId]: event.currentTarget.value,
-                      }))
-                    }
+                        [candidate.modelClubId]: value,
+                      }));
+                    }}
                   />
                   <datalist id={`club-alias-targets-${candidate.modelClubId}`}>
                     {wishClubOptions.map((option) => (
