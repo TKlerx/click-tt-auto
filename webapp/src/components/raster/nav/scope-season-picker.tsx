@@ -22,6 +22,7 @@ export function ScopeSeasonPicker({ scopes }: { scopes: RasterScopeOption[] }) {
   function update(name: "scope" | "season", value: string) {
     const next = new URLSearchParams(searchParams);
     next.set(name, value);
+    next.delete("workspace");
     router.push(`${pathname}?${next.toString()}`);
   }
 

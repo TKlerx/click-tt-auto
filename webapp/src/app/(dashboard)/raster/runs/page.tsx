@@ -1,4 +1,5 @@
 import { ScenarioComparison } from "@/components/raster/scenario-comparison";
+import { resolveWorkspaceSelection } from "@/lib/raster/workspace-selection";
 import { listInputSets, listScenarios } from "@/services/raster";
 import {
   RasterStepError,
@@ -13,12 +14,16 @@ export default async function RasterRunsPage({
 }) {
   const context = await requireRasterStep(searchParams);
   if ("error" in context) return <RasterStepError message={context.error} />;
+  const params = await searchParams;
 
   const [inputSets, scenarios] = await Promise.all([
     listInputSets(context.scope.id, context.season),
     listScenarios({ scopeId: context.scope.id, season: context.season }),
   ]);
-  const inputSet = inputSets[0] ?? null;
+  const inputSet = resolveWorkspaceSelection(
+    inputSets,
+    params.workspace,
+  ).selected;
 
   return (
     <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">

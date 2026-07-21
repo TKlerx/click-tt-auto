@@ -4,6 +4,7 @@ import { MatchReviewPanel } from "@/components/raster/match-review-panel";
 import { WishImportReviewPanel } from "@/components/raster/wish-import-review-panel";
 import { canUseRasterLevel } from "@/lib/raster/access";
 import { listMatchReviewState } from "@/lib/raster/match-review";
+import { resolveWorkspaceSelection } from "@/lib/raster/workspace-selection";
 import { FixedScheduleNumbersForm } from "@/components/raster/input-set-actions";
 import {
   GroupModeReview,
@@ -36,12 +37,16 @@ export default async function RasterReviewPage({
 }) {
   const context = await requireRasterStep(searchParams);
   if ("error" in context) return <RasterStepError message={context.error} />;
+  const params = await searchParams;
 
   const [inputSets, capacities] = await Promise.all([
     listInputSets(context.scope.id, context.season),
     listHallCapacities(context.scope.id),
   ]);
-  const inputSet = inputSets[0] ?? null;
+  const inputSet = resolveWorkspaceSelection(
+    inputSets,
+    params.workspace,
+  ).selected;
   const [capacityReview, matchReview, wishImportReview] = inputSet
     ? await Promise.all([
         reviewHallCapacitiesForInputSet(inputSet.id),

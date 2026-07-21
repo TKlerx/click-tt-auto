@@ -26,10 +26,14 @@ const services = vi.hoisted(() => ({
   listScenarios: vi.fn(),
   reviewHallCapacitiesForInputSet: vi.fn(),
 }));
+const matchReview = vi.hoisted(() => ({
+  listMatchReviewState: vi.fn(),
+}));
 
 vi.mock("@/lib/auth", () => ({ requireSession }));
 vi.mock("@/lib/db", () => ({ prisma }));
 vi.mock("@/services/raster", () => services);
+vi.mock("@/lib/raster/match-review", () => matchReview);
 
 import ImportPage from "@/app/(dashboard)/raster/import/page";
 import ReviewPage from "@/app/(dashboard)/raster/review/page";
@@ -84,9 +88,7 @@ describe("raster step access", () => {
       });
       prisma.scope.findMany.mockResolvedValue([scope("OWL")]);
       services.listInputSets.mockResolvedValue(
-        load === services.listRasterSourcesForInputSet
-          ? [inputSet()]
-          : [],
+        load === services.listRasterSourcesForInputSet ? [inputSet()] : [],
       );
       services.listHallCapacities.mockResolvedValue([]);
       services.listRasterSourcesForInputSet.mockResolvedValue([]);
@@ -143,16 +145,64 @@ describe("raster step access", () => {
 
     expect(services.adoptLegacyRasterSources).toHaveBeenCalledWith("input-1");
   });
+
+  it("loads the requested workspace on review and run steps", async () => {
+    requireSession.mockResolvedValue({
+      id: "scheduler-1",
+      role: Role.SCOPE_ADMIN,
+    });
+    prisma.scope.findMany.mockResolvedValue([scope("OWL")]);
+    prisma.scope.findFirst.mockResolvedValue({ id: "scope-OWL" });
+    services.listInputSets.mockResolvedValue([
+      inputSet("input-1"),
+      inputSet("input-2"),
+    ]);
+    services.listHallCapacities.mockResolvedValue([]);
+    services.reviewHallCapacitiesForInputSet.mockResolvedValue({
+      inferredCount: 0,
+      missingCount: 0,
+      insufficientCount: 0,
+      higherCount: 0,
+      blockingCount: 0,
+      rows: [],
+    });
+    services.listWishImportReview.mockResolvedValue(null);
+    matchReview.listMatchReviewState.mockResolvedValue([]);
+
+    await ReviewPage({
+      searchParams: Promise.resolve({
+        scope: "OWL",
+        season: "2026/27",
+        workspace: "input-2",
+      }),
+    });
+    await RunPage({
+      searchParams: Promise.resolve({
+        scope: "OWL",
+        season: "2026/27",
+        workspace: "input-2",
+      }),
+    });
+
+    expect(matchReview.listMatchReviewState).toHaveBeenCalledWith("input-2");
+    expect(services.reviewHallCapacitiesForInputSet).toHaveBeenCalledWith(
+      "input-2",
+    );
+  });
 });
 
-function inputSet() {
+function inputSet(id = "input-1") {
   return {
-    id: "input-1",
+    id,
     name: "OWL 2026/27",
     scopeId: "scope-OWL",
     season: "2026/27",
     status: "DRAFT",
     seasonModelJson: null,
+    fixedRasterzahlen: [],
+    wishes: [],
+    runs: [],
+    spannedScopes: [],
     _count: { wishes: 0, fixedRasterzahlen: 0, runs: 0 },
   };
 }
