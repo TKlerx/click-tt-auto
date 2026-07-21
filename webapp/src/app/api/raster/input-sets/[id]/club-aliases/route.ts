@@ -4,6 +4,7 @@ import { logRasterAudit } from "@/lib/raster/audit";
 import { requireRasterInputSet } from "@/lib/raster/route-context";
 import {
   inferHallCapacitiesFromInputSet,
+  syncInputSetSourceCaches,
   updateClubAliasMapping,
 } from "@/services/raster";
 import { AuditAction } from "../../../../../../../generated/prisma/enums";
@@ -40,6 +41,7 @@ export async function POST(
   if (!inputSet) {
     return NextResponse.json({ error: "Club alias not found" }, { status: 404 });
   }
+  await syncInputSetSourceCaches(context.inputSet.id);
   const capacities = await inferHallCapacitiesFromInputSet(
     context.inputSet.id,
     context.user.id,
