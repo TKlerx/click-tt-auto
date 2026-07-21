@@ -504,6 +504,8 @@ function applyWishToTeam(
   },
   wishMatchSource: "auto" | "manual",
 ) {
+  const confidence: SeasonModelTeam["confidence"] =
+    wishTeam.confidence === "OK" ? "ok" : "review";
   return {
     ...team,
     clubId: wishTeam.clubId,
@@ -518,7 +520,7 @@ function applyWishToTeam(
       : {}),
     wishMatchId: wishTeam.id,
     wishMatchSource,
-    confidence: wishTeam.confidence === "OK" ? "ok" : "review",
+    confidence,
     capacityRelevant: true,
   };
 }

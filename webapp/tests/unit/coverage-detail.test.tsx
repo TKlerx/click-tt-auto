@@ -59,7 +59,8 @@ function collectText(node: ReactNode): string[] {
   if (isValidElement(node)) {
     const element = node as ReactElement<{ children?: ReactNode }>;
     if (typeof element.type === "function") {
-      return collectText(element.type(element.props));
+      const render = element.type as (props: typeof element.props) => ReactNode;
+      return collectText(render(element.props));
     }
     return collectText(element.props.children);
   }

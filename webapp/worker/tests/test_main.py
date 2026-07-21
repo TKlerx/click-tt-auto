@@ -22,7 +22,9 @@ from starter_worker.db import (
     BackgroundJob,
     JobStore,
     _assignment_rows,
+    _conflict_rows,
     _find_overage_rows,
+    _raster_success_outcome,
     normalize_postgres_database_url,
 )
 from starter_worker.main import (
@@ -568,6 +570,38 @@ class WorkerTests(unittest.TestCase):
 
         self.assertTrue(rows)
         self.assertEqual(rows[0]["capacity"], 1)
+
+    def test_raster_solver_initial_heuristic_optimal_status_is_not_proven_optimal(self) -> None:
+        self.assertEqual(_raster_success_outcome("OPTIMAL", "initial_heuristic"), "FEASIBLE")
+        self.assertEqual(_raster_success_outcome("OPTIMAL", "cp_sat"), "PROVEN_OPTIMAL")
+
+    def test_raster_solver_conflict_rows_keep_unplanned_team_marker(self) -> None:
+        model = {"clubs": [{"id": "club", "name": "Club"}]}
+        rows = _conflict_rows(
+            "snapshot-1",
+            model,
+            [
+                {
+                    "week": 1,
+                    "clubId": "club",
+                    "weekday": "friday",
+                    "hall": "1",
+                    "capacity": 1,
+                    "actualCount": 2,
+                    "excess": 1,
+                    "teams": [
+                        {
+                            "id": "upper",
+                            "assignmentStatus": "FIXED",
+                            "planned": False,
+                        }
+                    ],
+                }
+            ],
+        )
+
+        teams = json.loads(rows[0][10])
+        self.assertEqual(teams[0]["planned"], False)
 
     def test_persisted_overages_do_not_duplicate_same_team_home_week(self) -> None:
         model = {

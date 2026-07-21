@@ -131,6 +131,7 @@ def process_raster_run(store: JobStore, job: BackgroundJob) -> dict[str, object]
         spanned_scope_ids=context.get("scopeIds") or [],
         model=model,
         solver_output=solver_output,
+        strategy=str(settings.get("strategy") or "cp_sat"),
     )
     metadata = solver_output.get("metadata") if isinstance(solver_output, dict) else {}
     return {
