@@ -419,6 +419,78 @@ describe("raster capacity service", () => {
     });
   });
 
+  it("asks for a club alias when no likely match is found", async () => {
+    prismaMock.rasterInputSet.findUnique.mockResolvedValue({
+      ...inputScope,
+      seasonModelJson: JSON.stringify({
+        clubs: [{ id: "model-club", name: "Model Club" }],
+        teams: [
+          {
+            clubId: "model-club",
+            hall: "1",
+            homeWeekday: "friday",
+          },
+        ],
+      }),
+      wishes: [
+        {
+          clubId: "wish-club",
+          clubName: "Different Wish Club",
+          teamLabel: "Erwachsene",
+          hall: "1",
+          homeWeekday: "FRIDAY",
+        },
+      ],
+    } as never);
+    prismaMock.rasterHallCapacity.findMany.mockResolvedValue([] as never);
+
+    await expect(
+      reviewHallCapacitiesForInputSet("input-1"),
+    ).resolves.toMatchObject({
+      aliasCandidates: [
+        {
+          modelClubId: "model-club",
+          wishClubId: undefined,
+          wishClubName: undefined,
+        },
+      ],
+    });
+  });
+
+  it("does not ask for aliases for excluded capacity teams", async () => {
+    prismaMock.rasterInputSet.findUnique.mockResolvedValue({
+      ...inputScope,
+      seasonModelJson: JSON.stringify({
+        clubs: [{ id: "excluded-club", name: "Excluded Club" }],
+        teams: [
+          {
+            clubId: "excluded-club",
+            hall: "1",
+            homeWeekday: "friday",
+            capacityRelevant: false,
+          },
+        ],
+      }),
+      wishes: [
+        {
+          clubId: "wish-club",
+          clubName: "Excluded Club 1920",
+          teamLabel: "Erwachsene",
+          hall: "1",
+          homeWeekday: "FRIDAY",
+        },
+      ],
+    } as never);
+    prismaMock.rasterHallCapacity.findMany.mockResolvedValue([] as never);
+
+    await expect(
+      reviewHallCapacitiesForInputSet("input-1"),
+    ).resolves.toMatchObject({
+      inferredCount: 1,
+      aliasCandidates: [],
+    });
+  });
+
   it("keeps reviewed club aliases visible for correction", async () => {
     prismaMock.rasterInputSet.findUnique.mockResolvedValue({
       ...inputScope,

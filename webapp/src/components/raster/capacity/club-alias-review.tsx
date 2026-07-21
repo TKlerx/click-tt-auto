@@ -78,8 +78,8 @@ export function ClubAliasReview({
         Club mappings to review ({candidates.length})
       </summary>
       <p className="mt-2 text-sm text-[var(--muted-foreground)]">
-        These names look like the same club, but the model and wish import use
-        different ids. Confirm only when the pair is correct.
+        These capacity clubs use ids that are not linked to the wish import.
+        Confirm the suggested match or choose the right wish club.
       </p>
       <div className="mt-3 overflow-x-auto">
         <table className="w-full text-left text-sm">

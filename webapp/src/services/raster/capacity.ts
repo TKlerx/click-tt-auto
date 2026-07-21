@@ -297,6 +297,7 @@ async function inferCapacityRows(
           homeWeekday?: string;
           startTime?: string;
           spielwochePref?: string;
+          capacityRelevant?: boolean;
         }>;
       })
     : { teams: [] };
@@ -350,6 +351,7 @@ async function findCapacityAliasReview(
   }
   const model = JSON.parse(inputSet.seasonModelJson) as {
     clubs?: Array<{ id?: string; name?: string }>;
+    teams?: Array<{ clubId?: string; capacityRelevant?: boolean }>;
     clubAliases?: Array<{
       sourceClubId?: string;
       sourceClubName?: string;
@@ -370,6 +372,13 @@ async function findCapacityAliasReview(
   }
   const wishClubOptions = [...wishesByName.values()].sort((a, b) =>
     a.clubName.localeCompare(b.clubName),
+  );
+  const wishClubIds = new Set(wishClubOptions.map((wish) => wish.clubId));
+  const capacityClubIds = new Set(
+    (model.teams ?? [])
+      .filter((team) => team.capacityRelevant !== false)
+      .map((team) => team.clubId)
+      .filter((clubId): clubId is string => Boolean(clubId)),
   );
 
   const candidates: HallCapacityAliasCandidate[] = [];
@@ -393,6 +402,8 @@ async function findCapacityAliasReview(
       confirmedSourceIds,
       wishesByName,
       wishClubOptions,
+      wishClubIds,
+      capacityClubIds,
     );
     if (!candidate) continue;
     const key = [candidate.modelClubId, candidate.wishClubId ?? ""].join("\0");
@@ -415,14 +426,16 @@ function capacityAliasCandidateForClub(
   confirmedSourceIds: Set<string | undefined>,
   wishesByName: Map<string, HallCapacityWishClubOption>,
   wishClubOptions: HallCapacityWishClubOption[],
+  wishClubIds: Set<string>,
+  capacityClubIds: Set<string>,
 ): HallCapacityAliasCandidate | null {
   if (!club.id || !club.name || confirmedSourceIds.has(club.id)) return null;
+  if (!capacityClubIds.has(club.id) || wishClubIds.has(club.id)) return null;
   const exactWish = wishesByName.get(capacityClubNameKey(club.name));
   const likelyWishes = exactWish
     ? [exactWish]
     : findLikelyWishClubs(club.name, wishClubOptions);
   const wish = likelyWishes.length === 1 ? likelyWishes[0] : null;
-  if (!wish && likelyWishes.length === 0) return null;
   if (wish?.clubId === club.id) return null;
   return {
     modelClubId: club.id,
@@ -509,10 +522,11 @@ function addCapacitySlot(
     homeWeekday?: string | null;
     startTime?: string | null;
     spielwochePref?: string | null;
+    capacityRelevant?: boolean | null;
   },
 ) {
   const weekday = normalizeWeekday(row.homeWeekday ?? undefined);
-  if (!row.clubId || !weekday) return;
+  if (!row.clubId || !weekday || row.capacityRelevant === false) return;
   const slot: CapacitySlot = {
     clubId: row.clubId,
     hall: row.hall || "1",
