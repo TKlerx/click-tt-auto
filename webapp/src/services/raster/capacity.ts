@@ -43,6 +43,7 @@ export type HallCapacityReview = {
 };
 
 export type HallCapacityAliasCandidate = {
+  confirmed?: boolean;
   modelClubId: string;
   modelClubName: string;
   wishClubId: string;
@@ -347,12 +348,15 @@ async function findCapacityAliasReview(
   }
   const model = JSON.parse(inputSet.seasonModelJson) as {
     clubs?: Array<{ id?: string; name?: string }>;
-    clubAliases?: Array<{ sourceClubId?: string; targetClubId?: string }>;
+    clubAliases?: Array<{
+      sourceClubId?: string;
+      sourceClubName?: string;
+      targetClubId?: string;
+      targetClubName?: string;
+    }>;
   };
-  const confirmed = new Set(
-    (model.clubAliases ?? []).map(
-      (alias) => `${alias.sourceClubId}\0${alias.targetClubId}`,
-    ),
+  const confirmedSourceIds = new Set(
+    (model.clubAliases ?? []).map((alias) => alias.sourceClubId),
   );
   const wishesByName = new Map<string, { clubId: string; clubName: string }>();
   for (const wish of inputSet.wishes) {
@@ -368,12 +372,26 @@ async function findCapacityAliasReview(
 
   const candidates: HallCapacityAliasCandidate[] = [];
   const seen = new Set<string>();
+  for (const alias of model.clubAliases ?? []) {
+    if (!alias.sourceClubId || !alias.targetClubId) continue;
+    const key = [alias.sourceClubId, alias.targetClubId].join("\0");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    candidates.push({
+      confirmed: true,
+      modelClubId: alias.sourceClubId,
+      modelClubName: alias.sourceClubName ?? alias.sourceClubId,
+      wishClubId: alias.targetClubId,
+      wishClubName: alias.targetClubName ?? alias.targetClubId,
+    });
+  }
   for (const club of model.clubs ?? []) {
     if (!club.id || !club.name) continue;
+    if (confirmedSourceIds.has(club.id)) continue;
     const wish = wishesByName.get(capacityClubNameKey(club.name));
     if (!wish || wish.clubId === club.id) continue;
     const key = [club.id, wish.clubId].join("\0");
-    if (seen.has(key) || confirmed.has(key)) continue;
+    if (seen.has(key)) continue;
     seen.add(key);
     candidates.push({
       modelClubId: club.id,

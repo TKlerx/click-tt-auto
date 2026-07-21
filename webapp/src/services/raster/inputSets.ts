@@ -762,9 +762,37 @@ export async function updateClubAliasMapping(
 
   const model = seasonModelSchema.parse(JSON.parse(inputSet.seasonModelJson));
   const typedModel = model as unknown as SeasonModelWithClubs;
-  const sourceClub = typedModel.clubs?.find((club) => club.id === sourceClubId);
-  if (!sourceClub) return null;
-  const aliases = clubAliasesFromModel(inputSet.seasonModelJson).filter(
+  const existingAliases = clubAliasesFromModel(inputSet.seasonModelJson);
+  const previousAlias = existingAliases.find(
+    (alias) => alias.sourceClubId === sourceClubId,
+  );
+  const sourceClub = typedModel.clubs?.find((club) => club.id === sourceClubId) ?? {
+    id: previousAlias?.sourceClubId ?? "",
+    name: previousAlias?.sourceClubName,
+  };
+  if (previousAlias) {
+    typedModel.teams = (typedModel.teams ?? []).map((team) => ({
+      ...team,
+      clubId:
+        team.clubId === previousAlias.targetClubId ? sourceClubId : team.clubId,
+    }));
+    typedModel.wishes = (typedModel.wishes ?? []).map((wish) => {
+      if (!wish || typeof wish !== "object" || !("clubId" in wish)) return wish;
+      const row = wish as Record<string, unknown>;
+      return {
+        ...row,
+        clubId:
+          row.clubId === previousAlias.targetClubId
+            ? sourceClubId
+            : row.clubId,
+      };
+    });
+  }
+  if (!sourceClub.id) return null;
+  if (!(typedModel.clubs ?? []).some((club) => club.id === sourceClub.id)) {
+    typedModel.clubs = [...(typedModel.clubs ?? []), sourceClub];
+  }
+  const aliases = existingAliases.filter(
     (alias) => alias.sourceClubId !== sourceClubId,
   );
   aliases.push({

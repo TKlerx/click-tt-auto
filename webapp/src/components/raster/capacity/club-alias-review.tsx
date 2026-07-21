@@ -5,6 +5,7 @@ import { useState } from "react";
 import { withBasePath } from "@/lib/base-path";
 
 type ClubAliasCandidate = {
+  confirmed?: boolean;
   modelClubId: string;
   modelClubName: string;
   wishClubId: string;
@@ -31,15 +32,7 @@ export function ClubAliasReview({
   const [busyId, setBusyId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [targets, setTargets] = useState<Record<string, string>>(() =>
-    Object.fromEntries(
-      candidates.map((candidate) => [
-        candidate.modelClubId,
-        clubOptionText({
-          clubId: candidate.wishClubId,
-          clubName: candidate.wishClubName,
-        }),
-      ]),
-    ),
+    initialTargets(candidates),
   );
   if (!candidates.length) return null;
 
@@ -72,7 +65,7 @@ export function ClubAliasReview({
         setMessage(body.error ?? `Failed (${response.status})`);
         return;
       }
-      setMessage("Mapping applied; capacities refreshed.");
+      setMessage("Mapping saved; capacities refreshed.");
       router.refresh();
     } finally {
       setBusyId(null);
@@ -82,7 +75,7 @@ export function ClubAliasReview({
   return (
     <details className="rounded-md border border-[var(--border)] p-3" open>
       <summary className="cursor-pointer text-sm font-medium">
-        Suspected unmapped clubs ({candidates.length})
+        Club mappings to review ({candidates.length})
       </summary>
       <p className="mt-2 text-sm text-[var(--muted-foreground)]">
         These names look like the same club, but the model and wish import use
@@ -111,6 +104,11 @@ export function ClubAliasReview({
                   <span className="text-[var(--muted-foreground)]">
                     {candidate.modelClubId}
                   </span>
+                  {candidate.confirmed ? (
+                    <span className="ml-2 text-xs text-[var(--muted-foreground)]">
+                      mapped
+                    </span>
+                  ) : null}
                 </td>
                 <td className="px-2 py-2">
                   <input
@@ -150,8 +148,10 @@ export function ClubAliasReview({
                       type="button"
                     >
                       {busyId === candidate.modelClubId
-                        ? "Mapping..."
-                        : "Map to wish club"}
+                        ? "Saving..."
+                        : candidate.confirmed
+                          ? "Update mapping"
+                          : "Map to wish club"}
                     </button>
                   ) : (
                     <span className="text-[var(--muted-foreground)]">
@@ -175,4 +175,16 @@ export function ClubAliasReview({
 
 function clubOptionText(option: WishClubOption) {
   return `${option.clubName} - ${option.clubId}`;
+}
+
+function initialTargets(candidates: ClubAliasCandidate[]) {
+  return Object.fromEntries(
+    candidates.map((candidate) => [
+      candidate.modelClubId,
+      clubOptionText({
+        clubId: candidate.wishClubId,
+        clubName: candidate.wishClubName,
+      }),
+    ]),
+  );
 }

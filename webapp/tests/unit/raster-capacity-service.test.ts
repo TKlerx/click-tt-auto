@@ -1,3 +1,4 @@
+/* eslint-disable max-lines-per-function */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { prismaMock } from "@/lib/__mocks__/db";
 import {
@@ -315,6 +316,52 @@ describe("raster capacity service", () => {
       ],
     });
     expect(prismaMock.rasterHallCapacity.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it("keeps reviewed club aliases visible for correction", async () => {
+    prismaMock.rasterInputSet.findUnique.mockResolvedValue({
+      ...inputScope,
+      seasonModelJson: JSON.stringify({
+        clubAliases: [
+          {
+            sourceClubId: "fc-bu-hne",
+            sourceClubName: "FC Bühne",
+            targetClubId: "fc-b-hne-1929-42518",
+            targetClubName: "FC Bühne 1929",
+          },
+        ],
+        clubs: [{ id: "fc-b-hne-1929-42518", name: "FC Bühne 1929" }],
+        teams: [
+          {
+            clubId: "fc-b-hne-1929-42518",
+            hall: "1",
+            homeWeekday: "friday",
+          },
+        ],
+      }),
+      wishes: [
+        {
+          clubId: "fc-b-hne-1929-42518",
+          clubName: "FC Bühne 1929",
+          teamLabel: "Erwachsene",
+          hall: "1",
+          homeWeekday: "FRIDAY",
+        },
+      ],
+    } as never);
+    prismaMock.rasterHallCapacity.findMany.mockResolvedValue([] as never);
+
+    await expect(
+      reviewHallCapacitiesForInputSet("input-1"),
+    ).resolves.toMatchObject({
+      aliasCandidates: [
+        {
+          confirmed: true,
+          modelClubId: "fc-bu-hne",
+          wishClubId: "fc-b-hne-1929-42518",
+        },
+      ],
+    });
   });
 
   it("infers capacities from parsed wishes when the season model has no week preference", async () => {
