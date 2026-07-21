@@ -103,8 +103,10 @@ export function WishImportReviewPanel({
     review.conflicts.length +
     review.unmatchedRows.length +
     visibleMissing.length;
+  const totalVisibleCount =
+    actionableCount + review.addedWishes.length + review.settledMatches.length;
   const counts: Record<Filter, number> = {
-    all: actionableCount,
+    all: totalVisibleCount,
     overwrites: overwriteConflicts.length,
     sourceChanged: sourceConflicts.length,
     added: review.addedWishes.length,
