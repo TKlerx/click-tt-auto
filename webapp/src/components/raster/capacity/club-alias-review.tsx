@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { withBasePath } from "@/lib/base-path";
 
 type ClubAliasCandidate = {
@@ -30,16 +30,23 @@ export function ClubAliasReview({
   wishClubOptions: WishClubOption[];
 }) {
   const router = useRouter();
-  const [busyId, setBusyId] = useState<string | null>(null);
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [busyIds, setBusyIds] = useState<Record<string, boolean>>({});
   const [message, setMessage] = useState<string | null>(null);
+  const [localCandidates, setLocalCandidates] = useState(candidates);
   const [targets, setTargets] = useState<Record<string, string>>(() =>
     initialTargets(candidates),
   );
   const [capacityRelevantOnly, setCapacityRelevantOnly] = useState(false);
   const visibleCandidates = capacityRelevantOnly
-    ? candidates.filter((candidate) => candidate.capacityRelevant)
-    : candidates;
-  if (!candidates.length) return null;
+    ? localCandidates.filter((candidate) => candidate.capacityRelevant)
+    : localCandidates;
+  if (!localCandidates.length) return null;
+
+  function refreshSoon() {
+    if (refreshTimer.current) clearTimeout(refreshTimer.current);
+    refreshTimer.current = setTimeout(() => router.refresh(), 600);
+  }
 
   async function apply(candidate: ClubAliasCandidate) {
     const selected = wishClubOptions.find(
@@ -49,7 +56,7 @@ export function ClubAliasReview({
       setMessage("Choose a wish club from the list.");
       return;
     }
-    setBusyId(candidate.modelClubId);
+    setBusyIds((current) => ({ ...current, [candidate.modelClubId]: true }));
     setMessage(null);
     try {
       const response = await fetch(
@@ -70,10 +77,22 @@ export function ClubAliasReview({
         setMessage(body.error ?? `Failed (${response.status})`);
         return;
       }
-      setMessage("Mapping saved; capacities refreshed.");
-      router.refresh();
+      setMessage("Mapping saved.");
+      setLocalCandidates((current) =>
+        current.map((item) =>
+          item.modelClubId === candidate.modelClubId
+            ? {
+                ...item,
+                confirmed: true,
+                wishClubId: selected.clubId,
+                wishClubName: selected.clubName,
+              }
+            : item,
+        ),
+      );
+      refreshSoon();
     } finally {
-      setBusyId(null);
+      setBusyIds((current) => ({ ...current, [candidate.modelClubId]: false }));
     }
   }
 
@@ -81,7 +100,7 @@ export function ClubAliasReview({
     <details className="rounded-md border border-[var(--border)] p-3" open>
       <summary className="cursor-pointer text-sm font-medium">
         Club mappings to review ({visibleCandidates.length}
-        {capacityRelevantOnly ? ` of ${candidates.length}` : ""})
+        {capacityRelevantOnly ? ` of ${localCandidates.length}` : ""})
       </summary>
       <p className="mt-2 text-sm text-[var(--muted-foreground)]">
         These capacity clubs use ids that are not linked to the wish import.
@@ -109,79 +128,82 @@ export function ClubAliasReview({
               </tr>
             </thead>
             <tbody>
-              {visibleCandidates.map((candidate) => (
-                <tr
-                  className="border-t border-[var(--border)]"
-                  key={`${candidate.modelClubId}-${candidate.wishClubId ?? "choose"}`}
-                >
-                  <td className="px-2 py-2">
-                    <span className="font-medium">
-                      {candidate.modelClubName}
-                    </span>
-                    <br />
-                    <span className="text-[var(--muted-foreground)]">
-                      {candidate.modelClubId}
-                    </span>
-                    {candidate.confirmed ? (
-                      <span className="ml-2 text-xs text-[var(--muted-foreground)]">
-                        mapped
+              {visibleCandidates.map((candidate) => {
+                const busy = busyIds[candidate.modelClubId] === true;
+                return (
+                  <tr
+                    className="border-t border-[var(--border)]"
+                    key={`${candidate.modelClubId}-${candidate.wishClubId ?? "choose"}`}
+                  >
+                    <td className="px-2 py-2">
+                      <span className="font-medium">
+                        {candidate.modelClubName}
                       </span>
-                    ) : null}
-                  </td>
-                  <td className="px-2 py-2">
-                    <input
-                      className="h-9 w-full min-w-72 rounded-md border border-[var(--border)] bg-[var(--background)] px-2 text-sm"
-                      disabled={!canEdit || busyId !== null}
-                      list={`club-alias-targets-${candidate.modelClubId}`}
-                      value={targets[candidate.modelClubId] ?? ""}
-                      onChange={(event) => {
-                        const value = event.currentTarget.value;
-                        setTargets((current) => ({
-                          ...current,
-                          [candidate.modelClubId]: value,
-                        }));
-                      }}
-                    />
-                    <datalist
-                      id={`club-alias-targets-${candidate.modelClubId}`}
-                    >
-                      {wishClubOptions.map((option) => (
-                        <option
-                          key={option.clubId}
-                          value={clubOptionText(option)}
-                        />
-                      ))}
-                    </datalist>
-                  </td>
-                  <td className="px-2 py-2">
-                    {canEdit ? (
-                      <button
-                        className="h-9 rounded-md border border-[var(--border)] px-3 text-sm font-medium"
-                        disabled={
-                          busyId !== null ||
-                          !wishClubOptions.some(
-                            (option) =>
-                              clubOptionText(option) ===
-                              targets[candidate.modelClubId],
-                          )
-                        }
-                        onClick={() => void apply(candidate)}
-                        type="button"
-                      >
-                        {busyId === candidate.modelClubId
-                          ? "Saving..."
-                          : candidate.confirmed
-                            ? "Update mapping"
-                            : "Map to wish club"}
-                      </button>
-                    ) : (
+                      <br />
                       <span className="text-[var(--muted-foreground)]">
-                        Scheduler required
+                        {candidate.modelClubId}
                       </span>
-                    )}
-                  </td>
-                </tr>
-              ))}
+                      {candidate.confirmed ? (
+                        <span className="ml-2 text-xs text-[var(--muted-foreground)]">
+                          mapped
+                        </span>
+                      ) : null}
+                    </td>
+                    <td className="px-2 py-2">
+                      <input
+                        className="h-9 w-full min-w-72 rounded-md border border-[var(--border)] bg-[var(--background)] px-2 text-sm"
+                        disabled={!canEdit || busy}
+                        list={`club-alias-targets-${candidate.modelClubId}`}
+                        value={targets[candidate.modelClubId] ?? ""}
+                        onChange={(event) => {
+                          const value = event.currentTarget.value;
+                          setTargets((current) => ({
+                            ...current,
+                            [candidate.modelClubId]: value,
+                          }));
+                        }}
+                      />
+                      <datalist
+                        id={`club-alias-targets-${candidate.modelClubId}`}
+                      >
+                        {wishClubOptions.map((option) => (
+                          <option
+                            key={option.clubId}
+                            value={clubOptionText(option)}
+                          />
+                        ))}
+                      </datalist>
+                    </td>
+                    <td className="px-2 py-2">
+                      {canEdit ? (
+                        <button
+                          className="h-9 rounded-md border border-[var(--border)] px-3 text-sm font-medium"
+                          disabled={
+                            busy ||
+                            !wishClubOptions.some(
+                              (option) =>
+                                clubOptionText(option) ===
+                                targets[candidate.modelClubId],
+                            )
+                          }
+                          onClick={() => void apply(candidate)}
+                          type="button"
+                        >
+                          {busy
+                            ? "Saving..."
+                            : candidate.confirmed
+                              ? "Update mapping"
+                              : "Map to wish club"}
+                        </button>
+                      ) : (
+                        <span className="text-[var(--muted-foreground)]">
+                          Scheduler required
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         ) : (
