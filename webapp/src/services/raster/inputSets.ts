@@ -203,7 +203,9 @@ export async function validateInputSet(id: string) {
       );
       if (undecidedGroups.length) {
         errors.push(
-          `${undecidedGroups.length} group(s) contain teams without parsed wish PDFs. Choose include or exclude before running.`,
+          `${undecidedGroups.length} group(s) contain teams without parsed wish PDFs: ${undecidedGroups
+            .map(groupLabel)
+            .join("; ")}. Choose include or exclude before running.`,
         );
       }
     }

@@ -126,7 +126,11 @@ describe("raster input set service", () => {
     } as never);
 
     await expect(validateInputSet("input-1")).resolves.toMatchObject({
-      errors: [expect.stringContaining("without parsed wish PDFs")],
+      errors: [
+        expect.stringContaining(
+          "L::G6. Choose include or exclude before running.",
+        ),
+      ],
     });
   });
 
