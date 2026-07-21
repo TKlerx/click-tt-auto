@@ -25,6 +25,11 @@ type CapacitySlot = {
 };
 
 type CapacityAliasClub = { id?: string; name?: string };
+type CapacityAliasTeam = {
+  id?: string;
+  clubId?: string;
+  capacityRelevant?: boolean;
+};
 
 export type HallCapacityReviewRow = Omit<InferredHallCapacity, "scopeId"> & {
   id: string | null;
@@ -45,6 +50,7 @@ export type HallCapacityReview = {
 };
 
 export type HallCapacityAliasCandidate = {
+  capacityRelevant: boolean;
   confirmed?: boolean;
   modelClubId: string;
   modelClubName: string;
@@ -336,9 +342,7 @@ async function inferCapacityRows(
   return [...inferred.values()];
 }
 
-async function findCapacityAliasReview(
-  inputSetId: string,
-) {
+async function findCapacityAliasReview(inputSetId: string) {
   const inputSet = await prisma.rasterInputSet.findUnique({
     where: { id: inputSetId },
     select: {
@@ -352,7 +356,7 @@ async function findCapacityAliasReview(
   const model = JSON.parse(inputSet.seasonModelJson) as {
     clubs?: Array<{ id?: string; name?: string }>;
     groups?: Array<{ planningStatus?: string; teamIds?: string[] }>;
-    teams?: Array<{ id?: string; clubId?: string }>;
+    teams?: CapacityAliasTeam[];
     clubAliases?: Array<{
       sourceClubId?: string;
       sourceClubName?: string;
@@ -386,6 +390,16 @@ async function findCapacityAliasReview(
       .map((team) => team.clubId)
       .filter((clubId): clubId is string => Boolean(clubId)),
   );
+  const capacityRelevantClubIds = new Set(
+    (model.teams ?? [])
+      .filter(
+        (team) =>
+          (!team.id || !excludedTeamIds.has(team.id)) &&
+          team.capacityRelevant !== false,
+      )
+      .map((team) => team.clubId)
+      .filter((clubId): clubId is string => Boolean(clubId)),
+  );
 
   const candidates: HallCapacityAliasCandidate[] = [];
   const seen = new Set<string>();
@@ -396,6 +410,7 @@ async function findCapacityAliasReview(
     seen.add(key);
     candidates.push({
       confirmed: true,
+      capacityRelevant: capacityRelevantClubIds.has(alias.sourceClubId),
       modelClubId: alias.sourceClubId,
       modelClubName: alias.sourceClubName ?? alias.sourceClubId,
       wishClubId: alias.targetClubId,
@@ -410,6 +425,7 @@ async function findCapacityAliasReview(
       wishClubOptions,
       wishClubIds,
       capacityClubIds,
+      capacityRelevantClubIds,
     );
     if (!candidate) continue;
     const key = [candidate.modelClubId, candidate.wishClubId ?? ""].join("\0");
@@ -434,6 +450,7 @@ function capacityAliasCandidateForClub(
   wishClubOptions: HallCapacityWishClubOption[],
   wishClubIds: Set<string>,
   capacityClubIds: Set<string>,
+  capacityRelevantClubIds: Set<string>,
 ): HallCapacityAliasCandidate | null {
   if (!club.id || !club.name || confirmedSourceIds.has(club.id)) return null;
   if (!capacityClubIds.has(club.id) || wishClubIds.has(club.id)) return null;
@@ -444,6 +461,7 @@ function capacityAliasCandidateForClub(
   const wish = likelyWishes.length === 1 ? likelyWishes[0] : null;
   if (wish?.clubId === club.id) return null;
   return {
+    capacityRelevant: capacityRelevantClubIds.has(club.id),
     modelClubId: club.id,
     modelClubName: club.name,
     wishClubId: wish?.clubId,
@@ -483,9 +501,7 @@ function capacityClubTokens(value: string) {
     .split(/[^a-z0-9]+/)
     .filter(
       (token) =>
-        token.length > 1 &&
-        !/^\d+$/.test(token) &&
-        !clubNoiseTokens.has(token),
+        token.length > 1 && !/^\d+$/.test(token) && !clubNoiseTokens.has(token),
     );
 }
 

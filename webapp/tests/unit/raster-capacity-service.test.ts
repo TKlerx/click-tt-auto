@@ -450,6 +450,7 @@ describe("raster capacity service", () => {
     ).resolves.toMatchObject({
       aliasCandidates: [
         {
+          capacityRelevant: false,
           modelClubId: "model-club",
           wishClubId: undefined,
           wishClubName: undefined,
