@@ -24,6 +24,8 @@ type CapacitySlot = {
   durationMinutes: number;
 };
 
+type CapacityAliasClub = { id?: string; name?: string };
+
 export type HallCapacityReviewRow = Omit<InferredHallCapacity, "scopeId"> & {
   id: string | null;
   storedCapacity: number | null;
@@ -46,8 +48,8 @@ export type HallCapacityAliasCandidate = {
   confirmed?: boolean;
   modelClubId: string;
   modelClubName: string;
-  wishClubId: string;
-  wishClubName: string;
+  wishClubId?: string;
+  wishClubName?: string;
 };
 
 export type HallCapacityWishClubOption = {
@@ -386,19 +388,17 @@ async function findCapacityAliasReview(
     });
   }
   for (const club of model.clubs ?? []) {
-    if (!club.id || !club.name) continue;
-    if (confirmedSourceIds.has(club.id)) continue;
-    const wish = wishesByName.get(capacityClubNameKey(club.name));
-    if (!wish || wish.clubId === club.id) continue;
-    const key = [club.id, wish.clubId].join("\0");
+    const candidate = capacityAliasCandidateForClub(
+      club,
+      confirmedSourceIds,
+      wishesByName,
+      wishClubOptions,
+    );
+    if (!candidate) continue;
+    const key = [candidate.modelClubId, candidate.wishClubId ?? ""].join("\0");
     if (seen.has(key)) continue;
     seen.add(key);
-    candidates.push({
-      modelClubId: club.id,
-      modelClubName: club.name,
-      wishClubId: wish.clubId,
-      wishClubName: wish.clubName,
-    });
+    candidates.push(candidate);
   }
   candidates.sort((a, b) => {
     if (a.confirmed !== b.confirmed) return a.confirmed ? 1 : -1;
@@ -410,12 +410,92 @@ async function findCapacityAliasReview(
   return { aliasCandidates: candidates, wishClubOptions };
 }
 
+function capacityAliasCandidateForClub(
+  club: CapacityAliasClub,
+  confirmedSourceIds: Set<string | undefined>,
+  wishesByName: Map<string, HallCapacityWishClubOption>,
+  wishClubOptions: HallCapacityWishClubOption[],
+): HallCapacityAliasCandidate | null {
+  if (!club.id || !club.name || confirmedSourceIds.has(club.id)) return null;
+  const exactWish = wishesByName.get(capacityClubNameKey(club.name));
+  const likelyWishes = exactWish
+    ? [exactWish]
+    : findLikelyWishClubs(club.name, wishClubOptions);
+  const wish = likelyWishes.length === 1 ? likelyWishes[0] : null;
+  if (!wish && likelyWishes.length === 0) return null;
+  if (wish?.clubId === club.id) return null;
+  return {
+    modelClubId: club.id,
+    modelClubName: club.name,
+    wishClubId: wish?.clubId,
+    wishClubName: wish?.clubName,
+  };
+}
+
 function capacityClubNameKey(value: string) {
   return normalizeClubName(value)
     .replace(/^sportfreunde/, "spfr")
     .replace(/\d/g, "")
     .replace(/ev$/, "");
 }
+
+function findLikelyWishClubs(
+  modelClubName: string,
+  wishes: HallCapacityWishClubOption[],
+) {
+  return wishes.filter((wish) =>
+    hasDistinctiveSubset(
+      capacityClubTokens(modelClubName),
+      capacityClubTokens(wish.clubName),
+    ),
+  );
+}
+
+function capacityClubTokens(value: string) {
+  return value
+    .normalize("NFKD")
+    .replace(/\p{Diacritic}/gu, "")
+    .replace(/ß/g, "ss")
+    .replace(/\bblau[\s-]*weiss\b/gi, "bw")
+    .replace(/\brot[\s-]*weiss\b/gi, "rw")
+    .replace(/\bschwarz[\s-]*weiss\b/gi, "sw")
+    .replace(/\bgruen[\s-]*weiss\b/gi, "gw")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(
+      (token) =>
+        token.length > 1 &&
+        !/^\d+$/.test(token) &&
+        !clubNoiseTokens.has(token),
+    );
+}
+
+function hasDistinctiveSubset(left: string[], right: string[]) {
+  const shorter = left.length <= right.length ? left : right;
+  const longer = new Set(left.length <= right.length ? right : left);
+  return (
+    shorter.some((token) => token.length >= 5) &&
+    shorter.every((token) => longer.has(token))
+  );
+}
+
+const clubNoiseTokens = new Set([
+  "djk",
+  "fc",
+  "sc",
+  "spfr",
+  "sportfreunde",
+  "ssv",
+  "sv",
+  "tus",
+  "sus",
+  "ttc",
+  "ttg",
+  "ttv",
+  "tsv",
+  "tura",
+  "ev",
+]);
 
 function addCapacitySlot(
   bySlot: Map<string, CapacitySlot[]>,

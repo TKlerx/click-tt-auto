@@ -318,6 +318,107 @@ describe("raster capacity service", () => {
     expect(prismaMock.rasterHallCapacity.deleteMany).not.toHaveBeenCalled();
   });
 
+  it("surfaces likely club aliases for review when official names differ", async () => {
+    prismaMock.rasterInputSet.findUnique.mockResolvedValue({
+      ...inputScope,
+      seasonModelJson: JSON.stringify({
+        clubs: [
+          { id: "djk-delbru-ck", name: "DJK Delbrück" },
+          { id: "ssv-bw-blankenau", name: "SSV BW Blankenau" },
+        ],
+        teams: [
+          {
+            clubId: "djk-delbru-ck",
+            hall: "1",
+            homeWeekday: "friday",
+          },
+          {
+            clubId: "ssv-bw-blankenau",
+            hall: "1",
+            homeWeekday: "friday",
+          },
+        ],
+      }),
+      wishes: [
+        {
+          clubId: "djk-graf-sporck-1920-e-v-delbr-ck-42722",
+          clubName: "DJK Graf Sporck 1920 e.V. Delbrück",
+          teamLabel: "Erwachsene",
+          hall: "1",
+          homeWeekday: "FRIDAY",
+        },
+        {
+          clubId: "ssv-blau-wei-blankenau-42515",
+          clubName: "SSV Blau-Weiß Blankenau",
+          teamLabel: "Erwachsene",
+          hall: "1",
+          homeWeekday: "FRIDAY",
+        },
+      ],
+    } as never);
+    prismaMock.rasterHallCapacity.findMany.mockResolvedValue([] as never);
+
+    await expect(
+      reviewHallCapacitiesForInputSet("input-1"),
+    ).resolves.toMatchObject({
+      aliasCandidates: [
+        {
+          modelClubId: "djk-delbru-ck",
+          wishClubId: "djk-graf-sporck-1920-e-v-delbr-ck-42722",
+        },
+        {
+          modelClubId: "ssv-bw-blankenau",
+          wishClubId: "ssv-blau-wei-blankenau-42515",
+        },
+      ],
+    });
+  });
+
+  it("asks for a club alias without preselecting an ambiguous match", async () => {
+    prismaMock.rasterInputSet.findUnique.mockResolvedValue({
+      ...inputScope,
+      seasonModelJson: JSON.stringify({
+        clubs: [{ id: "tus-senne", name: "TuS Senne" }],
+        teams: [
+          {
+            clubId: "tus-senne",
+            hall: "1",
+            homeWeekday: "friday",
+          },
+        ],
+      }),
+      wishes: [
+        {
+          clubId: "tus-senne-i",
+          clubName: "TuS Senne I",
+          teamLabel: "Erwachsene",
+          hall: "1",
+          homeWeekday: "FRIDAY",
+        },
+        {
+          clubId: "tus-senne-ii",
+          clubName: "TuS Senne II",
+          teamLabel: "Erwachsene II",
+          hall: "1",
+          homeWeekday: "FRIDAY",
+        },
+      ],
+    } as never);
+    prismaMock.rasterHallCapacity.findMany.mockResolvedValue([] as never);
+
+    await expect(
+      reviewHallCapacitiesForInputSet("input-1"),
+    ).resolves.toMatchObject({
+      aliasCandidates: [
+        {
+          modelClubId: "tus-senne",
+          wishClubId: undefined,
+          wishClubName: undefined,
+        },
+      ],
+    });
+  });
+
   it("keeps reviewed club aliases visible for correction", async () => {
     prismaMock.rasterInputSet.findUnique.mockResolvedValue({
       ...inputScope,

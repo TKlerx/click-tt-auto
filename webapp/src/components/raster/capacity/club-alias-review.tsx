@@ -8,8 +8,8 @@ type ClubAliasCandidate = {
   confirmed?: boolean;
   modelClubId: string;
   modelClubName: string;
-  wishClubId: string;
-  wishClubName: string;
+  wishClubId?: string;
+  wishClubName?: string;
 };
 
 type WishClubOption = {
@@ -94,7 +94,7 @@ export function ClubAliasReview({
             {candidates.map((candidate) => (
               <tr
                 className="border-t border-[var(--border)]"
-                key={`${candidate.modelClubId}-${candidate.wishClubId}`}
+                key={`${candidate.modelClubId}-${candidate.wishClubId ?? "choose"}`}
               >
                 <td className="px-2 py-2">
                   <span className="font-medium">
@@ -180,12 +180,18 @@ function clubOptionText(option: WishClubOption) {
 
 function initialTargets(candidates: ClubAliasCandidate[]) {
   return Object.fromEntries(
-    candidates.map((candidate) => [
-      candidate.modelClubId,
-      clubOptionText({
-        clubId: candidate.wishClubId,
-        clubName: candidate.wishClubName,
-      }),
-    ]),
+    candidates.flatMap((candidate) =>
+      candidate.wishClubId && candidate.wishClubName
+        ? [
+            [
+              candidate.modelClubId,
+              clubOptionText({
+                clubId: candidate.wishClubId,
+                clubName: candidate.wishClubName,
+              }),
+            ],
+          ]
+        : [],
+    ),
   );
 }
