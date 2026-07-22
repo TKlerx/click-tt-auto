@@ -1,7 +1,7 @@
 "use client";
 
 import { RefreshCw } from "lucide-react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { withBasePath } from "@/lib/base-path";
 import { infeasibleScopeMessage } from "@/lib/raster/run-outcome";
@@ -130,6 +130,7 @@ export function FixedScheduleNumbersForm({
   rows: FixedScheduleNumber[];
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [message, setMessage] = useState<string | null>(null);
 
   async function saveFixedScheduleNumbers(formData: FormData) {
@@ -203,6 +204,7 @@ export function InputSetRunActions({
   combined?: boolean;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [strategy, setStrategy] = useState<RasterRunStrategy>("cp_sat");
@@ -563,7 +565,7 @@ export function InputSetRunActions({
                     <a
                       className="text-[var(--primary)]"
                       href={withBasePath(
-                        `/raster/snapshots/${run.snapshot.id}`,
+                        `/raster/snapshots/${run.snapshot.id}?${searchParams.toString()}`,
                       )}
                     >
                       Results
@@ -839,7 +841,10 @@ function runOutcomeLabel(
   if (outcome === "INFEASIBLE") return "No feasible assignment";
   if (outcome === "FAILED") return "Software failure";
   if (outcome === "CANCELLED") return "Cancelled";
-  if (outcome === "PROVEN_OPTIMAL" && runStrategyLabel(settings) === "Initial heuristic") {
+  if (
+    outcome === "PROVEN_OPTIMAL" &&
+    runStrategyLabel(settings) === "Initial heuristic"
+  ) {
     return "Feasible";
   }
   if (outcome === "PROVEN_OPTIMAL") return "Proven optimal";

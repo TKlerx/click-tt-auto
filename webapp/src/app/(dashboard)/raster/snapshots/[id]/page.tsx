@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth";
 import { assertRasterAccess } from "@/lib/raster/access";
 import {
@@ -16,7 +16,11 @@ export default async function RasterSnapshotPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ scope?: string }>;
+  searchParams?: Promise<{
+    scope?: string;
+    season?: string;
+    workspace?: string;
+  }>;
 }) {
   const user = await requireSession();
   const snapshot = await getSnapshot((await params).id);
@@ -31,13 +35,25 @@ export default async function RasterSnapshotPage({
     );
   }
 
+  const query = await searchParams;
+  const runInputSet = snapshot.run?.inputSet;
+  if (runInputSet && (!query?.scope || !query.season || !query.workspace)) {
+    const next = new URLSearchParams({
+      ...query,
+      scope: query?.scope ?? runInputSet.scope.code,
+      season: query?.season ?? runInputSet.season,
+      workspace: query?.workspace ?? runInputSet.id,
+    });
+    redirect(`/raster/snapshots/${snapshot.id}?${next.toString()}`);
+  }
+
   const coveredScopes = snapshot.spannedScopes.length
     ? snapshot.spannedScopes.map((row) => row.scope.code)
     : [snapshot.scope.code];
   const scopeRows = snapshot.spannedScopes.length
     ? snapshot.spannedScopes
     : [{ scopeId: snapshot.scopeId, scope: snapshot.scope }];
-  const requestedScope = (await searchParams)?.scope;
+  const requestedScope = query?.scope;
   const selectedScopeId = scopeRows.some(
     (row) => row.scopeId === requestedScope,
   )
@@ -294,8 +310,7 @@ function parseConflictTeams(value: string): ConflictTeam[] {
             assignmentStatus: row.assignmentStatus
               ? String(row.assignmentStatus)
               : undefined,
-            planned:
-              typeof row.planned === "boolean" ? row.planned : undefined,
+            planned: typeof row.planned === "boolean" ? row.planned : undefined,
             weekSlot: row.weekSlot ? String(row.weekSlot) : undefined,
             startTime: row.startTime ? String(row.startTime) : undefined,
             durationMinutes:
@@ -334,7 +349,10 @@ function isUpperLeague(league?: string) {
   );
 }
 
-function displaySnapshotOptimality(optimality: string, settings?: string | null) {
+function displaySnapshotOptimality(
+  optimality: string,
+  settings?: string | null,
+) {
   if (optimality !== "PROVEN_OPTIMAL") return optimality;
   try {
     const parsed = JSON.parse(settings ?? "{}") as { strategy?: unknown };
