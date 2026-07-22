@@ -200,6 +200,9 @@ export function GroupPlanningReview({
   );
   const [messages, setMessages] = useState<Record<string, string>>({});
   const [savingGroups, setSavingGroups] = useState<Record<string, boolean>>({});
+  const [bulkSaving, setBulkSaving] = useState<"include" | "exclude" | null>(
+    null,
+  );
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -214,6 +217,28 @@ export function GroupPlanningReview({
     refreshTimer.current = setTimeout(() => router.refresh(), 600);
   }
 
+  async function updatePlanningStatus(
+    group: GroupPlanningReviewRow,
+    planningStatus: "include" | "exclude",
+  ) {
+    const response = await fetch(
+      withBasePath(
+        `/api/raster/input-sets/${group.inputSetId}/groups/${encodeURIComponent(group.groupId)}`,
+      ),
+      {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ planningStatus }),
+      },
+    );
+    if (!response.ok) {
+      const body = (await response.json().catch(() => ({}))) as {
+        error?: string;
+      };
+      throw new Error(body.error ?? "Group review update failed");
+    }
+  }
+
   async function save(
     group: GroupPlanningReviewRow,
     planningStatus: "include" | "exclude",
@@ -222,22 +247,7 @@ export function GroupPlanningReview({
     setStatuses((current) => ({ ...current, [group.groupId]: planningStatus }));
     setMessages((current) => ({ ...current, [group.groupId]: "Saving..." }));
     try {
-      const response = await fetch(
-        withBasePath(
-          `/api/raster/input-sets/${group.inputSetId}/groups/${encodeURIComponent(group.groupId)}`,
-        ),
-        {
-          method: "PUT",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ planningStatus }),
-        },
-      );
-      if (!response.ok) {
-        const body = (await response.json().catch(() => ({}))) as {
-          error?: string;
-        };
-        throw new Error(body.error ?? "Group review update failed");
-      }
+      await updatePlanningStatus(group, planningStatus);
       setMessages((current) => ({ ...current, [group.groupId]: "Saved" }));
       refreshSoon();
     } catch (error) {
@@ -253,6 +263,91 @@ export function GroupPlanningReview({
     } finally {
       setSavingGroups((current) => ({ ...current, [group.groupId]: false }));
     }
+  }
+
+  async function saveGroups(
+    targets: GroupPlanningReviewRow[],
+    planningStatus: "include" | "exclude",
+  ) {
+    if (!targets.length) return;
+
+    const previousStatuses = Object.fromEntries(
+      targets.map((group) => [
+        group.groupId,
+        statuses[group.groupId] ?? group.planningStatus ?? "",
+      ]),
+    ) as Record<string, "include" | "exclude" | "">;
+
+    setBulkSaving(planningStatus);
+    setSavingGroups((current) => ({
+      ...current,
+      ...Object.fromEntries(targets.map((group) => [group.groupId, true])),
+    }));
+    setStatuses((current) => ({
+      ...current,
+      ...Object.fromEntries(
+        targets.map((group) => [group.groupId, planningStatus]),
+      ),
+    }));
+    setMessages((current) => ({
+      ...current,
+      ...Object.fromEntries(
+        targets.map((group) => [group.groupId, "Saving..."]),
+      ),
+    }));
+
+    const results = await Promise.all(
+      targets.map(async (group) => {
+        try {
+          await updatePlanningStatus(group, planningStatus);
+          return { group, error: null };
+        } catch (error) {
+          return { group, error };
+        }
+      }),
+    );
+    const failed = results.filter((result) => result.error);
+
+    setMessages((current) => ({
+      ...current,
+      ...Object.fromEntries(
+        results.map((result) => [
+          result.group.groupId,
+          result.error instanceof Error ? result.error.message : "Saved",
+        ]),
+      ),
+    }));
+    setStatuses((current) => ({
+      ...current,
+      ...Object.fromEntries(
+        failed.map((result) => [
+          result.group.groupId,
+          previousStatuses[result.group.groupId],
+        ]),
+      ),
+    }));
+    setSavingGroups((current) => ({
+      ...current,
+      ...Object.fromEntries(targets.map((group) => [group.groupId, false])),
+    }));
+    setBulkSaving(null);
+
+    if (failed.length) {
+      window.alert(`${failed.length} group update(s) failed.`);
+    }
+    if (failed.length < targets.length) refreshSoon();
+  }
+
+  async function saveIncompleteGroups(planningStatus: "include" | "exclude") {
+    await saveGroups(
+      groups.filter((group) =>
+        groupNeedsDecision(
+          group,
+          statuses[group.groupId] ?? group.planningStatus ?? "",
+        ),
+      ),
+      planningStatus,
+    );
   }
 
   async function saveTeamWeek(
@@ -383,6 +478,12 @@ export function GroupPlanningReview({
   }
 
   if (!groups.length) return null;
+  const incompleteGroups = groups.filter((group) =>
+    groupNeedsDecision(
+      group,
+      statuses[group.groupId] ?? group.planningStatus ?? "",
+    ),
+  );
 
   return (
     <details className="mt-3 border-t border-[var(--border)] pt-3">
@@ -402,6 +503,15 @@ export function GroupPlanningReview({
           change a PDF match after a mistaken selection. Excluded groups stay
           visible here and can be included again once their wishes arrive.
         </p>
+        <GroupPlanningBulkActions
+          bulkSaving={bulkSaving}
+          incompleteCount={incompleteGroups.length}
+          onExcludeAll={() => void saveGroups(groups, "exclude")}
+          onExcludeIncomplete={() => void saveIncompleteGroups("exclude")}
+          onIncludeAll={() => void saveGroups(groups, "include")}
+          onIncludeIncomplete={() => void saveIncompleteGroups("include")}
+          totalCount={groups.length}
+        />
         {groups.map((group) => {
           const status = statuses[group.groupId] ?? group.planningStatus ?? "";
           const needsReview = groupNeedsDecision(group, status);
@@ -465,122 +575,178 @@ export function GroupPlanningReview({
                 </span>
               </summary>
               <div className="mt-3 overflow-auto">
-              <table className="w-full min-w-[56rem] text-left text-xs">
-                <thead className="text-[var(--muted-foreground)]">
-                  <tr>
-                    <th className="py-2 pr-3 font-medium">Team</th>
-                    <th className="py-2 pr-3 font-medium">Current fields</th>
-                    <th className="py-2 pr-3 font-medium">Missing</th>
-                    <th className="py-2 pr-3 font-medium">PDF match</th>
-                    <th className="py-2 pr-3 font-medium">Match status</th>
-                    <th className="py-2 pr-3 font-medium">Week</th>
-                    <th className="py-2 pr-3 font-medium">PDF week</th>
-                    <th className="py-2 pr-3 font-medium">Team id</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {group.teams.map((team) => (
-                    <tr
-                      className="border-t border-[var(--border)]"
-                      key={team.id}
-                    >
-                      <td className="py-2 pr-3">{team.label}</td>
-                      <td className="py-2 pr-3">{team.fields}</td>
-                      <td className="py-2 pr-3">{team.missing}</td>
-                      <td className="py-2 pr-3">
-                        <div className="flex gap-2">
-                          <input
-                            className="h-8 w-72 rounded-md border border-[var(--border)] bg-[var(--background)] px-2 text-xs"
+                <table className="w-full min-w-[56rem] text-left text-xs">
+                  <thead className="text-[var(--muted-foreground)]">
+                    <tr>
+                      <th className="py-2 pr-3 font-medium">Team</th>
+                      <th className="py-2 pr-3 font-medium">Current fields</th>
+                      <th className="py-2 pr-3 font-medium">Missing</th>
+                      <th className="py-2 pr-3 font-medium">PDF match</th>
+                      <th className="py-2 pr-3 font-medium">Match status</th>
+                      <th className="py-2 pr-3 font-medium">Week</th>
+                      <th className="py-2 pr-3 font-medium">PDF week</th>
+                      <th className="py-2 pr-3 font-medium">Team id</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {group.teams.map((team) => (
+                      <tr
+                        className="border-t border-[var(--border)]"
+                        key={team.id}
+                      >
+                        <td className="py-2 pr-3">{team.label}</td>
+                        <td className="py-2 pr-3">{team.fields}</td>
+                        <td className="py-2 pr-3">{team.missing}</td>
+                        <td className="py-2 pr-3">
+                          <div className="flex gap-2">
+                            <input
+                              className="h-8 w-72 rounded-md border border-[var(--border)] bg-[var(--background)] px-2 text-xs"
+                              disabled={savingId === team.id}
+                              list={`wish-matches-${team.id}`}
+                              placeholder="Search parsed wish"
+                              title={matchValues[team.id] ?? ""}
+                              value={matchValues[team.id] ?? ""}
+                              onChange={(event) => {
+                                const value = event.currentTarget.value;
+                                setMatchValues((current) => ({
+                                  ...current,
+                                  [team.id]: value,
+                                }));
+                              }}
+                            />
+                            <datalist id={`wish-matches-${team.id}`}>
+                              {(
+                                matchCandidates[team.id] ?? team.wishCandidates
+                              ).map((candidate) => (
+                                <option
+                                  key={candidate.id}
+                                  title={candidateText(candidate)}
+                                  value={candidateText(candidate)}
+                                />
+                              ))}
+                            </datalist>
+                            <button
+                              className="h-8 rounded-md border border-[var(--border)] px-2 text-xs font-medium"
+                              disabled={
+                                savingId === team.id || searchingId === team.id
+                              }
+                              onClick={() => void searchWishes(group, team.id)}
+                              type="button"
+                            >
+                              {searchingId === team.id ? "Searching" : "Search"}
+                            </button>
+                            <button
+                              className="h-8 rounded-md border border-[var(--border)] px-2 text-xs font-medium"
+                              disabled={
+                                savingId === team.id ||
+                                !(
+                                  matchCandidates[team.id] ??
+                                  team.wishCandidates
+                                ).some(
+                                  (candidate) =>
+                                    candidateText(candidate) ===
+                                    matchValues[team.id],
+                                )
+                              }
+                              onClick={() => void applyWish(group, team.id)}
+                              type="button"
+                            >
+                              {savingId === team.id ? "Applying" : "Apply"}
+                            </button>
+                          </div>
+                          <div className="mt-1 min-h-4 text-[var(--muted-foreground)]">
+                            {messages[team.id] ?? ""}
+                          </div>
+                        </td>
+                        <td className="py-2 pr-3">
+                          {team.wishMatchSource ?? "-"}
+                        </td>
+                        <td className="py-2 pr-3">
+                          <select
+                            className="h-8 rounded-md border border-[var(--border)] bg-[var(--background)] px-2 text-xs"
+                            value={
+                              weekValues[team.id] ?? team.spielwochePref ?? ""
+                            }
                             disabled={savingId === team.id}
-                            list={`wish-matches-${team.id}`}
-                            placeholder="Search parsed wish"
-                            title={matchValues[team.id] ?? ""}
-                            value={matchValues[team.id] ?? ""}
                             onChange={(event) => {
                               const value = event.currentTarget.value;
-                              setMatchValues((current) => ({
-                                ...current,
-                                [team.id]: value,
-                              }));
+                              void saveTeamWeek(group, team.id, value);
                             }}
-                          />
-                          <datalist id={`wish-matches-${team.id}`}>
-                            {(
-                              matchCandidates[team.id] ?? team.wishCandidates
-                            ).map((candidate) => (
-                              <option
-                                key={candidate.id}
-                                title={candidateText(candidate)}
-                                value={candidateText(candidate)}
-                              />
-                            ))}
-                          </datalist>
-                          <button
-                            className="h-8 rounded-md border border-[var(--border)] px-2 text-xs font-medium"
-                            disabled={
-                              savingId === team.id || searchingId === team.id
-                            }
-                            onClick={() => void searchWishes(group, team.id)}
-                            type="button"
                           >
-                            {searchingId === team.id ? "Searching" : "Search"}
-                          </button>
-                          <button
-                            className="h-8 rounded-md border border-[var(--border)] px-2 text-xs font-medium"
-                            disabled={
-                              savingId === team.id ||
-                              !(
-                                matchCandidates[team.id] ?? team.wishCandidates
-                              ).some(
-                                (candidate) =>
-                                  candidateText(candidate) ===
-                                  matchValues[team.id],
-                              )
-                            }
-                            onClick={() => void applyWish(group, team.id)}
-                            type="button"
-                          >
-                            {savingId === team.id ? "Applying" : "Apply"}
-                          </button>
-                        </div>
-                        <div className="mt-1 min-h-4 text-[var(--muted-foreground)]">
-                          {messages[team.id] ?? ""}
-                        </div>
-                      </td>
-                      <td className="py-2 pr-3">
-                        {team.wishMatchSource ?? "-"}
-                      </td>
-                      <td className="py-2 pr-3">
-                        <select
-                          className="h-8 rounded-md border border-[var(--border)] bg-[var(--background)] px-2 text-xs"
-                          value={
-                            weekValues[team.id] ?? team.spielwochePref ?? ""
-                          }
-                          disabled={savingId === team.id}
-                          onChange={(event) => {
-                            const value = event.currentTarget.value;
-                            void saveTeamWeek(group, team.id, value);
-                          }}
-                        >
-                          <option value="">No wish</option>
-                          <option value="A">A</option>
-                          <option value="B">B</option>
-                        </select>
-                      </td>
-                      <td className="py-2 pr-3">
-                        {team.parsedSpielwochePref ?? "-"}
-                      </td>
-                      <td className="py-2 pr-3">{team.id}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </details>
+                            <option value="">No wish</option>
+                            <option value="A">A</option>
+                            <option value="B">B</option>
+                          </select>
+                        </td>
+                        <td className="py-2 pr-3">
+                          {team.parsedSpielwochePref ?? "-"}
+                        </td>
+                        <td className="py-2 pr-3">{team.id}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </details>
           );
         })}
       </div>
     </details>
+  );
+}
+
+function GroupPlanningBulkActions({
+  bulkSaving,
+  incompleteCount,
+  onExcludeAll,
+  onExcludeIncomplete,
+  onIncludeAll,
+  onIncludeIncomplete,
+  totalCount,
+}: {
+  bulkSaving: "include" | "exclude" | null;
+  incompleteCount: number;
+  onExcludeAll: () => void;
+  onExcludeIncomplete: () => void;
+  onIncludeAll: () => void;
+  onIncludeIncomplete: () => void;
+  totalCount: number;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      <button
+        className="h-9 rounded-md border border-[var(--border)] px-3 text-sm font-medium disabled:opacity-60"
+        disabled={!incompleteCount || bulkSaving !== null}
+        onClick={onIncludeIncomplete}
+        type="button"
+      >
+        {bulkSaving === "include" ? "Including..." : "Include all incomplete"}
+      </button>
+      <button
+        className="h-9 rounded-md border border-[var(--border)] px-3 text-sm font-medium disabled:opacity-60"
+        disabled={!incompleteCount || bulkSaving !== null}
+        onClick={onExcludeIncomplete}
+        type="button"
+      >
+        {bulkSaving === "exclude" ? "Excluding..." : "Exclude all incomplete"}
+      </button>
+      <button
+        className="h-9 rounded-md border border-[var(--border)] px-3 text-sm font-medium disabled:opacity-60"
+        disabled={!totalCount || bulkSaving !== null}
+        onClick={onIncludeAll}
+        type="button"
+      >
+        Include all rows
+      </button>
+      <button
+        className="h-9 rounded-md border border-[var(--border)] px-3 text-sm font-medium disabled:opacity-60"
+        disabled={!totalCount || bulkSaving !== null}
+        onClick={onExcludeAll}
+        type="button"
+      >
+        Exclude all rows
+      </button>
+    </div>
   );
 }
 
