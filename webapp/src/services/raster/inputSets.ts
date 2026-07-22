@@ -669,13 +669,22 @@ export async function updateGroupPlanningStatus(
   groupId: string,
   planningStatus: "include" | "exclude",
 ) {
+  return updateGroupPlanningStatuses(inputSetId, [groupId], planningStatus);
+}
+
+export async function updateGroupPlanningStatuses(
+  inputSetId: string,
+  groupIds: string[],
+  planningStatus: "include" | "exclude",
+) {
   const inputSet = await getInputSet(inputSetId);
   if (!inputSet?.seasonModelJson) return null;
 
+  const targetIds = new Set(groupIds);
   const model = seasonModelSchema.parse(JSON.parse(inputSet.seasonModelJson));
   let updated = false;
   model.groups = (model.groups as SeasonGroup[]).map((group) => {
-    if (groupKey(group) !== groupId) return group;
+    if (!targetIds.has(groupKey(group))) return group;
     updated = true;
     return { ...group, planningStatus };
   });

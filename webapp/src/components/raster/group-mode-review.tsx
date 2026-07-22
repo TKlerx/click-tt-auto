@@ -239,6 +239,27 @@ export function GroupPlanningReview({
     }
   }
 
+  async function updatePlanningStatuses(
+    inputSetId: string,
+    groupIds: string[],
+    planningStatus: "include" | "exclude",
+  ) {
+    const response = await fetch(
+      withBasePath(`/api/raster/input-sets/${inputSetId}/groups`),
+      {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ groupIds, planningStatus }),
+      },
+    );
+    if (!response.ok) {
+      const body = (await response.json().catch(() => ({}))) as {
+        error?: string;
+      };
+      throw new Error(body.error ?? "Group review update failed");
+    }
+  }
+
   async function save(
     group: GroupPlanningReviewRow,
     planningStatus: "include" | "exclude",
@@ -296,46 +317,36 @@ export function GroupPlanningReview({
       ),
     }));
 
-    const results = await Promise.all(
-      targets.map(async (group) => {
-        try {
-          await updatePlanningStatus(group, planningStatus);
-          return { group, error: null };
-        } catch (error) {
-          return { group, error };
-        }
-      }),
-    );
-    const failed = results.filter((result) => result.error);
-
-    setMessages((current) => ({
-      ...current,
-      ...Object.fromEntries(
-        results.map((result) => [
-          result.group.groupId,
-          result.error instanceof Error ? result.error.message : "Saved",
-        ]),
-      ),
-    }));
-    setStatuses((current) => ({
-      ...current,
-      ...Object.fromEntries(
-        failed.map((result) => [
-          result.group.groupId,
-          previousStatuses[result.group.groupId],
-        ]),
-      ),
-    }));
-    setSavingGroups((current) => ({
-      ...current,
-      ...Object.fromEntries(targets.map((group) => [group.groupId, false])),
-    }));
-    setBulkSaving(null);
-
-    if (failed.length) {
-      window.alert(`${failed.length} group update(s) failed.`);
+    try {
+      await updatePlanningStatuses(
+        targets[0].inputSetId,
+        targets.map((group) => group.groupId),
+        planningStatus,
+      );
+      setMessages((current) => ({
+        ...current,
+        ...Object.fromEntries(targets.map((group) => [group.groupId, "Saved"])),
+      }));
+      refreshSoon();
+    } catch (error) {
+      setStatuses((current) => ({ ...current, ...previousStatuses }));
+      setMessages((current) => ({
+        ...current,
+        ...Object.fromEntries(
+          targets.map((group) => [
+            group.groupId,
+            error instanceof Error ? error.message : "Save failed",
+          ]),
+        ),
+      }));
+      window.alert(error instanceof Error ? error.message : "Save failed");
+    } finally {
+      setSavingGroups((current) => ({
+        ...current,
+        ...Object.fromEntries(targets.map((group) => [group.groupId, false])),
+      }));
+      setBulkSaving(null);
     }
-    if (failed.length < targets.length) refreshSoon();
   }
 
   async function saveIncompleteGroups(planningStatus: "include" | "exclude") {

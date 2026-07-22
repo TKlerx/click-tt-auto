@@ -5,6 +5,7 @@ import {
   syncInputSetSourceCaches,
   updateClubAliasMapping,
   updateGroupPlanningStatus,
+  updateGroupPlanningStatuses,
   updateGroupRasterMode,
   updateTeamWishFields,
   validateInputSet,
@@ -247,6 +248,40 @@ describe("raster input set service", () => {
     ]);
   });
 
+  it("updates multiple group planning statuses in one write", async () => {
+    prismaMock.rasterInputSet.findUnique.mockResolvedValueOnce({
+      id: "input-1",
+      status: InputSetStatus.DRAFT,
+      seasonModelJson: JSON.stringify({
+        ...model,
+        teams: [
+          { id: "t1", capacityRelevant: true, wishMatchId: "wish-1" },
+          { id: "t2", capacityRelevant: true, wishMatchId: "wish-2" },
+        ],
+        groups: [
+          { ref: { league: "L", name: "G1" }, teamIds: ["t1"] },
+          { ref: { league: "L", name: "G2" }, teamIds: ["t2"] },
+        ],
+      }),
+    } as never);
+    prismaMock.rasterInputSet.update.mockResolvedValue({} as never);
+
+    await updateGroupPlanningStatuses("input-1", ["L::G1", "L::G2"], "exclude");
+
+    const saved = JSON.parse(
+      prismaMock.rasterInputSet.update.mock.calls[0]?.[0].data
+        .seasonModelJson as string,
+    );
+    expect(saved.groups).toEqual([
+      expect.objectContaining({ planningStatus: "exclude" }),
+      expect.objectContaining({ planningStatus: "exclude" }),
+    ]);
+    expect(saved.teams).toEqual([
+      expect.objectContaining({ id: "t1", capacityRelevant: false }),
+      expect.objectContaining({ id: "t2", capacityRelevant: false }),
+    ]);
+  });
+
   it("marks manual week preferences for source sync preservation", async () => {
     prismaMock.rasterInputSet.findUnique.mockResolvedValue({
       id: "input-1",
@@ -288,11 +323,7 @@ describe("raster input set service", () => {
     } as never);
     prismaMock.rasterInputSet.update.mockResolvedValue({} as never);
 
-    await updateClubAliasMapping(
-      "input-1",
-      "fc-bu-hne",
-      "fc-b-hne-1929-42518",
-    );
+    await updateClubAliasMapping("input-1", "fc-bu-hne", "fc-b-hne-1929-42518");
 
     const saved = JSON.parse(
       prismaMock.rasterInputSet.update.mock.calls[0]?.[0].data
@@ -342,11 +373,7 @@ describe("raster input set service", () => {
     } as never);
     prismaMock.rasterInputSet.update.mockResolvedValue({} as never);
 
-    await updateClubAliasMapping(
-      "input-1",
-      "fc-bu-hne",
-      "fc-b-hne-1929-42518",
-    );
+    await updateClubAliasMapping("input-1", "fc-bu-hne", "fc-b-hne-1929-42518");
 
     const saved = JSON.parse(
       prismaMock.rasterInputSet.update.mock.calls[0]?.[0].data
