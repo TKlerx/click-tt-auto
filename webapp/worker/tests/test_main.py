@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import psycopg
 from psycopg.rows import dict_row
-from worker_db import ensure_worker_database, truncate_all
+from worker_db import ensure_worker_database, truncate_all, worker_test_database_url
 
 from starter_worker.config import WorkerConfig, load_config
 from starter_worker.db import (
@@ -89,6 +89,33 @@ class WorkerLoggingTests(unittest.TestCase):
             jobType="noop",
             attempt=2,
         )
+
+    def test_worker_test_database_url_derives_from_e2e_database_url(self) -> None:
+        with patch.dict(
+            os.environ,
+            {
+                "E2E_DATABASE_URL": "postgresql://u:p@localhost:45555/custom_e2e",
+            },
+            clear=True,
+        ):
+            self.assertEqual(
+                worker_test_database_url(),
+                "postgresql://u:p@localhost:45555/business_app_starter_worker_test",
+            )
+
+    def test_worker_test_database_url_prefers_explicit_override(self) -> None:
+        with patch.dict(
+            os.environ,
+            {
+                "E2E_DATABASE_URL": "postgresql://u:p@localhost:45555/custom_e2e",
+                "WORKER_TEST_DATABASE_URL": "postgresql://worker:p@localhost:1/worker",
+            },
+            clear=True,
+        ):
+            self.assertEqual(
+                worker_test_database_url(),
+                "postgresql://worker:p@localhost:1/worker",
+            )
 
 
 class WorkerTests(unittest.TestCase):

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 
 import psycopg
 from psycopg import sql
@@ -16,9 +17,11 @@ from psycopg import sql
 # The worker tests get their own database on the shared E2E PostgreSQL container.
 # Sharing business_app_starter_e2e_test would let a Playwright run and a pytest run
 # truncate each other's rows.
-DEFAULT_TEST_DATABASE_URL = (
-    "postgresql://starter:starter_e2e_password@localhost:45432/business_app_starter_worker_test"
+DEFAULT_E2E_DATABASE_URL = (
+    "postgresql://starter:starter_e2e_password@localhost:45432/"
+    "business_app_starter_e2e_test"
 )
+WORKER_TEST_DATABASE_NAME = "business_app_starter_worker_test"
 
 MIGRATIONS_DIR = Path(__file__).resolve().parents[2] / "prisma" / "migrations-postgres"
 
@@ -26,7 +29,10 @@ _schema_ready = False
 
 
 def worker_test_database_url() -> str:
-    return os.environ.get("WORKER_TEST_DATABASE_URL", DEFAULT_TEST_DATABASE_URL)
+    if os.environ.get("WORKER_TEST_DATABASE_URL"):
+        return os.environ["WORKER_TEST_DATABASE_URL"]
+    parsed = urlsplit(os.environ.get("E2E_DATABASE_URL", DEFAULT_E2E_DATABASE_URL))
+    return urlunsplit(parsed._replace(path=f"/{WORKER_TEST_DATABASE_NAME}"))
 
 
 def _maintenance_conninfo(database_url: str) -> tuple[str, str]:
