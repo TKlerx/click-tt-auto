@@ -101,7 +101,24 @@ function ListSection({ title, items }: { title: string; items: string[] }) {
 function parseCoverage(value?: string | null): CoverageRecord | null {
   if (!value) return null;
   try {
-    return JSON.parse(value) as CoverageRecord;
+    const coverage = JSON.parse(value) as Partial<CoverageRecord>;
+    return {
+      complete: Boolean(coverage.complete),
+      spannedScopes: coverage.spannedScopes ?? [],
+      spannedAll: Boolean(coverage.spannedAll),
+      scopesWithoutInputSet: coverage.scopesWithoutInputSet ?? [],
+      excludedGroups: coverage.excludedGroups ?? [],
+      wishGaps: coverage.wishGaps ?? [],
+      capacityGaps: coverage.capacityGaps ?? [],
+      unresolvedWishConflicts: coverage.unresolvedWishConflicts,
+      upperLeague: {
+        importPresent: coverage.upperLeague?.importPresent ?? true,
+        matched: coverage.upperLeague?.matched ?? [],
+        unmatched: coverage.upperLeague?.unmatched ?? [],
+        excludedNoHall: coverage.upperLeague?.excludedNoHall ?? [],
+        invalidRasterzahl: coverage.upperLeague?.invalidRasterzahl ?? [],
+      },
+    };
   } catch {
     return null;
   }

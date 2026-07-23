@@ -56,6 +56,15 @@ const wttvDistricts = [
   ["SUEDWESTFALEN", "Südwestfalen"],
 ] as const;
 
+const emptyRasterSeasonModel = JSON.stringify({
+  clubs: [],
+  teams: [],
+  groups: [],
+  wishes: [],
+  absoluteConstraints: [],
+  warnings: [],
+});
+
 async function readJson<T>() {
   const chunks: Buffer[] = [];
   for await (const chunk of process.stdin) {
@@ -680,7 +689,7 @@ async function main() {
             season: "2026/27",
             createdById: user.id,
             status: InputSetStatus.READY,
-            seasonModelJson: "{}",
+            seasonModelJson: emptyRasterSeasonModel,
           },
           select: { id: true },
         });
@@ -716,7 +725,7 @@ async function main() {
             season: "2026/27",
             createdById: user.id,
             status: InputSetStatus.READY,
-            seasonModelJson: "{}",
+            seasonModelJson: emptyRasterSeasonModel,
             spannedScopes: {
               create: [{ scopeId: owl.id }, { scopeId: westfalen.id }],
             },
@@ -792,6 +801,7 @@ async function main() {
         });
 
         return {
+          combinedInputSetId: combinedInputSet.id,
           combinedSnapshotId: combinedSnapshot.id,
           completeCombinedSnapshotId: completeCombinedSnapshot.id,
           singleSnapshotId: singleSnapshot.id,

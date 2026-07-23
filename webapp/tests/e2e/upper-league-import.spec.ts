@@ -96,8 +96,8 @@ test("scheduler imports an upper-league raster PDF and sees the preview on mobil
 
   await page.reload();
   await expect(page.getByText("Needs parse")).toBeVisible();
-  await page.getByRole("button", { name: "Parse", exact: true }).click();
-  await expect(page.getByText("Parsed 31 leagues")).toBeVisible({
+  await page.getByRole("button", { name: "Parse all" }).click();
+  await expect(page.getByText("Parsed data: 31 leagues")).toBeVisible({
     timeout: 20000,
   });
   await page.reload();
@@ -188,13 +188,14 @@ test("unmatched upper-league sources do not inject teams", async ({ page }) => {
   ).toBe(200);
 
   await page.goto(
-    `${appBasePath}/raster/review?scope=${constraintScope.code}&season=${encodeURIComponent(season)}`,
+    `${appBasePath}/raster/review?scope=${constraintScope.code}&season=${encodeURIComponent(season)}&workspace=${inputSet.id}`,
   );
   await page
     .getByRole("button", { name: "Recheck capacities" })
     .first()
     .click();
   await expect(page.getByText(/Inferred \d+; \d+ need review/)).toBeVisible();
+  await page.getByText(/Source matches/).click();
   await page.getByRole("button", { name: "Acknowledge all" }).click();
   await expect(page.getByText("Source matches (0 outstanding)")).toBeVisible();
   await page.getByRole("link", { name: /^Run optimizer/ }).click();

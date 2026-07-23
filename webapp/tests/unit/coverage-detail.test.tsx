@@ -33,6 +33,19 @@ describe("coverage detail", () => {
     expect(text).toMatch(/Upper-league unmatched\s+\(\s*1\s*\)/);
     expect(text).toMatch(/Upper-league missing hall\/day\s+\(\s*1\s*\)/);
   });
+
+  it("renders minimal historical coverage records", () => {
+    const detail = CoverageDetail({
+      coverageJson: JSON.stringify({
+        complete: false,
+        spannedScopes: ["scope-a"],
+        spannedAll: false,
+        excludedGroups: ["group-a"],
+      }),
+    });
+
+    expect(collectText(detail).join(" ")).toMatch(/Coverage gaps\s+\(\s*1\s*\)/);
+  });
 });
 
 function collectElements(

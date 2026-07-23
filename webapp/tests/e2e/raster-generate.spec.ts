@@ -133,7 +133,9 @@ test("admin can generate and review a raster snapshot", async ({ page }) => {
 
   // Address the step directly: /raster redirects to whatever step readiness
   // picks, which depends on state other tests leave behind.
-  await page.goto(`${appBasePath}/raster/review?${rasterQuery}`);
+  await page.goto(
+    `${appBasePath}/raster/review?${rasterQuery}&workspace=${inputSetId}`,
+  );
   await expect(
     page.getByText(`E2E generated ${suffix}`, { exact: true }),
   ).toBeVisible();
@@ -142,6 +144,7 @@ test("admin can generate and review a raster snapshot", async ({ page }) => {
     .first()
     .click();
   await expect(page.getByText(/Inferred \d+; \d+ need review/)).toBeVisible();
+  await page.getByText(/Source matches/).click();
   await page.getByRole("button", { name: "Acknowledge all" }).click();
   await expect(page.getByText("Source matches (0 outstanding)")).toBeVisible();
   await page.getByRole("link", { name: /^Run optimizer/ }).click();
@@ -411,7 +414,7 @@ function processRasterWorkerJob(runId: string) {
   const workerDir = path.join(process.cwd(), "worker");
   const repoRoot = path.dirname(process.cwd());
   const databaseUrl =
-    process.env.WORKER_DATABASE_URL ??
+    process.env.E2E_DATABASE_URL ??
     process.env.DATABASE_URL ??
     "postgresql://starter:starter_e2e_password@localhost:45432/business_app_starter_e2e_test";
   execFileSync(
