@@ -3,7 +3,7 @@
 **Feature Branch**: `012-manual-baseline-raster`  
 **Created**: 2026-07-23  
 **Status**: Draft  
-**Input**: User description: "Crawl/scrape the current manually set Rasterzahlen from click-TT. They are hidden/tricky to get, and should be stored as an optional manual baseline."
+**Input**: User description: "Crawl/scrape the current manually set Rasterzahlen from click-TT. They are hidden/tricky to get, should use the authenticated Playwright scraper path again, and should be stored as an optional manual baseline."
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -17,7 +17,7 @@ A scheduler imports the current expert-set Rasterzahlen from click-TT for the se
 
 **Acceptance Scenarios**:
 
-1. **Given** a scheduler is on a raster workspace with click-TT access configured, **When** they start manual baseline import, **Then** the system collects current Rasterzahlen for all available groups in that scope and season.
+1. **Given** a scheduler is on a raster workspace with click-TT access configured, **When** they start manual baseline import, **Then** the system collects current Rasterzahlen for all available groups in that scope and season through the authenticated live click-TT browser flow.
 2. **Given** a click-TT group hides the current Rasterzahl behind a nested or non-obvious page/action, **When** the import runs, **Then** the value is still captured with its source group, source team label, source URL, and import timestamp.
 3. **Given** a baseline import already exists for the workspace, **When** the scheduler refreshes it, **Then** the new imported baseline becomes the active baseline while the UI makes clear that previous optimizer runs used their original captured baseline.
 
@@ -71,6 +71,7 @@ A read-only user can inspect already imported baseline information where their a
 ### Edge Cases
 
 - click-TT exposes no current Rasterzahl for a group or team that exists in the season model.
+- A saved click-TT URL contains stateful navigation parameters and would return the wrong group if replayed directly.
 - click-TT exposes current Rasterzahlen for teams outside the selected scope, season, or workspace.
 - Multiple click-TT rows normalize to the same team or club label.
 - A source team has been renamed, moved groups, withdrawn, or replaced since the season model was imported.
@@ -85,21 +86,22 @@ A read-only user can inspect already imported baseline information where their a
 ### Functional Requirements
 
 - **FR-001**: The system MUST let schedulers create or refresh a manual baseline Rasterzahl import for the selected scope, season, and planning workspace.
-- **FR-002**: The system MUST collect current expert-set Rasterzahlen from click-TT even when the values are only reachable through nested, indirect, or hidden group/team pages.
-- **FR-003**: Each imported baseline row MUST preserve the source scope/season context, click-TT group label, click-TT team label, Rasterzahl, source location, and import timestamp.
-- **FR-004**: The system MUST verify that each captured baseline row belongs to the intended click-TT group/team context before storing it.
-- **FR-005**: The system MUST store the manual baseline as optional comparison data, not as a hard optimizer constraint by default.
-- **FR-006**: The system MUST keep manual baseline data separate from wish imports, capacity imports, upper-league fixed imports, and optimizer output.
-- **FR-007**: The system MUST show all unmatched, ambiguous, invalid, or changed baseline rows in one review area where schedulers can map, ignore, or correct them.
-- **FR-008**: The system MUST preserve scheduler review decisions across baseline refreshes when the underlying source row still represents the same team.
-- **FR-009**: The system MUST mark a baseline as ready only when every imported row is either mapped, ignored, or explicitly accepted as unresolved.
-- **FR-010**: The optimizer run setup MUST let schedulers choose whether to attach the reviewed baseline as comparison input.
-- **FR-011**: Optimizer run snapshots MUST record whether a baseline was used and which baseline version was used.
-- **FR-012**: Result pages for runs with a baseline MUST show assignment deltas against that baseline, including unchanged assignments, changed Rasterzahlen, assignments missing from the baseline, and baseline rows missing from optimizer output.
-- **FR-013**: Baseline deltas MUST NOT be reported as hard-constraint violations unless a value was separately marked fixed through an existing fixed-assignment workflow.
-- **FR-014**: Import failures MUST report which scope, group, or navigation step failed and MUST keep the previous active baseline usable when one exists.
-- **FR-015**: Read-only scope users MUST NOT be able to trigger baseline imports, refreshes, mapping decisions, or other baseline writes.
-- **FR-016**: Baseline imports MUST be scoped to the active workspace so one planning set cannot silently affect another.
+- **FR-002**: The system MUST collect current expert-set Rasterzahlen through the existing authenticated Playwright click-TT scraper flow, not by replaying saved stateful admin URLs.
+- **FR-003**: The system MUST collect current expert-set Rasterzahlen from click-TT even when the values are only reachable through nested, indirect, or hidden group/team pages.
+- **FR-004**: Each imported baseline row MUST preserve the source scope/season context, click-TT group label, click-TT team label, Rasterzahl, source location, and import timestamp.
+- **FR-005**: The system MUST verify that each captured baseline row belongs to the intended click-TT group/team context before storing it.
+- **FR-006**: The system MUST store the manual baseline as optional comparison data, not as a hard optimizer constraint by default.
+- **FR-007**: The system MUST keep manual baseline data separate from wish imports, capacity imports, upper-league fixed imports, and optimizer output.
+- **FR-008**: The system MUST show all unmatched, ambiguous, invalid, or changed baseline rows in one review area where schedulers can map, ignore, or correct them.
+- **FR-009**: The system MUST preserve scheduler review decisions across baseline refreshes when the underlying source row still represents the same team.
+- **FR-010**: The system MUST mark a baseline as ready only when every imported row is either mapped, ignored, or explicitly accepted as unresolved.
+- **FR-011**: The optimizer run setup MUST let schedulers choose whether to attach the reviewed baseline as comparison input.
+- **FR-012**: Optimizer run snapshots MUST record whether a baseline was used and which baseline version was used.
+- **FR-013**: Result pages for runs with a baseline MUST show assignment deltas against that baseline, including unchanged assignments, changed Rasterzahlen, assignments missing from the baseline, and baseline rows missing from optimizer output.
+- **FR-014**: Baseline deltas MUST NOT be reported as hard-constraint violations unless a value was separately marked fixed through an existing fixed-assignment workflow.
+- **FR-015**: Import failures MUST report which scope, group, or navigation step failed and MUST keep the previous active baseline usable when one exists.
+- **FR-016**: Read-only scope users MUST NOT be able to trigger baseline imports, refreshes, mapping decisions, or other baseline writes.
+- **FR-017**: Baseline imports MUST be scoped to the active workspace so one planning set cannot silently affect another.
 
 ### Key Entities *(include if feature involves data)*
 
@@ -126,3 +128,4 @@ A read-only user can inspect already imported baseline information where their a
 - Existing fixed upper-league and manual fixed schedule-number flows remain the only ways to create hard fixed Rasterzahl constraints.
 - The first implementation may support one active manual baseline per workspace while retaining enough version identity for run snapshots and audit.
 - Baseline import is a scheduler action, not a page-render side effect.
+- The existing Playwright scraper is the baseline import path unless implementation planning proves it cannot reach the hidden current Rasterzahl pages.
