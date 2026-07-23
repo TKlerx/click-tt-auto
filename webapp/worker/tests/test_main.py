@@ -100,7 +100,7 @@ class WorkerLoggingTests(unittest.TestCase):
         ):
             self.assertEqual(
                 worker_test_database_url(),
-                "postgresql://u:p@localhost:45555/business_app_starter_worker_test",
+                "postgresql://u:p@localhost:45555/custom_e2e?options=-csearch_path%3Dbusiness_app_starter_worker_test",
             )
 
     def test_worker_test_database_url_prefers_explicit_override(self) -> None:
@@ -108,7 +108,9 @@ class WorkerLoggingTests(unittest.TestCase):
             os.environ,
             {
                 "E2E_DATABASE_URL": "postgresql://u:p@localhost:45555/custom_e2e",
-                "WORKER_TEST_DATABASE_URL": "postgresql://worker:p@localhost:1/worker",
+                "WORKER_TEST_DATABASE_URL": (
+                    "postgresql://worker:p@localhost:1/worker?connection_limit=2"
+                ),
             },
             clear=True,
         ):

@@ -1,7 +1,10 @@
 import { spawnSync } from "node:child_process";
 import net from "node:net";
+import { config as loadDotenv } from "dotenv";
 
 import { resolveE2eDatabaseUrl } from "./e2e-database-url.mjs";
+
+loadDotenv({ path: new URL("../.env", import.meta.url) });
 
 const databaseUrl = resolveE2eDatabaseUrl();
 
