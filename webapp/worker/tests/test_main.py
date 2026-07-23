@@ -36,6 +36,7 @@ from starter_worker.main import (
     _log_job_completed,
     _log_job_failed,
     _log_jobs_requeued_stale,
+    _log_database_unavailable,
     _log_teams_poll_scheduled,
     _raster_run_model,
     _solve_raster_model,
@@ -44,6 +45,50 @@ from starter_worker.main import (
     process_raster_run,
     process_teams_intake_poll,
 )
+
+
+class WorkerLoggingTests(unittest.TestCase):
+    def test_worker_lifecycle_logs_use_structured_events(self) -> None:
+        job = type(
+            "Job",
+            (),
+            {"id": "job-1", "job_type": "noop", "attempt_count": 2},
+        )()
+
+        error = RuntimeError("bad job")
+        with patch("starter_worker.main.worker_logger") as worker_logger:
+            _log_jobs_requeued_stale(3)
+            _log_database_unavailable(ConnectionError("db offline"))
+            _log_teams_poll_scheduled()
+            _log_job_claimed(job)
+            _log_job_completed(job, {"status": "ok", "token": "secret"})
+            _log_job_failed(job, error)
+
+        worker_logger.warning.assert_any_call("jobs.requeued_stale", count=3)
+        worker_logger.warning.assert_any_call(
+            "database.unavailable", error="db offline"
+        )
+        worker_logger.info.assert_any_call("teams.poll_scheduled")
+        worker_logger.info.assert_any_call(
+            "job.claimed",
+            jobId="job-1",
+            jobType="noop",
+            attempt=2,
+        )
+        worker_logger.info.assert_any_call(
+            "job.completed",
+            jobId="job-1",
+            jobType="noop",
+            status="completed",
+            result={"status": "ok", "token": "[REDACTED]"},
+        )
+        worker_logger.exception.assert_called_once_with(
+            "job.failed",
+            error,
+            jobId="job-1",
+            jobType="noop",
+            attempt=2,
+        )
 
 
 class WorkerTests(unittest.TestCase):
@@ -1066,44 +1111,6 @@ class WorkerTests(unittest.TestCase):
             config = load_config(env_path=env_path)
 
         self.assertEqual(config.database_url, "postgresql://worker:test@localhost:5432/app")
-
-    def test_worker_lifecycle_logs_use_structured_events(self) -> None:
-        job = type(
-            "Job",
-            (),
-            {"id": "job-1", "job_type": "noop", "attempt_count": 2},
-        )()
-
-        error = RuntimeError("bad job")
-        with patch("starter_worker.main.worker_logger") as worker_logger:
-            _log_jobs_requeued_stale(3)
-            _log_teams_poll_scheduled()
-            _log_job_claimed(job)
-            _log_job_completed(job, {"status": "ok", "token": "secret"})
-            _log_job_failed(job, error)
-
-        worker_logger.warning.assert_called_once_with("jobs.requeued_stale", count=3)
-        worker_logger.info.assert_any_call("teams.poll_scheduled")
-        worker_logger.info.assert_any_call(
-            "job.claimed",
-            jobId="job-1",
-            jobType="noop",
-            attempt=2,
-        )
-        worker_logger.info.assert_any_call(
-            "job.completed",
-            jobId="job-1",
-            jobType="noop",
-            status="completed",
-            result={"status": "ok", "token": "[REDACTED]"},
-        )
-        worker_logger.exception.assert_called_once_with(
-            "job.failed",
-            error,
-            jobId="job-1",
-            jobType="noop",
-            attempt=2,
-        )
 
     def test_worker_strips_prisma_only_postgres_url_params(self) -> None:
         url = normalize_postgres_database_url(

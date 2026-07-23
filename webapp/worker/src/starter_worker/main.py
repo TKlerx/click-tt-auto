@@ -13,6 +13,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, cast
 
+import psycopg
+
 from .config import WorkerConfig, load_config
 from .db import BackgroundJob, JobStore
 from .graph_mail import get_graph_mail_message, list_graph_mail_messages, send_graph_mail
@@ -893,6 +895,10 @@ def _log_jobs_requeued_stale(count: int) -> None:
     worker_logger.warning("jobs.requeued_stale", count=count)
 
 
+def _log_database_unavailable(error: BaseException) -> None:
+    worker_logger.warning("database.unavailable", error=str(error))
+
+
 def _log_teams_poll_scheduled() -> None:
     worker_logger.info("teams.poll_scheduled")
 
@@ -933,19 +939,26 @@ def main() -> None:
 
     next_teams_poll_at = 0.0
     while True:
-        recovered_count = store.requeue_stale_jobs()
-        if recovered_count:
-            _log_jobs_requeued_stale(recovered_count)
+        try:
+            recovered_count = store.requeue_stale_jobs()
+            if recovered_count:
+                _log_jobs_requeued_stale(recovered_count)
 
-        if _is_teams_enabled():
-            flags = store.get_teams_integration_flags()
-            if flags["intakeEnabled"] and time.time() >= next_teams_poll_at:
-                created_poll_job = store.create_teams_intake_poll_job_if_missing()
-                next_teams_poll_at = time.time() + max(config.teams_poll_interval_seconds, 1)
-                if created_poll_job:
-                    _log_teams_poll_scheduled()
+            if _is_teams_enabled():
+                flags = store.get_teams_integration_flags()
+                if flags["intakeEnabled"] and time.time() >= next_teams_poll_at:
+                    created_poll_job = store.create_teams_intake_poll_job_if_missing()
+                    next_teams_poll_at = time.time() + max(
+                        config.teams_poll_interval_seconds, 1
+                    )
+                    if created_poll_job:
+                        _log_teams_poll_scheduled()
 
-        job = store.claim_next_job()
+            job = store.claim_next_job()
+        except psycopg.OperationalError as error:
+            _log_database_unavailable(error)
+            time.sleep(config.poll_interval_seconds)
+            continue
         if job is None:
             time.sleep(config.poll_interval_seconds)
             continue
