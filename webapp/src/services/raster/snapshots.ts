@@ -71,7 +71,17 @@ export async function getSnapshot(id: string) {
     where: { id, archivedAt: null },
     include: {
       scope: true,
-      run: true,
+      run: {
+        include: {
+          inputSet: {
+            select: {
+              id: true,
+              season: true,
+              scope: { select: { code: true } },
+            },
+          },
+        },
+      },
       spannedScopes: {
         select: {
           scopeId: true,

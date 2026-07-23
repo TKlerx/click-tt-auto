@@ -99,6 +99,81 @@ function clubWithUpperLeagueTeam(options?: {
   };
 }
 
+function clubWithUnplannedUpperLeagueDerbyPair(): SeasonModel {
+  return {
+    clubs: [
+      {
+        id: "tura-elsen",
+        name: "TuRa Elsen",
+        venues: [
+          { hall: "1", name: "Halle 1", capacityByWeekday: { friday: 1 } },
+        ],
+        notes: "",
+      },
+      { id: "filler-club", name: "Filler", venues: [], notes: "" },
+    ],
+    teams: [
+      {
+        id: "landesliga-tura-elsen-ii",
+        clubId: "tura-elsen",
+        label: "II",
+        group: { league: "Landesliga", name: "Landesliga 1" },
+        homeWeekday: "friday",
+        hall: "1",
+        rasterzahl: { kind: "fixed", value: 11 },
+        planned: false,
+        confidence: "ok",
+      },
+      {
+        id: "landesliga-tura-elsen-iii",
+        clubId: "tura-elsen",
+        label: "III",
+        group: { league: "Landesliga", name: "Landesliga 1" },
+        homeWeekday: "friday",
+        hall: "1",
+        rasterzahl: { kind: "fixed", value: 5 },
+        planned: false,
+        confidence: "ok",
+      },
+      {
+        id: "bezirksliga-tura-elsen-iv",
+        clubId: "tura-elsen",
+        label: "IV",
+        group: { league: "Bezirksliga", name: "Bezirksliga 1" },
+        homeWeekday: "friday",
+        hall: "1",
+        rasterzahl: { kind: "assignable" },
+        confidence: "ok",
+      },
+      {
+        id: "bezirksliga-filler",
+        clubId: "filler-club",
+        label: "F1",
+        group: { league: "Bezirksliga", name: "Bezirksliga 1" },
+        homeWeekday: "tuesday",
+        hall: "9",
+        rasterzahl: { kind: "fixed", value: 1 },
+        confidence: "ok",
+      },
+    ],
+    groups: [
+      {
+        ref: { league: "Landesliga", name: "Landesliga 1" },
+        size: 12,
+        teamIds: ["landesliga-tura-elsen-ii", "landesliga-tura-elsen-iii"],
+      },
+      {
+        ref: { league: "Bezirksliga", name: "Bezirksliga 1" },
+        size: 12,
+        teamIds: ["bezirksliga-tura-elsen-iv", "bezirksliga-filler"],
+      },
+    ],
+    wishes: [],
+    absoluteConstraints: [],
+    warnings: [],
+  };
+}
+
 async function solve(model: SeasonModel): Promise<Assignment> {
   const dir = await mkdtemp(path.join(tmpdir(), "upper-league-capacity-"));
   try {
@@ -195,5 +270,23 @@ describe("upper-league Rasterzahl occupies hall capacity", () => {
 
     expect(assignment["verbandsliga-tura-elsen-i"]).toBe(10);
     expect(evaluate(model, assignment).overUsages).toEqual([]);
+  }, 120_000);
+
+  it("uses unplanned upper-league Rasterzahlen for capacity without derby infeasibility", async () => {
+    const model = clubWithUnplannedUpperLeagueDerbyPair();
+
+    const collision = evaluate(model, {
+      "landesliga-tura-elsen-ii": 11,
+      "landesliga-tura-elsen-iii": 5,
+      "bezirksliga-tura-elsen-iv": 5,
+      "bezirksliga-filler": 1,
+    });
+    expect(collision.overUsages.length).toBeGreaterThan(0);
+    expect(collision.hardViolations).toEqual([]);
+
+    const assignment = await solve(model);
+
+    expect(assignment["landesliga-tura-elsen-ii"]).toBe(11);
+    expect(assignment["landesliga-tura-elsen-iii"]).toBe(5);
   }, 120_000);
 });

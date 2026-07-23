@@ -3,8 +3,11 @@ import { prismaMock } from "@/lib/__mocks__/db";
 import {
   listInputSets,
   syncInputSetSourceCaches,
+  updateClubAliasMapping,
   updateGroupPlanningStatus,
+  updateGroupPlanningStatuses,
   updateGroupRasterMode,
+  updateTeamWishFields,
   validateInputSet,
 } from "@/services/raster";
 import { InputSetStatus } from "../../generated/prisma/enums";
@@ -126,7 +129,11 @@ describe("raster input set service", () => {
     } as never);
 
     await expect(validateInputSet("input-1")).resolves.toMatchObject({
-      errors: [expect.stringContaining("without parsed wish PDFs")],
+      errors: [
+        expect.stringContaining(
+          "L::G6. Choose include or exclude before running.",
+        ),
+      ],
     });
   });
 
@@ -238,6 +245,148 @@ describe("raster input set service", () => {
     expect(saved.teams).toEqual([
       expect.objectContaining({ id: "t1", capacityRelevant: true }),
       expect.objectContaining({ id: "t2", capacityRelevant: false }),
+    ]);
+  });
+
+  it("updates multiple group planning statuses in one write", async () => {
+    prismaMock.rasterInputSet.findUnique.mockResolvedValueOnce({
+      id: "input-1",
+      status: InputSetStatus.DRAFT,
+      seasonModelJson: JSON.stringify({
+        ...model,
+        teams: [
+          { id: "t1", capacityRelevant: true, wishMatchId: "wish-1" },
+          { id: "t2", capacityRelevant: true, wishMatchId: "wish-2" },
+        ],
+        groups: [
+          { ref: { league: "L", name: "G1" }, teamIds: ["t1"] },
+          { ref: { league: "L", name: "G2" }, teamIds: ["t2"] },
+        ],
+      }),
+    } as never);
+    prismaMock.rasterInputSet.update.mockResolvedValue({} as never);
+
+    await updateGroupPlanningStatuses("input-1", ["L::G1", "L::G2"], "exclude");
+
+    const saved = JSON.parse(
+      prismaMock.rasterInputSet.update.mock.calls[0]?.[0].data
+        .seasonModelJson as string,
+    );
+    expect(saved.groups).toEqual([
+      expect.objectContaining({ planningStatus: "exclude" }),
+      expect.objectContaining({ planningStatus: "exclude" }),
+    ]);
+    expect(saved.teams).toEqual([
+      expect.objectContaining({ id: "t1", capacityRelevant: false }),
+      expect.objectContaining({ id: "t2", capacityRelevant: false }),
+    ]);
+  });
+
+  it("marks manual week preferences for source sync preservation", async () => {
+    prismaMock.rasterInputSet.findUnique.mockResolvedValue({
+      id: "input-1",
+      status: InputSetStatus.DRAFT,
+      seasonModelJson: JSON.stringify(model),
+      _count: { wishes: 1, fixedRasterzahlen: 0 },
+    } as never);
+    prismaMock.rasterInputSet.update.mockResolvedValue({} as never);
+
+    await updateTeamWishFields("input-1", "t1", { spielwochePref: "B" });
+
+    const saved = JSON.parse(
+      prismaMock.rasterInputSet.update.mock.calls[0]?.[0].data
+        .seasonModelJson as string,
+    );
+    expect(saved.teams).toEqual([
+      expect.objectContaining({
+        id: "t1",
+        spielwochePref: "B",
+        spielwochePrefSource: "manual",
+      }),
+    ]);
+  });
+
+  it("stores reviewed club aliases and rewrites model club ids", async () => {
+    prismaMock.rasterInputSet.findUnique.mockResolvedValue({
+      id: "input-1",
+      status: InputSetStatus.DRAFT,
+      seasonModelJson: JSON.stringify({
+        ...model,
+        clubs: [{ id: "fc-bu-hne", name: "FC Bühne" }],
+        teams: [{ id: "t1", clubId: "fc-bu-hne" }],
+        wishes: [{ clubId: "fc-bu-hne", text: "parallel" }],
+      }),
+    } as never);
+    prismaMock.rasterWish.findFirst.mockResolvedValue({
+      clubId: "fc-b-hne-1929-42518",
+      clubName: "FC Bühne 1929",
+    } as never);
+    prismaMock.rasterInputSet.update.mockResolvedValue({} as never);
+
+    await updateClubAliasMapping("input-1", "fc-bu-hne", "fc-b-hne-1929-42518");
+
+    const saved = JSON.parse(
+      prismaMock.rasterInputSet.update.mock.calls[0]?.[0].data
+        .seasonModelJson as string,
+    );
+    expect(saved.clubAliases).toEqual([
+      {
+        sourceClubId: "fc-bu-hne",
+        sourceClubName: "FC Bühne",
+        targetClubId: "fc-b-hne-1929-42518",
+        targetClubName: "FC Bühne 1929",
+      },
+    ]);
+    expect(saved.clubs).toEqual([
+      expect.objectContaining({ id: "fc-b-hne-1929-42518" }),
+    ]);
+    expect(saved.teams).toEqual([
+      expect.objectContaining({ clubId: "fc-b-hne-1929-42518" }),
+    ]);
+    expect(saved.wishes).toEqual([
+      expect.objectContaining({ clubId: "fc-b-hne-1929-42518" }),
+    ]);
+  });
+
+  it("updates reviewed club aliases after a wrong mapping", async () => {
+    prismaMock.rasterInputSet.findUnique.mockResolvedValue({
+      id: "input-1",
+      status: InputSetStatus.DRAFT,
+      seasonModelJson: JSON.stringify({
+        ...model,
+        clubAliases: [
+          {
+            sourceClubId: "fc-bu-hne",
+            sourceClubName: "FC Bühne",
+            targetClubId: "wrong-club",
+            targetClubName: "Wrong Club",
+          },
+        ],
+        clubs: [{ id: "wrong-club", name: "Wrong Club" }],
+        teams: [{ id: "t1", clubId: "wrong-club" }],
+        wishes: [{ clubId: "wrong-club", text: "parallel" }],
+      }),
+    } as never);
+    prismaMock.rasterWish.findFirst.mockResolvedValue({
+      clubId: "fc-b-hne-1929-42518",
+      clubName: "FC Bühne 1929",
+    } as never);
+    prismaMock.rasterInputSet.update.mockResolvedValue({} as never);
+
+    await updateClubAliasMapping("input-1", "fc-bu-hne", "fc-b-hne-1929-42518");
+
+    const saved = JSON.parse(
+      prismaMock.rasterInputSet.update.mock.calls[0]?.[0].data
+        .seasonModelJson as string,
+    );
+    expect(saved.clubAliases).toEqual([
+      expect.objectContaining({
+        sourceClubId: "fc-bu-hne",
+        targetClubId: "fc-b-hne-1929-42518",
+      }),
+    ]);
+    expect(saved.teams).toEqual([
+      expect.objectContaining({ clubId: "fc-b-hne-1929-42518" }),
     ]);
   });
 
@@ -441,6 +590,135 @@ describe("raster input set service", () => {
     ).toMatchObject({
       clubId: "ttv-lage",
       startTime: "20:00",
+    });
+  });
+});
+
+describe("raster input set sync preservation", () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("preserves manual wish matches while syncing source caches", async () => {
+    const parsedWish = {
+      clubs: [
+        {
+          id: "sportverein-1930-bergheim",
+          name: "Sportverein 1930 Bergheim",
+        },
+      ],
+      teams: [
+        {
+          clubId: "sportverein-1930-bergheim",
+          label: "Erwachsene",
+          homeWeekday: "friday",
+          hall: "1",
+          startTime: "20:00",
+          spielwochePref: "A",
+          rasterzahl: { kind: "assignable" },
+          confidence: "review",
+        },
+      ],
+      warnings: [],
+    };
+    const wishesJson = JSON.stringify({
+      sources: [
+        {
+          sourceId: "wish-source",
+          sourceRef: "wishes",
+          parsed: parsedWish,
+        },
+      ],
+    });
+    prismaMock.rasterInputSet.findUnique.mockResolvedValue({
+      id: "input-1",
+      scopeId: "owl",
+      season: "2026/27",
+      createdById: "user-1",
+      wishesJson,
+      seasonModelJson: JSON.stringify({
+        clubs: [],
+        teams: [
+          {
+            id: "bezirksoberliga-erwachsene-ttc-auto",
+            clubId: "sportverein-1930-bergheim",
+            label: "Erwachsene",
+            wishMatchId: "wish-bergheim",
+            wishMatchSource: "manual",
+            spielwochePref: "B",
+            spielwochePrefSource: "manual",
+          },
+        ],
+        groups: [],
+        wishes: [],
+        absoluteConstraints: [],
+        warnings: [],
+      }),
+    } as never);
+    prismaMock.rasterWish.findMany.mockResolvedValue([
+      {
+        id: "wish-bergheim",
+        clubId: "sportverein-1930-bergheim",
+        clubName: "Sportverein 1930 Bergheim",
+        teamLabel: "Erwachsene",
+        homeWeekday: "FRIDAY",
+        hall: "1",
+        startTime: "20:00",
+        spielwochePref: "A",
+        requestedRasterzahl: null,
+        notes: null,
+        confidence: "REVIEW",
+      },
+    ] as never);
+    prismaMock.rasterSource.findMany.mockResolvedValue([
+      {
+        id: "group-source",
+        sourceType: "GROUP_ASSIGNMENT",
+        sourceRef: "groups",
+        parsedJson: JSON.stringify({
+          assignments: [1, 2, 3, 4, 5].map((rasterzahl) => ({
+            league: "L",
+            group: "Bezirksoberliga Erwachsene",
+            rasterzahl,
+            team: rasterzahl === 1 ? "TTC Auto" : `Other Club ${rasterzahl}`,
+            sourceUrl: "https://example.test/group",
+          })),
+        }),
+      },
+      {
+        id: "wish-source",
+        sourceType: "WISHES_PDF",
+        sourceRef: "wishes",
+        parsedJson: JSON.stringify(parsedWish),
+      },
+    ] as never);
+    prismaMock.rasterInputSet.update.mockResolvedValue({} as never);
+
+    await syncInputSetSourceCaches("input-1");
+
+    const update = prismaMock.rasterInputSet.update.mock.calls.at(-1)?.[0] as {
+      data: { seasonModelJson?: string };
+    };
+    const synced = JSON.parse(update.data.seasonModelJson ?? "{}") as {
+      teams: Array<{
+        id: string;
+        clubId?: string;
+        spielwochePref?: string;
+        spielwochePrefSource?: string;
+        wishMatchId?: string;
+        wishMatchSource?: string;
+      }>;
+    };
+    expect(
+      synced.teams.find(
+        (team) => team.id === "bezirksoberliga-erwachsene-ttc-auto",
+      ),
+    ).toMatchObject({
+      clubId: "sportverein-1930-bergheim",
+      spielwochePref: "B",
+      spielwochePrefSource: "manual",
+      wishMatchId: "wish-bergheim",
+      wishMatchSource: "manual",
     });
   });
 });

@@ -1,9 +1,11 @@
 import { CapacityTable } from "@/components/raster/capacity/capacity-table";
+import { ClubAliasReview } from "@/components/raster/capacity/club-alias-review";
 import { InferCapacitiesButton } from "@/components/raster/capacity/infer-capacities-button";
 import { MatchReviewPanel } from "@/components/raster/match-review-panel";
 import { WishImportReviewPanel } from "@/components/raster/wish-import-review-panel";
 import { canUseRasterLevel } from "@/lib/raster/access";
 import { listMatchReviewState } from "@/lib/raster/match-review";
+import { resolveWorkspaceSelection } from "@/lib/raster/workspace-selection";
 import { FixedScheduleNumbersForm } from "@/components/raster/input-set-actions";
 import {
   GroupModeReview,
@@ -36,12 +38,16 @@ export default async function RasterReviewPage({
 }) {
   const context = await requireRasterStep(searchParams);
   if ("error" in context) return <RasterStepError message={context.error} />;
+  const params = await searchParams;
 
   const [inputSets, capacities] = await Promise.all([
     listInputSets(context.scope.id, context.season),
     listHallCapacities(context.scope.id),
   ]);
-  const inputSet = inputSets[0] ?? null;
+  const inputSet = resolveWorkspaceSelection(
+    inputSets,
+    params.workspace,
+  ).selected;
   const [capacityReview, matchReview, wishImportReview] = inputSet
     ? await Promise.all([
         reviewHallCapacitiesForInputSet(inputSet.id),
@@ -50,6 +56,19 @@ export default async function RasterReviewPage({
       ])
     : [null, [], null];
   const canEdit = canUseRasterLevel(context.user, "scheduler");
+  const planningGroups = inputSet
+    ? extractPlanningGroups(
+        inputSet.id,
+        inputSet.seasonModelJson,
+        inputSet.wishes,
+      )
+    : [];
+  const missingMappingCount =
+    planningGroups.filter(
+      (group) => group.missingTeams > 0 || !group.planningStatus,
+    ).length +
+    (capacityReview?.aliasCandidates.length ?? 0) +
+    wishImportIssueCount(wishImportReview);
 
   if (!inputSet) {
     return (
@@ -74,28 +93,78 @@ export default async function RasterReviewPage({
         <ModelWarnings
           warnings={extractModelWarnings(inputSet.seasonModelJson)}
         />
+        <details
+          className="mt-3 border-t border-[var(--border)] pt-3"
+          open={missingMappingCount > 0}
+        >
+          <summary className="cursor-pointer text-sm font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
+            Missing mappings ({missingMappingCount})
+          </summary>
+          <div className="mt-3 grid gap-3">
+            {capacityReview ? (
+              <ClubAliasReview
+                canEdit={canEdit}
+                candidates={capacityReview.aliasCandidates}
+                inputSetId={inputSet.id}
+                wishClubOptions={capacityReview.wishClubOptions}
+              />
+            ) : null}
+            {wishImportReview && wishImportIssueCount(wishImportReview) > 0 ? (
+              <WishImportReviewPanel
+                canEdit={canEdit}
+                inputSetId={inputSet.id}
+                review={wishImportReview}
+                showMissing
+              />
+            ) : null}
+            <GroupPlanningReview groups={planningGroups} />
+            {missingMappingCount === 0 ? (
+              <p className="text-sm text-[var(--muted-foreground)]">
+                No missing mappings.
+              </p>
+            ) : null}
+          </div>
+        </details>
         <MatchReviewPanel
           canEdit={canEdit}
           inputSetId={inputSet.id}
           records={matchReview}
         />
-        {wishImportReview ? (
-          <div className="mt-3">
-            <WishImportReviewPanel
-              canEdit={canEdit}
-              inputSetId={inputSet.id}
-              review={wishImportReview}
-              showMissing
-            />
+        <details
+          className="mt-3 border-t border-[var(--border)] pt-3"
+          open={
+            !!capacityReview &&
+            (capacityReview.aliasCandidates.length > 0 ||
+              capacityReview.blockingCount > 0)
+          }
+        >
+          <summary className="cursor-pointer text-sm font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
+            Gym capacities
+          </summary>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            {canEdit ? (
+              <InferCapacitiesButton
+                inputSetId={inputSet.id}
+                label="Recheck capacities"
+              />
+            ) : null}
           </div>
-        ) : null}
-        <GroupPlanningReview
-          groups={extractPlanningGroups(
-            inputSet.id,
-            inputSet.seasonModelJson,
-            inputSet.wishes,
-          )}
-        />
+          {capacityReview ? (
+            <div className="my-3 grid gap-3">
+              <p className="text-sm text-[var(--muted-foreground)]">
+                {capacityReview.inferredCount} inferred,{" "}
+                {capacityReview.missingCount} missing,{" "}
+                {capacityReview.insufficientCount} lower than inferred,{" "}
+                {capacityReview.higherCount} higher than inferred.
+              </p>
+            </div>
+          ) : null}
+          <CapacityTable
+            canEdit={canEdit}
+            scope={context.scope.code}
+            rows={capacities}
+          />
+        </details>
         <GroupModeReview
           groups={extractSixTeamGroups(inputSet.id, inputSet.seasonModelJson)}
         />
@@ -106,32 +175,17 @@ export default async function RasterReviewPage({
           />
         ) : null}
       </section>
-      <section className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-4">
-        <div className="mb-3 flex flex-wrap items-center gap-3">
-          <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
-            Gym capacities
-          </h2>
-          {canEdit ? (
-            <InferCapacitiesButton
-              inputSetId={inputSet.id}
-              label="Recheck capacities"
-            />
-          ) : null}
-        </div>
-        {capacityReview ? (
-          <p className="mb-3 text-sm text-[var(--muted-foreground)]">
-            {capacityReview.inferredCount} inferred,{" "}
-            {capacityReview.missingCount} missing,{" "}
-            {capacityReview.insufficientCount} lower than inferred,{" "}
-            {capacityReview.higherCount} higher than inferred.
-          </p>
-        ) : null}
-        <CapacityTable
-          canEdit={canEdit}
-          scope={context.scope.code}
-          rows={capacities}
-        />
-      </section>
     </div>
+  );
+}
+
+function wishImportIssueCount(
+  review: Awaited<ReturnType<typeof listWishImportReview>> | null,
+) {
+  if (!review) return 0;
+  return (
+    review.conflicts.length +
+    review.unmatchedRows.length +
+    review.missingWishes.length
   );
 }

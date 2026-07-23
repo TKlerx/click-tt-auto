@@ -428,7 +428,9 @@
         "overwrites": "Überschreibt Ihre Änderung",
         "sourceChanged": "Quelle geändert"
       },
+      "toReview": "{count, plural, one {# zu prüfen} other {# zu prüfen}}",
       "addedCount": "{count, plural, one {# hinzugefügter Wunsch, noch nicht geprüft} other {# hinzugefügte Wünsche, noch nicht geprüft}}",
+      "addedInfoCount": "{count, plural, one {# Wunsch sauber importiert} other {# Wünsche sauber importiert}}",
       "settledCount": "{count, plural, one {# erledigte Zuordnung} other {# erledigte Zuordnungen}}",
       "noopMatch": "Keine Änderung",
       "acceptedMatch": "Entschieden: {decision}",

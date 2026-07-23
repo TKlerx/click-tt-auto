@@ -1,0 +1,242 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useRef, useState } from "react";
+import { withBasePath } from "@/lib/base-path";
+
+type ClubAliasCandidate = {
+  capacityRelevant: boolean;
+  confirmed?: boolean;
+  modelClubId: string;
+  modelClubName: string;
+  wishClubId?: string;
+  wishClubName?: string;
+};
+
+type WishClubOption = {
+  clubId: string;
+  clubName: string;
+};
+
+export function ClubAliasReview({
+  canEdit,
+  candidates,
+  inputSetId,
+  wishClubOptions,
+}: {
+  canEdit: boolean;
+  candidates: ClubAliasCandidate[];
+  inputSetId: string;
+  wishClubOptions: WishClubOption[];
+}) {
+  const router = useRouter();
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [busyIds, setBusyIds] = useState<Record<string, boolean>>({});
+  const [message, setMessage] = useState<string | null>(null);
+  const [localCandidates, setLocalCandidates] = useState(candidates);
+  const [targets, setTargets] = useState<Record<string, string>>(() =>
+    initialTargets(candidates),
+  );
+  const [capacityRelevantOnly, setCapacityRelevantOnly] = useState(false);
+  const visibleCandidates = capacityRelevantOnly
+    ? localCandidates.filter((candidate) => candidate.capacityRelevant)
+    : localCandidates;
+  if (!localCandidates.length) return null;
+
+  function refreshSoon() {
+    if (refreshTimer.current) clearTimeout(refreshTimer.current);
+    refreshTimer.current = setTimeout(() => router.refresh(), 600);
+  }
+
+  async function apply(candidate: ClubAliasCandidate) {
+    const selected = wishClubOptions.find(
+      (option) => clubOptionText(option) === targets[candidate.modelClubId],
+    );
+    if (!selected) {
+      setMessage("Choose a wish club from the list.");
+      return;
+    }
+    setBusyIds((current) => ({ ...current, [candidate.modelClubId]: true }));
+    setMessage(null);
+    try {
+      const response = await fetch(
+        withBasePath(`/api/raster/input-sets/${inputSetId}/club-aliases`),
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            sourceClubId: candidate.modelClubId,
+            targetClubId: selected.clubId,
+          }),
+        },
+      );
+      if (!response.ok) {
+        const body = (await response.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        setMessage(body.error ?? `Failed (${response.status})`);
+        return;
+      }
+      setMessage("Mapping saved.");
+      setLocalCandidates((current) =>
+        current.map((item) =>
+          item.modelClubId === candidate.modelClubId
+            ? {
+                ...item,
+                confirmed: true,
+                wishClubId: selected.clubId,
+                wishClubName: selected.clubName,
+              }
+            : item,
+        ),
+      );
+      refreshSoon();
+    } finally {
+      setBusyIds((current) => ({ ...current, [candidate.modelClubId]: false }));
+    }
+  }
+
+  return (
+    <details className="rounded-md border border-[var(--border)] p-3" open>
+      <summary className="cursor-pointer text-sm font-medium">
+        Club mappings to review ({visibleCandidates.length}
+        {capacityRelevantOnly ? ` of ${localCandidates.length}` : ""})
+      </summary>
+      <p className="mt-2 text-sm text-[var(--muted-foreground)]">
+        These capacity clubs use ids that are not linked to the wish import.
+        Confirm the suggested match or choose the right wish club.
+      </p>
+      <label className="mt-3 flex items-center gap-2 text-sm text-[var(--muted-foreground)]">
+        <input
+          checked={capacityRelevantOnly}
+          className="h-4 w-4"
+          onChange={(event) =>
+            setCapacityRelevantOnly(event.currentTarget.checked)
+          }
+          type="checkbox"
+        />
+        Show only capacity-relevant clubs
+      </label>
+      <div className="mt-3 overflow-x-auto">
+        {visibleCandidates.length ? (
+          <table className="w-full text-left text-sm">
+            <thead className="text-xs uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
+              <tr>
+                <th className="px-2 py-2">Season model</th>
+                <th className="px-2 py-2">Map to wish club</th>
+                <th className="px-2 py-2">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleCandidates.map((candidate) => {
+                const busy = busyIds[candidate.modelClubId] === true;
+                return (
+                  <tr
+                    className="border-t border-[var(--border)]"
+                    key={`${candidate.modelClubId}-${candidate.wishClubId ?? "choose"}`}
+                  >
+                    <td className="px-2 py-2">
+                      <span className="font-medium">
+                        {candidate.modelClubName}
+                      </span>
+                      <br />
+                      <span className="text-[var(--muted-foreground)]">
+                        {candidate.modelClubId}
+                      </span>
+                      {candidate.confirmed ? (
+                        <span className="ml-2 text-xs text-[var(--muted-foreground)]">
+                          mapped
+                        </span>
+                      ) : null}
+                    </td>
+                    <td className="px-2 py-2">
+                      <input
+                        className="h-9 w-full min-w-72 rounded-md border border-[var(--border)] bg-[var(--background)] px-2 text-sm"
+                        disabled={!canEdit || busy}
+                        list={`club-alias-targets-${candidate.modelClubId}`}
+                        value={targets[candidate.modelClubId] ?? ""}
+                        onChange={(event) => {
+                          const value = event.currentTarget.value;
+                          setTargets((current) => ({
+                            ...current,
+                            [candidate.modelClubId]: value,
+                          }));
+                        }}
+                      />
+                      <datalist
+                        id={`club-alias-targets-${candidate.modelClubId}`}
+                      >
+                        {wishClubOptions.map((option) => (
+                          <option
+                            key={option.clubId}
+                            value={clubOptionText(option)}
+                          />
+                        ))}
+                      </datalist>
+                    </td>
+                    <td className="px-2 py-2">
+                      {canEdit ? (
+                        <button
+                          className="h-9 rounded-md border border-[var(--border)] px-3 text-sm font-medium"
+                          disabled={
+                            busy ||
+                            !wishClubOptions.some(
+                              (option) =>
+                                clubOptionText(option) ===
+                                targets[candidate.modelClubId],
+                            )
+                          }
+                          onClick={() => void apply(candidate)}
+                          type="button"
+                        >
+                          {busy
+                            ? "Saving..."
+                            : candidate.confirmed
+                              ? "Update mapping"
+                              : "Map to wish club"}
+                        </button>
+                      ) : (
+                        <span className="text-[var(--muted-foreground)]">
+                          Scheduler required
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        ) : (
+          <p className="text-sm text-[var(--muted-foreground)]">
+            No capacity-relevant club mappings to review.
+          </p>
+        )}
+      </div>
+      {message ? (
+        <p className="mt-2 text-sm text-[var(--muted-foreground)]">{message}</p>
+      ) : null}
+    </details>
+  );
+}
+
+function clubOptionText(option: WishClubOption) {
+  return `${option.clubName} - ${option.clubId}`;
+}
+
+function initialTargets(candidates: ClubAliasCandidate[]) {
+  return Object.fromEntries(
+    candidates.flatMap((candidate) =>
+      candidate.wishClubId && candidate.wishClubName
+        ? [
+            [
+              candidate.modelClubId,
+              clubOptionText({
+                clubId: candidate.wishClubId,
+                clubName: candidate.wishClubName,
+              }),
+            ],
+          ]
+        : [],
+    ),
+  );
+}

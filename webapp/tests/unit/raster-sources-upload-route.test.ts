@@ -12,14 +12,14 @@ const {
   upsertRasterSource,
   parseUpperLeagueRasterPdf,
 } = vi.hoisted(() => ({
-    requireApiUser: vi.fn(),
-    saveFile: vi.fn(),
-    getFilePath: vi.fn((value: string) => `D:/storage/${value}`),
-    importRasterRoster: vi.fn(),
-    replaceRasterSource: vi.fn(),
-    upsertRasterSource: vi.fn(),
-    parseUpperLeagueRasterPdf: vi.fn(),
-  }));
+  requireApiUser: vi.fn(),
+  saveFile: vi.fn(),
+  getFilePath: vi.fn((value: string) => `D:/storage/${value}`),
+  importRasterRoster: vi.fn(),
+  replaceRasterSource: vi.fn(),
+  upsertRasterSource: vi.fn(),
+  parseUpperLeagueRasterPdf: vi.fn(),
+}));
 
 vi.mock("@/lib/db", () => ({
   prisma: prismaMock,
@@ -226,7 +226,7 @@ describe("raster source upload route", () => {
     expect(replaceRasterSource).not.toHaveBeenCalled();
   });
 
-  it("imports an upper-league raster PDF as a replacing parsed source", async () => {
+  it("uploads an upper-league raster PDF as a replacing unparsed source", async () => {
     requireApiUser.mockResolvedValue({
       user: {
         id: "scheduler-1",
@@ -245,10 +245,6 @@ describe("raster source upload route", () => {
       id: "input-1",
     } as never);
     saveFile.mockResolvedValue("uploads/gruppen.pdf");
-    parseUpperLeagueRasterPdf.mockResolvedValue({
-      sourceLabel: "gruppen.pdf",
-      leagues: [{ league: "Verbandsliga 1 Erwachsene", size: 11, entries: [] }],
-    });
     replaceRasterSource.mockResolvedValue({ id: "upper-source" });
 
     const formData = new FormData();
@@ -265,9 +261,7 @@ describe("raster source upload route", () => {
     );
 
     expect(response.status).toBe(201);
-    expect(parseUpperLeagueRasterPdf).toHaveBeenCalledWith(
-      "D:/storage/uploads/gruppen.pdf",
-    );
+    expect(parseUpperLeagueRasterPdf).not.toHaveBeenCalled();
     expect(replaceRasterSource).toHaveBeenCalledWith({
       scopeId: "owl",
       inputSetId: "input-1",
@@ -275,51 +269,7 @@ describe("raster source upload route", () => {
       sourceType: "UPPER_LEAGUE_RASTER",
       sourceRef: "uploads/gruppen.pdf",
       displayName: "gruppen.pdf",
-      parsedJson: JSON.stringify({
-        sourceLabel: "gruppen.pdf",
-        leagues: [
-          { league: "Verbandsliga 1 Erwachsene", size: 11, entries: [] },
-        ],
-      }),
     });
-  });
-
-  it("rejects malformed upper-league raster PDFs without recording a source", async () => {
-    requireApiUser.mockResolvedValue({
-      user: {
-        id: "scheduler-1",
-        role: Role.SCOPE_ADMIN,
-        status: UserStatus.ACTIVE,
-      },
-    });
-    prismaMock.scope.findFirst
-      .mockResolvedValueOnce({ id: "owl" } as never)
-      .mockResolvedValueOnce({
-        id: "owl",
-        code: "OWL",
-        name: "Ostwestfalen/Lippe",
-      } as never);
-    prismaMock.rasterInputSet.findFirst.mockResolvedValue({
-      id: "input-1",
-    } as never);
-    saveFile.mockResolvedValue("uploads/gruppen.pdf");
-    parseUpperLeagueRasterPdf.mockRejectedValue(new Error("no readable entries"));
-
-    const formData = new FormData();
-    formData.set("scopeCode", "OWL");
-    formData.set("inputSetId", "input-1");
-    formData.set("sourceType", "UPPER_LEAGUE_RASTER");
-    formData.set("file", new File(["%PDF-1.4"], "gruppen.pdf"));
-
-    const response = await POST(
-      new Request("http://localhost/api/raster/sources/upload", {
-        method: "POST",
-        body: formData,
-      }),
-    );
-
-    expect(response.status).toBe(422);
-    expect(replaceRasterSource).not.toHaveBeenCalled();
   });
 
   it("imports a roster CSV before recording the source", async () => {

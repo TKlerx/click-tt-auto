@@ -38,6 +38,8 @@ describe("raster scenario service", () => {
         origin: "optimizer",
         strategy: "cp_sat",
         status: "feasible",
+        detailRef:
+          "/raster/snapshots/snapshot-1?scope=OWL&season=2026%2F27&workspace=input-1",
       },
     ]);
 
