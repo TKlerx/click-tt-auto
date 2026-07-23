@@ -3,7 +3,7 @@
 **Feature Branch**: `012-manual-baseline-raster`  
 **Created**: 2026-07-23  
 **Status**: Draft  
-**Input**: User description: "Crawl/scrape the current manually set Rasterzahlen from click-TT. They are hidden/tricky to get, should use the authenticated Playwright scraper path again, and should be stored as an optional manual baseline."
+**Input**: User description: "Crawl/scrape the current manually set Rasterzahlen from click-TT as the manual baseline Rasterzahlen. They are hidden/tricky to get, should use the authenticated Playwright scraper path again, and should be stored as an optional manual baseline."
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -86,7 +86,7 @@ A read-only user can inspect already imported baseline information where their a
 ### Functional Requirements
 
 - **FR-001**: The system MUST let schedulers create or refresh a manual baseline Rasterzahl import for the selected scope, season, and planning workspace.
-- **FR-002**: The system MUST collect current expert-set Rasterzahlen through the existing authenticated Playwright click-TT scraper flow, not by replaying saved stateful admin URLs.
+- **FR-002**: The system MUST collect the manual baseline Rasterzahlen through the existing authenticated Playwright click-TT scraper flow, not by replaying saved stateful admin URLs.
 - **FR-003**: The system MUST collect current expert-set Rasterzahlen from click-TT even when the values are only reachable through nested, indirect, or hidden group/team pages.
 - **FR-004**: Each imported baseline row MUST preserve the source scope/season context, click-TT group label, click-TT team label, Rasterzahl, source location, and import timestamp.
 - **FR-005**: The system MUST verify that each captured baseline row belongs to the intended click-TT group/team context before storing it.
@@ -128,4 +128,4 @@ A read-only user can inspect already imported baseline information where their a
 - Existing fixed upper-league and manual fixed schedule-number flows remain the only ways to create hard fixed Rasterzahl constraints.
 - The first implementation may support one active manual baseline per workspace while retaining enough version identity for run snapshots and audit.
 - Baseline import is a scheduler action, not a page-render side effect.
-- The existing Playwright scraper is the baseline import path unless implementation planning proves it cannot reach the hidden current Rasterzahl pages.
+- The existing Playwright scraper is the manual baseline Rasterzahlen import path unless implementation planning proves it cannot reach the hidden current Rasterzahl pages.
