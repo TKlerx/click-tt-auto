@@ -61,7 +61,7 @@
     "lucide-react": "^1.8.0",
     "next": "^16.2.4",
     "next-intl": "^4.11.0",
-    "pdfjs-dist": "^6.1.200",
+    "pdfjs-dist": "^6.2.108",
     "pg": "^8.20.0",
     "radix-ui": "^1.4.3",
     "react": "^19.2.5",
