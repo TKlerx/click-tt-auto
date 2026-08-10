@@ -1,0 +1,85 @@
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directories:
+      - "/"
+      - "/webapp"
+      - "/webapp/docker/migrate"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/Berlin"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+  - package-ecosystem: "gomod"
+    directory: "/webapp/cli"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/Berlin"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+  - package-ecosystem: "pip"
+    directory: "/webapp/worker"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/Berlin"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+  - package-ecosystem: "docker"
+    directory: "/webapp"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/Berlin"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+  - package-ecosystem: "terraform"
+    directories:
+      - "/webapp/infra/azure"
+      - "/webapp/infra/azure/bootstrap"
+      - "/webapp/infra/azure/modules/data"
+      - "/webapp/infra/azure/modules/network"
+      - "/webapp/infra/azure/modules/observability"
+      - "/webapp/infra/azure/modules/registry"
+      - "/webapp/infra/azure/modules/runtime"
+      - "/webapp/infra/azure/modules/secrets"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/Berlin"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/Berlin"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
