@@ -28,8 +28,8 @@
     "exceljs": "^4.4.0",
     "fflate": "^0.8.3",
     "minimist": "^1.2.8",
-    "pdfjs-dist": "^6.1.200",
-    "playwright": "^1.56.1"
+    "pdfjs-dist": "^6.2.108",
+    "playwright": "^1.62.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.37.0",
@@ -39,10 +39,10 @@
     "eslint": "^9.37.0",
     "globals": "^16.4.0",
     "jsdom": "^27.0.0",
-    "prettier": "^3.6.2",
-    "tsx": "^4.20.6",
+    "prettier": "^3.9.6",
+    "tsx": "^4.23.11",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.46.1",
+    "typescript-eslint": "^8.66.0",
     "vitest": "^3.2.4"
   }
 }
