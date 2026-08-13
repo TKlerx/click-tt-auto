@@ -2,7 +2,7 @@
   "name": "business-app-starter-migrate",
   "version": "1.0.0",
   "private": true,
-  "packageManager": "pnpm@11.8.0",
+  "packageManager": "pnpm@11.21.0",
   "dependencies": {
     "bcryptjs": "3.0.3",
     "dotenv": "17.4.2",

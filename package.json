@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@11.8.0",
+  "packageManager": "pnpm@11.21.0",
   "description": "CLI automation for approving click-TT match reports.",
   "scripts": {
     "approve": "tsx src/index.ts",
