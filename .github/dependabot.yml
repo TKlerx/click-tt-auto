@@ -1,6 +1,7 @@
 version: 2
 updates:
   - package-ecosystem: "npm"
+    open-pull-requests-limit: 0
     directories:
       - "/"
       - "/webapp"
@@ -16,6 +17,7 @@ updates:
           - "minor"
           - "patch"
   - package-ecosystem: "gomod"
+    open-pull-requests-limit: 0
     directory: "/webapp/cli"
     schedule:
       interval: "weekly"
@@ -28,6 +30,7 @@ updates:
           - "minor"
           - "patch"
   - package-ecosystem: "pip"
+    open-pull-requests-limit: 0
     directory: "/webapp/worker"
     schedule:
       interval: "weekly"
@@ -40,6 +43,7 @@ updates:
           - "minor"
           - "patch"
   - package-ecosystem: "docker"
+    open-pull-requests-limit: 0
     directory: "/webapp"
     schedule:
       interval: "weekly"
@@ -52,6 +56,7 @@ updates:
           - "minor"
           - "patch"
   - package-ecosystem: "terraform"
+    open-pull-requests-limit: 0
     directories:
       - "/webapp/infra/azure"
       - "/webapp/infra/azure/bootstrap"
@@ -72,6 +77,7 @@ updates:
           - "minor"
           - "patch"
   - package-ecosystem: "github-actions"
+    open-pull-requests-limit: 0
     directory: "/"
     schedule:
       interval: "weekly"
