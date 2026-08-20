@@ -80,7 +80,7 @@ test("guided raster flow keeps exclusions provisional and easy to include", asyn
   expect(modelResponse.status()).toBe(200);
 
   await page.goto(
-    `${appBasePath}/raster/run?scope=${scopeCode}&season=2026%2F27`,
+    `${appBasePath}/raster/run?scope=${scopeCode}&season=2026%2F27&workspace=${inputSetBody.inputSet.id}`,
   );
   await expect(
     page.getByText(/provisional because excluded groups/),
@@ -88,10 +88,11 @@ test("guided raster flow keeps exclusions provisional and easy to include", asyn
   await expect(page.getByText(/exclusions/).first()).toBeVisible();
 
   await page.goto(
-    `${appBasePath}/raster/review?scope=${scopeCode}&season=2026%2F27`,
+    `${appBasePath}/raster/review?scope=${scopeCode}&season=2026%2F27&workspace=${inputSetBody.inputSet.id}`,
   );
+  await page.getByText(/Missing mappings/).click();
   await page.getByText(/Group planning and wish matches/).click();
   await expect(page.getByText("excluded, deferred")).toBeVisible();
-  await page.getByRole("button", { name: "Include" }).click();
+  await page.getByRole("button", { name: "Include", exact: true }).click();
   await expect(page.getByText("included")).toBeVisible();
 });

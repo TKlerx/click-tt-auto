@@ -188,11 +188,12 @@ pnpm run cli:install-releases
 ## Docker Deployment
 
 - Local `pnpm run dev` uses PostgreSQL via `DATABASE_URL`; there is no SQLite fallback.
+- For local development, run one worker directly with `pnpm run worker:dev`; the Docker worker is opt-in so it does not claim jobs at the same time.
 - Put Docker-only PostgreSQL and initial admin values in `.env.docker` using `.env.docker.example` as the template, then start Docker with `pnpm docker up`.
 - Production-style Docker uses separate database URL names by runtime: `APP_DATABASE_URL`, `WORKER_DATABASE_URL`, and `MIGRATION_DATABASE_URL`.
 - Docker services receive explicit allowlisted environment variables; the Postgres container only receives `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD`.
 - `pnpm docker build app migrate worker` builds the production app, migration, and worker images.
-- `pnpm docker up -d worker` starts the Python background worker against the same Postgres database.
+- `pnpm docker up -d worker` explicitly starts the Docker Python background worker against the same Postgres database.
 - Review [`docs/runtime-credentials.md`](./docs/runtime-credentials.md) before adding secrets to app, worker, or migration environments.
 - `sh ./scripts/deploy.sh` now performs a pre-deploy PostgreSQL dump, applies migrations, and restarts the app and worker. Set `CLI_RELEASES_BUILD_DURING_DEPLOY=docker` to build `starterctl` release archives in a GoReleaser container, `CLI_RELEASES_BUILD_DURING_DEPLOY=true` to build with host tools, or `CLI_RELEASES_SOURCE_DIR=/path/to/artifacts` to install prebuilt archives.
 - Manual PostgreSQL backup: `sh ./scripts/backup-postgres.sh`. Dumps are written to `./backups/postgres/business-app-starter-<UTC-timestamp>.dump` and validated with `pg_restore -l`.

@@ -428,7 +428,9 @@
         "overwrites": "Annule votre modification",
         "sourceChanged": "Source modifiée"
       },
+      "toReview": "{count, plural, one {# à revoir} other {# à revoir}}",
       "addedCount": "{count, plural, one {# souhait ajouté, pas encore révisé} other {# souhaits ajoutés, pas encore révisés}}",
+      "addedInfoCount": "{count, plural, one {# souhait importé sans conflit} other {# souhaits importés sans conflit}}",
       "settledCount": "{count, plural, one {# appariement réglé} other {# appariements réglés}}",
       "noopMatch": "Aucun changement",
       "acceptedMatch": "Décidé : {decision}",

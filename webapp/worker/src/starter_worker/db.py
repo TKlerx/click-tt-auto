@@ -306,6 +306,7 @@ class JobStore:
         spanned_scope_ids: list[str] | None = None,
         model: dict[str, Any],
         solver_output: dict[str, Any],
+        strategy: str = "cp_sat",
     ) -> str:
         snapshot_id = _new_id()
         metadata = solver_output["metadata"]
@@ -314,7 +315,7 @@ class JobStore:
         total_excess = sum(int(row["excess"]) for row in overages)
         affected_clubs = len({str(row["clubId"]) for row in overages})
         max_excess = max([int(row["excess"]) for row in overages], default=0)
-        optimality = _raster_success_outcome(str(metadata.get("status") or ""))
+        optimality = _raster_success_outcome(str(metadata.get("status") or ""), strategy)
         outcome = optimality
         assignments = _assignment_rows(snapshot_id, model, assignment)
         objective_breakdown = json.dumps(
@@ -842,9 +843,9 @@ def _objective_breakdown(overages: list[dict[str, Any]], weights: object) -> dic
     }
 
 
-def _raster_success_outcome(status: str) -> str:
+def _raster_success_outcome(status: str, strategy: str = "cp_sat") -> str:
     normalized = status.strip().upper()
-    if normalized == "OPTIMAL":
+    if normalized == "OPTIMAL" and strategy != "initial_heuristic":
         return "PROVEN_OPTIMAL"
     return "FEASIBLE"
 
@@ -950,6 +951,7 @@ def _find_overage_rows(model: dict[str, Any], assignment: dict[str, Any]) -> lis
                     "assignedRasterzahl": rasterzahl,
                     "requestedRasterzahl": team.get("requestedRasterzahl"),
                     "assignmentStatus": _assignment_status(str(raster.get("kind") or "")),
+                    "planned": team.get("planned"),
                     "weekSlot": team.get("spielwochePref"),
                     "startTime": team.get("startTime"),
                     "start_minutes": _parse_start_minutes(team.get("startTime")),
@@ -1010,6 +1012,7 @@ def _unique_team_refs(teams: list[dict[str, Any]]) -> list[dict[str, Any]]:
                     "assignedRasterzahl": team.get("assignedRasterzahl"),
                     "requestedRasterzahl": team.get("requestedRasterzahl"),
                     "assignmentStatus": team.get("assignmentStatus"),
+                    "planned": team.get("planned"),
                     "weekSlot": team.get("weekSlot"),
                     "startTime": team.get("startTime"),
                     "durationMinutes": team.get("duration_minutes"),

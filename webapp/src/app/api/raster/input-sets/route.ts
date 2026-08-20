@@ -2,7 +2,11 @@ import { NextResponse } from "next/server";
 import { requireApiUser } from "@/lib/route-auth";
 import { assertRasterAccess, resolveRasterScope } from "@/lib/raster/access";
 import { normalizeRasterSeason } from "@/lib/raster/season";
-import { createInputSet, listInputSets } from "@/services/raster";
+import {
+  createInputSet,
+  DuplicateInputSetNameError,
+  listInputSets,
+} from "@/services/raster";
 import { z } from "zod";
 
 const createInputSetBodySchema = z.object({
@@ -65,12 +69,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Scope not found" }, { status: 404 });
   }
 
-  const inputSet = await createInputSet({
-    scopeId: scope.id,
-    name: parsed.data.name,
-    season: normalizeRasterSeason(parsed.data.season),
-    createdById: auth.user.id,
-  });
+  let inputSet;
+  try {
+    inputSet = await createInputSet({
+      scopeId: scope.id,
+      name: parsed.data.name,
+      season: normalizeRasterSeason(parsed.data.season),
+      createdById: auth.user.id,
+    });
+  } catch (error) {
+    if (error instanceof DuplicateInputSetNameError) {
+      return NextResponse.json({ error: error.message }, { status: 409 });
+    }
+    throw error;
+  }
 
   return NextResponse.json({ inputSet }, { status: 201 });
 }

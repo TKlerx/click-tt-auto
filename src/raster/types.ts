@@ -71,6 +71,7 @@ export interface Team {
     | { kind: "pinned"; value: Rasterzahl };
   requestedRasterzahl?: Rasterzahl[];
   capacityRelevant?: boolean;
+  planned?: boolean;
   confidence: "ok" | "review";
 }
 

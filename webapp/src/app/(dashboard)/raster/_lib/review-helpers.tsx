@@ -54,6 +54,7 @@ export function extractPlanningGroups(
   const teams = new Map((parsed.teams ?? []).map((team) => [team.id, team]));
   return (parsed.groups ?? [])
     .map((group) => {
+      const isExcluded = group.planningStatus === "exclude";
       const teamRows = (group.teamIds ?? [])
         .map((teamId) => teams.get(teamId))
         .filter((team) => team?.id)
@@ -63,7 +64,9 @@ export function extractPlanningGroups(
             id: team!.id!,
             label: team!.label ?? team!.name ?? team!.id!,
             fields: formatWishFields(team!),
-            missing: missingWishFields(team!).join(", ") || "-",
+            missing: isExcluded
+              ? "deferred"
+              : missingWishFields(team!).join(", ") || "-",
             spielwochePref: normalizeWeekSlot(
               team!.spielwochePref ?? selectedWish?.spielwochePref ?? undefined,
             ),
@@ -86,7 +89,9 @@ export function extractPlanningGroups(
           [group.ref?.league, group.ref?.name].filter(Boolean).join(" / ") ||
           groupId ||
           "Group",
-        missingTeams: teamRows.filter((team) => team.missing !== "-").length,
+        missingTeams: isExcluded
+          ? 0
+          : teamRows.filter((team) => team.missing !== "-").length,
         planningStatus: group.planningStatus ?? null,
         teams: teamRows,
       };

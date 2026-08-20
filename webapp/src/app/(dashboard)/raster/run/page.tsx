@@ -1,5 +1,6 @@
 import { InputSetRunActions } from "@/components/raster/input-set-actions";
 import { canUseRasterLevel } from "@/lib/raster/access";
+import { resolveWorkspaceSelection } from "@/lib/raster/workspace-selection";
 import {
   listInputSets,
   reviewHallCapacitiesForInputSet,
@@ -17,9 +18,13 @@ export default async function RasterRunPage({
 }) {
   const context = await requireRasterStep(searchParams);
   if ("error" in context) return <RasterStepError message={context.error} />;
+  const params = await searchParams;
 
-  const inputSet =
-    (await listInputSets(context.scope.id, context.season))[0] ?? null;
+  const inputSets = await listInputSets(context.scope.id, context.season);
+  const inputSet = resolveWorkspaceSelection(
+    inputSets,
+    params.workspace,
+  ).selected;
   const capacityReview = inputSet
     ? await reviewHallCapacitiesForInputSet(inputSet.id)
     : null;

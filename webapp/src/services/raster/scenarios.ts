@@ -106,7 +106,13 @@ export function scenarioFromRun(run: RunWithScenarioData): RasterScenario {
           run,
         })
       : null,
-    detailRef: run.snapshot ? `/raster/snapshots/${run.snapshot.id}` : null,
+    detailRef: run.snapshot
+      ? `/raster/snapshots/${run.snapshot.id}?${new URLSearchParams({
+          scope: run.inputSet.scope.code,
+          season: run.inputSet.season,
+          workspace: run.inputSetId,
+        }).toString()}`
+      : null,
     stale: run.snapshot?.stale ?? false,
     createdAt: run.createdAt.toISOString(),
     finishedAt: run.finishedAt?.toISOString() ?? null,

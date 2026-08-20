@@ -59,6 +59,7 @@ export function RasterSourcesPanel({
   const [sourceMessages, setSourceMessages] = useState<Record<string, string>>(
     {},
   );
+  const defaultGroupDisplayName = `${scopeCode} group assignment ${season}`;
 
   async function submitLink(formData: FormData) {
     setMessage(null);
@@ -72,7 +73,9 @@ export function RasterSourcesPanel({
       inputSetId: inputSet.id,
       sourceType: String(formData.get("sourceType") ?? ""),
       sourceRef: String(formData.get("sourceRef") ?? ""),
-      displayName: String(formData.get("displayName") ?? ""),
+      displayName:
+        String(formData.get("displayName") ?? "").trim() ||
+        defaultGroupDisplayName,
       contentHash: String(formData.get("contentHash") ?? "") || undefined,
       parsedJson: String(formData.get("parsedJson") ?? "") || undefined,
     };
@@ -117,33 +120,50 @@ export function RasterSourcesPanel({
     router.refresh();
   }
 
-  async function refreshSource(sourceId: string) {
-    setRefreshingId(sourceId);
-    setMessage(null);
+  async function refreshOneSource(sourceId: string) {
     setSourceMessages((messages) => ({
       ...messages,
       [sourceId]: "Parsing...",
     }));
-    try {
-      const response = await fetch(
-        withBasePath(`/api/raster/sources/${sourceId}/refresh`),
-        { method: "POST" },
-      );
-      const body = (await response.json().catch(() => ({}))) as {
-        error?: string;
-        summary?: string;
-      };
-      if (!response.ok) {
-        setSourceMessages((messages) => ({
-          ...messages,
-          [sourceId]: body.error ?? `Parse failed (${response.status})`,
-        }));
-        return;
-      }
+    const response = await fetch(
+      withBasePath(`/api/raster/sources/${sourceId}/refresh`),
+      { method: "POST" },
+    );
+    const body = (await response.json().catch(() => ({}))) as {
+      error?: string;
+      summary?: string;
+    };
+    if (!response.ok) {
       setSourceMessages((messages) => ({
         ...messages,
-        [sourceId]: body.summary ?? "Parsed",
+        [sourceId]: body.error ?? `Parse failed (${response.status})`,
       }));
+      return;
+    }
+    setSourceMessages((messages) => ({
+      ...messages,
+      [sourceId]: body.summary ?? "Parsed",
+    }));
+  }
+
+  async function refreshSource(sourceId: string) {
+    setRefreshingId(sourceId);
+    setMessage(null);
+    try {
+      await refreshOneSource(sourceId);
+      router.refresh();
+    } finally {
+      setRefreshingId(null);
+    }
+  }
+
+  async function refreshAllSources() {
+    setRefreshingId("all");
+    setMessage(null);
+    try {
+      for (const source of sources) {
+        await refreshOneSource(source.id);
+      }
       router.refresh();
     } finally {
       setRefreshingId(null);
@@ -231,8 +251,7 @@ export function RasterSourcesPanel({
               <input
                 className="h-10 rounded-md border border-[var(--border)] bg-transparent px-3 text-sm font-normal"
                 name="displayName"
-                placeholder={`${scopeCode} group assignment ${season}`}
-                required
+                placeholder={defaultGroupDisplayName}
               />
             </label>
             <button
@@ -277,7 +296,11 @@ export function RasterSourcesPanel({
             <input name="scopeCode" type="hidden" value={scopeCode} />
             <input name="season" type="hidden" value={season} />
             <input name="inputSetId" type="hidden" value={inputSet.id} />
-            <input name="sourceType" type="hidden" value="UPPER_LEAGUE_RASTER" />
+            <input
+              name="sourceType"
+              type="hidden"
+              value="UPPER_LEAGUE_RASTER"
+            />
             <label className="grid gap-1 text-sm font-medium">
               Upper-league raster PDF
               <input
@@ -318,113 +341,127 @@ export function RasterSourcesPanel({
       )}
       <div className="divide-y divide-[var(--border)]">
         {sources.length ? (
-          sources.map((source) => (
-            <div
-              key={source.id}
-              className="grid gap-2 px-4 py-3 text-sm md:grid-cols-[10rem_minmax(12rem,1fr)_8rem_12rem_7rem_7rem]"
-            >
-              <span className="font-medium">
-                {source.sourceType} {source.season}
-              </span>
-              <span className="break-all">{source.displayName}</span>
-              <span
-                className={
-                  source.parsedJson
-                    ? "text-[var(--primary)]"
-                    : "text-[var(--muted-foreground)]"
-                }
-              >
-                {source.parsedJson ? "Parsed" : "Needs parse"}
-              </span>
-              <span className="text-[var(--muted-foreground)]">
-                {new Date(source.updatedAt).toLocaleDateString()}
-              </span>
-              {canEdit ? (
+          <>
+            {canEdit ? (
+              <div className="flex justify-end px-4 py-3">
                 <button
-                  aria-label={`Parse ${source.displayName}`}
-                  className="h-9 rounded-md border border-[var(--border)] px-3 text-sm"
-                  disabled={refreshingId === source.id}
-                  onClick={() => void refreshSource(source.id)}
+                  className="h-9 rounded-md border border-[var(--border)] px-3 text-sm font-medium"
+                  disabled={refreshingId !== null}
+                  onClick={() => void refreshAllSources()}
                   type="button"
                 >
-                  {refreshingId === source.id ? "..." : "Parse"}
+                  {refreshingId === "all" ? "..." : "Parse all"}
                 </button>
-              ) : null}
-              {canEdit ? (
-                <button
-                  aria-label={`Delete ${source.displayName}`}
-                  className="h-9 rounded-md border border-[var(--border)] px-3 text-sm"
-                  disabled={deletingId === source.id}
-                  onClick={() =>
-                    void deleteSource(source.id, source.displayName)
+              </div>
+            ) : null}
+            {sources.map((source) => (
+              <div
+                key={source.id}
+                className="grid gap-2 px-4 py-3 text-sm md:grid-cols-[10rem_minmax(12rem,1fr)_8rem_12rem_7rem_7rem]"
+              >
+                <span className="font-medium">
+                  {source.sourceType} {source.season}
+                </span>
+                <span className="break-all">{source.displayName}</span>
+                <span
+                  className={
+                    source.parsedJson
+                      ? "text-[var(--primary)]"
+                      : "text-[var(--muted-foreground)]"
                   }
-                  type="button"
                 >
-                  {deletingId === source.id ? "..." : "Delete"}
-                </button>
-              ) : null}
-              <a
-                className="break-all text-[var(--primary)] md:col-span-6"
-                href={source.sourceRef}
-                rel="noreferrer"
-                target="_blank"
-              >
-                {source.sourceRef}
-              </a>
-              {sourceMessages[source.id] ? (
-                <p className="text-sm text-[var(--muted-foreground)] md:col-span-6">
-                  {sourceMessages[source.id]}
-                </p>
-              ) : null}
-              {source.parsedJson ? (
-                <details className="md:col-span-6">
-                  <summary className="cursor-pointer text-sm font-medium">
-                    Parsed data: {parsedSourceSummary(source.parsedJson)}
-                  </summary>
-                  {source.sourceType.toUpperCase() === "WISHES_PDF" ? (
-                    <ProjectionReview
-                      inputSet={inputSet}
-                      sourceJson={source.parsedJson}
-                    />
-                  ) : null}
-                  {source.sourceType.toUpperCase() ===
-                  "UPPER_LEAGUE_RASTER" ? (
-                    <UpperLeaguePreview
-                      review={upperLeagueReview}
-                      sourceJson={source.parsedJson}
-                    />
-                  ) : null}
-                  {canEdit ? (
-                    <form
-                      action={(formData) =>
-                        void saveParsedJson(source.id, formData)
-                      }
-                      className="mt-2 grid gap-2"
-                    >
-                      <textarea
-                        className="min-h-80 rounded-md border border-[var(--border)] bg-[var(--background)] p-3 font-mono text-xs"
-                        name="parsedJson"
-                        defaultValue={formatParsedJson(source.parsedJson)}
+                  {source.parsedJson ? "Parsed" : "Needs parse"}
+                </span>
+                <span className="text-[var(--muted-foreground)]">
+                  {new Date(source.updatedAt).toLocaleDateString()}
+                </span>
+                {canEdit ? (
+                  <button
+                    aria-label={`Parse ${source.displayName}`}
+                    className="h-9 rounded-md border border-[var(--border)] px-3 text-sm"
+                    disabled={refreshingId !== null}
+                    onClick={() => void refreshSource(source.id)}
+                    type="button"
+                  >
+                    {refreshingId === source.id ? "..." : "Parse"}
+                  </button>
+                ) : null}
+                {canEdit ? (
+                  <button
+                    aria-label={`Delete ${source.displayName}`}
+                    className="h-9 rounded-md border border-[var(--border)] px-3 text-sm"
+                    disabled={deletingId === source.id}
+                    onClick={() =>
+                      void deleteSource(source.id, source.displayName)
+                    }
+                    type="button"
+                  >
+                    {deletingId === source.id ? "..." : "Delete"}
+                  </button>
+                ) : null}
+                <a
+                  className="break-all text-[var(--primary)] md:col-span-6"
+                  href={source.sourceRef}
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  {source.sourceRef}
+                </a>
+                {sourceMessages[source.id] ? (
+                  <p className="text-sm text-[var(--muted-foreground)] md:col-span-6">
+                    {sourceMessages[source.id]}
+                  </p>
+                ) : null}
+                {source.parsedJson ? (
+                  <details className="md:col-span-6">
+                    <summary className="cursor-pointer text-sm font-medium">
+                      Parsed data: {parsedSourceSummary(source.parsedJson)}
+                    </summary>
+                    {source.sourceType.toUpperCase() === "WISHES_PDF" ? (
+                      <ProjectionReview
+                        inputSet={inputSet}
+                        sourceJson={source.parsedJson}
                       />
-                      <button
-                        className="h-9 w-fit rounded-md border border-[var(--border)] px-3 text-sm font-medium"
-                        disabled={savingParsedId === source.id}
-                        type="submit"
+                    ) : null}
+                    {source.sourceType.toUpperCase() ===
+                    "UPPER_LEAGUE_RASTER" ? (
+                      <UpperLeaguePreview
+                        review={upperLeagueReview}
+                        sourceJson={source.parsedJson}
+                      />
+                    ) : null}
+                    {canEdit ? (
+                      <form
+                        action={(formData) =>
+                          void saveParsedJson(source.id, formData)
+                        }
+                        className="mt-2 grid gap-2"
                       >
-                        {savingParsedId === source.id
-                          ? "..."
-                          : "Save parsed data"}
-                      </button>
-                    </form>
-                  ) : (
-                    <pre className="mt-2 max-h-96 overflow-auto rounded-md border border-[var(--border)] bg-[var(--background)] p-3 text-xs">
-                      {formatParsedJson(source.parsedJson)}
-                    </pre>
-                  )}
-                </details>
-              ) : null}
-            </div>
-          ))
+                        <textarea
+                          className="min-h-80 rounded-md border border-[var(--border)] bg-[var(--background)] p-3 font-mono text-xs"
+                          name="parsedJson"
+                          defaultValue={formatParsedJson(source.parsedJson)}
+                        />
+                        <button
+                          className="h-9 w-fit rounded-md border border-[var(--border)] px-3 text-sm font-medium"
+                          disabled={savingParsedId === source.id}
+                          type="submit"
+                        >
+                          {savingParsedId === source.id
+                            ? "..."
+                            : "Save parsed data"}
+                        </button>
+                      </form>
+                    ) : (
+                      <pre className="mt-2 max-h-96 overflow-auto rounded-md border border-[var(--border)] bg-[var(--background)] p-3 text-xs">
+                        {formatParsedJson(source.parsedJson)}
+                      </pre>
+                    )}
+                  </details>
+                ) : null}
+              </div>
+            ))}
+          </>
         ) : (
           <p className="px-4 py-6 text-sm text-[var(--muted-foreground)]">
             No sources for {scopeCode}.
@@ -533,7 +570,10 @@ function UpperLeagueReviewList({
       {rows.length ? (
         <ul className="mt-2 grid gap-1 text-[var(--muted-foreground)]">
           {rows.slice(0, 8).map((row, index) => (
-            <li className="flex justify-between gap-2" key={`${row.label}-${index}`}>
+            <li
+              className="flex justify-between gap-2"
+              key={`${row.label}-${index}`}
+            >
               <span className="break-words">{row.label}</span>
               {row.detail ? <span>{row.detail}</span> : null}
             </li>

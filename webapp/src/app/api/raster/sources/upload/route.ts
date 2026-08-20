@@ -5,7 +5,7 @@ import { normalizeRasterSeason } from "@/lib/raster/season";
 import { rasterIngest } from "@/lib/raster/pipeline";
 import { isZip, readRasterBundle } from "@/lib/raster/bundle";
 import { prisma } from "@/lib/db";
-import { getFilePath, saveFile } from "@/lib/file-storage";
+import { saveFile } from "@/lib/file-storage";
 import {
   importRasterRoster,
   replaceRasterSource,
@@ -148,29 +148,17 @@ async function processUploadedFile(params: {
     }
   }
   if (normalizedSourceType === "UPPER_LEAGUE_RASTER") {
-    try {
-      return [
-        await importUpperLeagueRasterSource(
-          buffer,
-          params.file.name || "source.pdf",
-          params.displayName,
-          params.fileCount,
-          params.scope.id,
-          params.inputSetId,
-          params.season,
-        ),
-      ];
-    } catch (error) {
-      return NextResponse.json(
-        {
-          error:
-            error instanceof Error
-              ? error.message
-              : "Upper-league raster import failed.",
-        },
-        { status: 422 },
-      );
-    }
+    return [
+      await saveUpperLeagueRasterSource(
+        buffer,
+        params.file.name || "source.pdf",
+        params.displayName,
+        params.fileCount,
+        params.scope.id,
+        params.inputSetId,
+        params.season,
+      ),
+    ];
   }
   return [
     await saveRasterSource(
@@ -186,7 +174,7 @@ async function processUploadedFile(params: {
   ];
 }
 
-async function importUpperLeagueRasterSource(
+async function saveUpperLeagueRasterSource(
   buffer: Buffer,
   fileName: string,
   displayName: string,
@@ -196,7 +184,6 @@ async function importUpperLeagueRasterSource(
   season: string,
 ) {
   const sourceRef = await saveFile(buffer, fileName);
-  const parsed = await rasterIngest.parseUpperLeagueRasterPdf(getFilePath(sourceRef));
   return replaceRasterSource({
     scopeId,
     inputSetId,
@@ -204,7 +191,6 @@ async function importUpperLeagueRasterSource(
     sourceType: "UPPER_LEAGUE_RASTER",
     sourceRef,
     displayName: sourceDisplayName(displayName, fileName, fileCount),
-    parsedJson: JSON.stringify(parsed),
   });
 }
 

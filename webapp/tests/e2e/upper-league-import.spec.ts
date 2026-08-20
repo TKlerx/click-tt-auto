@@ -95,6 +95,12 @@ test("scheduler imports an upper-league raster PDF and sees the preview on mobil
   await expectStatus(upload, 201);
 
   await page.reload();
+  await expect(page.getByText("Needs parse")).toBeVisible();
+  await page.getByRole("button", { name: "Parse all" }).click();
+  await expect(page.getByText("Parsed data: 31 leagues")).toBeVisible({
+    timeout: 20000,
+  });
+  await page.reload();
   await page.getByText("Parsed data: 31 leagues").click();
   await expect(
     page.getByRole("cell", { name: "Verbandsliga 1 Erwachsene" }),
@@ -102,9 +108,7 @@ test("scheduler imports an upper-league raster PDF and sees the preview on mobil
   await expect(page.getByText("TuRa Elsen").first()).toBeVisible();
 });
 
-test("malformed upper-league uploads fail and non-matching clubs do not inject teams", async ({
-  page,
-}) => {
+test("unmatched upper-league sources do not inject teams", async ({ page }) => {
   const suffix = Date.now();
   const email = `e2e-upper-constraints-${suffix}@example.com`;
   const password = "UpperConstraints123";
@@ -135,24 +139,6 @@ test("malformed upper-league uploads fail and non-matching clubs do not inject t
     inputSet: { id: string };
   };
 
-  const malformed = await page.request.post(
-    `${appBasePath}/api/raster/sources/upload`,
-    {
-      multipart: {
-        scopeCode: constraintScope.code,
-        season,
-        inputSetId: inputSet.id,
-        sourceType: "UPPER_LEAGUE_RASTER",
-        file: {
-          name: "broken.pdf",
-          mimeType: "application/pdf",
-          buffer: Buffer.from("%PDF-1.4\nnot the expected fixture"),
-        },
-      },
-    },
-  );
-  expect(malformed.status()).toBe(422);
-
   const pdf = await readFile(fixture);
   const valid = await page.request.post(
     `${appBasePath}/api/raster/sources/upload`,
@@ -175,9 +161,12 @@ test("malformed upper-league uploads fail and non-matching clubs do not inject t
   const model = buildNoMatchModel();
   expect(
     await page.request
-      .post(`${appBasePath}/api/raster/input-sets/${inputSet.id}/season-model`, {
-        data: model,
-      })
+      .post(
+        `${appBasePath}/api/raster/input-sets/${inputSet.id}/season-model`,
+        {
+          data: model,
+        },
+      )
       .then((response) => response.status()),
   ).toBe(200);
   expect(
@@ -199,11 +188,15 @@ test("malformed upper-league uploads fail and non-matching clubs do not inject t
   ).toBe(200);
 
   await page.goto(
-    `${appBasePath}/raster/review?scope=${constraintScope.code}&season=${encodeURIComponent(season)}`,
+    `${appBasePath}/raster/review?scope=${constraintScope.code}&season=${encodeURIComponent(season)}&workspace=${inputSet.id}`,
   );
-  await page.getByRole("button", { name: "Recheck capacities" }).first().click();
+  await page
+    .getByRole("button", { name: "Recheck capacities" })
+    .first()
+    .click();
   await expect(page.getByText(/Inferred \d+; \d+ need review/)).toBeVisible();
-  await page.getByRole("button", { name: "Mark all reviewed" }).click();
+  await page.getByText(/Source matches/).click();
+  await page.getByRole("button", { name: "Acknowledge all" }).click();
   await expect(page.getByText("Source matches (0 outstanding)")).toBeVisible();
   await page.getByRole("link", { name: /^Run optimizer/ }).click();
   await page.getByRole("button", { name: "Validate" }).click();
@@ -257,6 +250,9 @@ function buildNoMatchModel() {
   };
 }
 
-async function expectStatus(response: { status(): number; text(): Promise<string> }, status: number) {
+async function expectStatus(
+  response: { status(): number; text(): Promise<string> },
+  status: number,
+) {
   expect(response.status(), await response.text()).toBe(status);
 }

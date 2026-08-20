@@ -17,6 +17,7 @@ type TeamMatchRecord = {
 export type RasterMatchReviewState = {
   recordId: string;
   label: string;
+  detail: string;
   fingerprint: string;
   status: "settled" | "outstanding";
   reason: "never_reviewed" | "changed" | null;
@@ -49,7 +50,8 @@ export function deriveMatchReviewState(
     const reviewedFingerprint = reviewByRecord.get(recordId);
     return {
       recordId,
-      label: team.label ?? team.name ?? recordId,
+      label: matchReviewLabel(team),
+      detail: matchReviewDetail(team),
       fingerprint,
       status: reviewedFingerprint === fingerprint ? "settled" : "outstanding",
       reason: !reviewedFingerprint
@@ -59,6 +61,24 @@ export function deriveMatchReviewState(
           : "changed",
     };
   });
+}
+
+function matchReviewLabel(team: TeamMatchRecord) {
+  return [team.clubName ?? team.clubId, team.label ?? team.name ?? team.id]
+    .filter(Boolean)
+    .join(" / ");
+}
+
+function matchReviewDetail(team: TeamMatchRecord) {
+  return [
+    team.homeWeekday ? `home ${team.homeWeekday}` : null,
+    team.hall ? `hall ${team.hall}` : null,
+    team.startTime ? team.startTime : null,
+    team.spielwochePref ? `week ${team.spielwochePref}` : null,
+    team.wishMatchId ? "matched wish data" : "no matched wish data",
+  ]
+    .filter(Boolean)
+    .join(", ");
 }
 
 export async function listMatchReviewState(inputSetId: string) {

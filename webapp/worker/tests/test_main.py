@@ -15,14 +15,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import psycopg
 from psycopg.rows import dict_row
-from worker_db import ensure_worker_database, truncate_all
+from worker_db import ensure_worker_database, truncate_all, worker_test_database_url
 
 from starter_worker.config import WorkerConfig, load_config
 from starter_worker.db import (
     BackgroundJob,
     JobStore,
     _assignment_rows,
+    _conflict_rows,
     _find_overage_rows,
+    _raster_success_outcome,
     normalize_postgres_database_url,
 )
 from starter_worker.main import (
@@ -34,6 +36,7 @@ from starter_worker.main import (
     _log_job_completed,
     _log_job_failed,
     _log_jobs_requeued_stale,
+    _log_database_unavailable,
     _log_teams_poll_scheduled,
     _raster_run_model,
     _solve_raster_model,
@@ -44,10 +47,85 @@ from starter_worker.main import (
 )
 
 
+class WorkerLoggingTests(unittest.TestCase):
+    def test_worker_lifecycle_logs_use_structured_events(self) -> None:
+        job = type(
+            "Job",
+            (),
+            {"id": "job-1", "job_type": "noop", "attempt_count": 2},
+        )()
+
+        error = RuntimeError("bad job")
+        with patch("starter_worker.main.worker_logger") as worker_logger:
+            _log_jobs_requeued_stale(3)
+            _log_database_unavailable(ConnectionError("db offline"))
+            _log_teams_poll_scheduled()
+            _log_job_claimed(job)
+            _log_job_completed(job, {"status": "ok", "token": "secret"})
+            _log_job_failed(job, error)
+
+        worker_logger.warning.assert_any_call("jobs.requeued_stale", count=3)
+        worker_logger.warning.assert_any_call(
+            "database.unavailable", error="db offline"
+        )
+        worker_logger.info.assert_any_call("teams.poll_scheduled")
+        worker_logger.info.assert_any_call(
+            "job.claimed",
+            jobId="job-1",
+            jobType="noop",
+            attempt=2,
+        )
+        worker_logger.info.assert_any_call(
+            "job.completed",
+            jobId="job-1",
+            jobType="noop",
+            status="completed",
+            result={"status": "ok", "token": "[REDACTED]"},
+        )
+        worker_logger.exception.assert_called_once_with(
+            "job.failed",
+            error,
+            jobId="job-1",
+            jobType="noop",
+            attempt=2,
+        )
+
+    def test_worker_test_database_url_derives_from_e2e_database_url(self) -> None:
+        with patch.dict(
+            os.environ,
+            {
+                "E2E_DATABASE_URL": "postgresql://u:p@localhost:45555/custom_e2e",
+            },
+            clear=True,
+        ):
+            self.assertEqual(
+                worker_test_database_url(),
+                "postgresql://u:p@localhost:45555/custom_e2e?options=-csearch_path%3Dbusiness_app_starter_worker_test",
+            )
+
+    def test_worker_test_database_url_prefers_explicit_override(self) -> None:
+        with patch.dict(
+            os.environ,
+            {
+                "E2E_DATABASE_URL": "postgresql://u:p@localhost:45555/custom_e2e",
+                "WORKER_TEST_DATABASE_URL": (
+                    "postgresql://worker:p@localhost:1/worker?connection_limit=2"
+                ),
+            },
+            clear=True,
+        ):
+            self.assertEqual(
+                worker_test_database_url(),
+                "postgresql://worker:p@localhost:1/worker",
+            )
+
+
 class WorkerTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory()
-        if self._testMethodName.startswith("test_combined_raster_model_"):
+        if self._testMethodName.startswith(
+            ("test_combined_raster_model_", "test_raster_solver_", "test_worker_runtime_")
+        ):
             return
         self.database_url = ensure_worker_database()
         truncate_all(self.database_url)
@@ -479,7 +557,7 @@ class WorkerTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, result.stderr)
 
-    def test_raster_solver_uses_worker_uv_project(self) -> None:
+    def test_raster_solver_uses_worker_python(self) -> None:
         completed = subprocess.CompletedProcess(
             args=[],
             returncode=0,
@@ -494,7 +572,7 @@ class WorkerTests(unittest.TestCase):
             _solve_raster_model({"clubs": [], "teams": [], "groups": []}, {})
 
         command = run.call_args.args[0]
-        self.assertEqual(command[:4], ["uv", "run", "--project", str(Path(__file__).parents[1])])
+        self.assertEqual(command[0], sys.executable)
 
     def test_raster_solver_can_use_initial_heuristic(self) -> None:
         completed = subprocess.CompletedProcess(
@@ -566,6 +644,38 @@ class WorkerTests(unittest.TestCase):
 
         self.assertTrue(rows)
         self.assertEqual(rows[0]["capacity"], 1)
+
+    def test_raster_solver_initial_heuristic_optimal_status_is_not_proven_optimal(self) -> None:
+        self.assertEqual(_raster_success_outcome("OPTIMAL", "initial_heuristic"), "FEASIBLE")
+        self.assertEqual(_raster_success_outcome("OPTIMAL", "cp_sat"), "PROVEN_OPTIMAL")
+
+    def test_raster_solver_conflict_rows_keep_unplanned_team_marker(self) -> None:
+        model = {"clubs": [{"id": "club", "name": "Club"}]}
+        rows = _conflict_rows(
+            "snapshot-1",
+            model,
+            [
+                {
+                    "week": 1,
+                    "clubId": "club",
+                    "weekday": "friday",
+                    "hall": "1",
+                    "capacity": 1,
+                    "actualCount": 2,
+                    "excess": 1,
+                    "teams": [
+                        {
+                            "id": "upper",
+                            "assignmentStatus": "FIXED",
+                            "planned": False,
+                        }
+                    ],
+                }
+            ],
+        )
+
+        teams = json.loads(rows[0][10])
+        self.assertEqual(teams[0]["planned"], False)
 
     def test_persisted_overages_do_not_duplicate_same_team_home_week(self) -> None:
         model = {
@@ -1030,44 +1140,6 @@ class WorkerTests(unittest.TestCase):
             config = load_config(env_path=env_path)
 
         self.assertEqual(config.database_url, "postgresql://worker:test@localhost:5432/app")
-
-    def test_worker_lifecycle_logs_use_structured_events(self) -> None:
-        job = type(
-            "Job",
-            (),
-            {"id": "job-1", "job_type": "noop", "attempt_count": 2},
-        )()
-
-        error = RuntimeError("bad job")
-        with patch("starter_worker.main.worker_logger") as worker_logger:
-            _log_jobs_requeued_stale(3)
-            _log_teams_poll_scheduled()
-            _log_job_claimed(job)
-            _log_job_completed(job, {"status": "ok", "token": "secret"})
-            _log_job_failed(job, error)
-
-        worker_logger.warning.assert_called_once_with("jobs.requeued_stale", count=3)
-        worker_logger.info.assert_any_call("teams.poll_scheduled")
-        worker_logger.info.assert_any_call(
-            "job.claimed",
-            jobId="job-1",
-            jobType="noop",
-            attempt=2,
-        )
-        worker_logger.info.assert_any_call(
-            "job.completed",
-            jobId="job-1",
-            jobType="noop",
-            status="completed",
-            result={"status": "ok", "token": "[REDACTED]"},
-        )
-        worker_logger.exception.assert_called_once_with(
-            "job.failed",
-            error,
-            jobId="job-1",
-            jobType="noop",
-            attempt=2,
-        )
 
     def test_worker_strips_prisma_only_postgres_url_params(self) -> None:
         url = normalize_postgres_database_url(

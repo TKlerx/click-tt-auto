@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { requireRasterInputSet } from "@/lib/raster/route-context";
-import { inferHallCapacitiesFromInputSet } from "@/services/raster";
+import {
+  inferHallCapacitiesFromInputSet,
+  syncInputSetSourceCaches,
+} from "@/services/raster";
 
 export async function POST(
   request: Request,
@@ -13,6 +16,7 @@ export async function POST(
   );
   if ("error" in context) return context.error;
 
+  await syncInputSetSourceCaches(context.inputSet.id);
   return NextResponse.json({
     result: await inferHallCapacitiesFromInputSet(
       context.inputSet.id,

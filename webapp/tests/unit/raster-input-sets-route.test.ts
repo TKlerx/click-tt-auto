@@ -85,4 +85,32 @@ describe("raster input set route", () => {
       },
     });
   });
+
+  it("rejects duplicate planning set names", async () => {
+    requireApiUser.mockResolvedValue({
+      user: {
+        id: "admin-1",
+        role: Role.PLATFORM_ADMIN,
+        status: UserStatus.ACTIVE,
+      },
+    });
+    prismaMock.scope.findFirst.mockResolvedValue({ id: "scope-1" } as never);
+    prismaMock.scope.findUnique.mockResolvedValue({ code: "OWL" } as never);
+    prismaMock.rasterInputSet.findFirst.mockResolvedValue({
+      id: "input-1",
+    } as never);
+
+    const response = await POST(
+      new Request("http://localhost/api/raster/input-sets", {
+        method: "POST",
+        body: JSON.stringify({ scope: "OWL", name: "OWL 2026" }),
+      }),
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({
+      error: "Planning set name already exists for this scope and season.",
+    });
+    expect(prismaMock.rasterInputSet.create).not.toHaveBeenCalled();
+  });
 });

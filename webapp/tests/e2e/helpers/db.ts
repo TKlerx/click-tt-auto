@@ -200,6 +200,7 @@ export function seedRasterCombinedReviewFixture(input: {
   return runDbWorker<
     typeof input,
     {
+      combinedInputSetId: string;
       combinedSnapshotId: string;
       completeCombinedSnapshotId: string;
       singleSnapshotId: string;

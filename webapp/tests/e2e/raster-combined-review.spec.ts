@@ -35,7 +35,9 @@ test("combined raster review shows independent markings and narrows by scope", a
   await loginWithPassword(page, email, password);
   await expectOnDashboard(page);
 
-  await page.goto(`${appBasePath}/raster/run?scope=OWL&season=2026%2F27`);
+  await page.goto(
+    `${appBasePath}/raster/run?scope=OWL&season=2026%2F27&workspace=${fixture.combinedInputSetId}`,
+  );
   await expect(page.getByText("Combined")).toHaveCount(2);
   await expect(page.getByText("Incomplete")).toHaveCount(1);
 
