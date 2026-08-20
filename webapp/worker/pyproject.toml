@@ -20,6 +20,7 @@ build-backend = "hatchling.build"
 
 [tool.uv]
 exclude-newer = "1 week" # nosemgrep: package_managers.uv.uv-missing-dependency-cooldown.uv-missing-dependency-cooldown
+exclude-newer-package = { urllib3 = "2026-08-11" }
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/starter_worker"]

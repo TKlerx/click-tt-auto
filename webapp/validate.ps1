@@ -247,12 +247,12 @@ function Test-Utf8Encoding {
 function Test-DependencyCooldownSupport {
     Write-Step "Dependency cooldown support (pnpm + uv)"
     try {
-        if (-not (Test-Path ".npmrc" -PathType Leaf)) {
-            throw ".npmrc is missing"
+        if (-not (Test-Path "pnpm-workspace.yaml" -PathType Leaf)) {
+            throw "pnpm-workspace.yaml is missing"
         }
 
-        $npmrcContent = Get-Content ".npmrc" -Raw
-        if ($npmrcContent -notmatch '(?m)^\s*min-release-age\s*=\s*7\s*$') {
+        $pnpmWorkspaceContent = Get-Content "pnpm-workspace.yaml" -Raw
+        if ($pnpmWorkspaceContent -notmatch '(?m)^\s*minimumReleaseAge:\s*4320\s*(?:#.*)?$') {
             throw "project pnpm cooldown is not configured"
         }
 
@@ -292,25 +292,25 @@ function Test-DependencyCooldownSupport {
             throw "installed uv does not support --exclude-newer"
         }
 
-        Write-Pass "dependency cooldown support is available (pnpm min-release-age=7, uv exclude-newer=1 week)"
+        Write-Pass "dependency cooldown support is available (pnpm minimumReleaseAge=4320 minutes, uv exclude-newer=1 week)"
     } catch {
         Write-Fail "dependency cooldown support is not available"
         $message = $_.Exception.Message
         switch -Regex ($message) {
-            '^\.npmrc is missing$' {
-                Write-Host "Create .npmrc with `min-release-age=7` so pnpm installs respect the repo cooldown policy." -ForegroundColor Yellow
+            '^pnpm-workspace\.yaml is missing$' {
+                Write-Host "Restore pnpm-workspace.yaml so the repo-local pnpm cooldown policy can be validated." -ForegroundColor Yellow
             }
             '^project pnpm cooldown is not configured$' {
-                Write-Host "Set `min-release-age=7` in .npmrc to enforce the pnpm package release delay." -ForegroundColor Yellow
+                Write-Host "Set `minimumReleaseAge: 4320` in pnpm-workspace.yaml to enforce the three-day pnpm package release delay." -ForegroundColor Yellow
             }
             '^packageManager does not pin pnpm$' {
-                Write-Host "Set package.json `packageManager` to the pinned pnpm version, for example `pnpm@11.1.0`." -ForegroundColor Yellow
+                Write-Host "Set package.json `packageManager` to the pinned pnpm version, for example `pnpm@11.21.0`." -ForegroundColor Yellow
             }
             '^pnpm is not available$' {
-                Write-Host "Install pnpm through Corepack (`corepack enable` then `corepack prepare pnpm@11.1.0 --activate`)." -ForegroundColor Yellow
+                Write-Host "Install pnpm through Corepack (`corepack enable` then `corepack prepare pnpm@11.21.0 --activate`)." -ForegroundColor Yellow
             }
             '^installed pnpm does not match packageManager$' {
-                Write-Host "Use the pinned pnpm version from package.json so `.npmrc` min-release-age=7 is applied consistently." -ForegroundColor Yellow
+                Write-Host "Use the pinned pnpm version from package.json so pnpm-workspace.yaml is applied consistently." -ForegroundColor Yellow
             }
             '^worker/pyproject\.toml is missing$' {
                 Write-Host "Restore worker/pyproject.toml so the repo-local uv cooldown policy can be validated." -ForegroundColor Yellow
@@ -710,7 +710,7 @@ function Test-ProductionDependencyAudit([switch]$Blocking) {
                 Write-Host ("Unexpected packages: " + ($unexpectedPackages -join ", ")) -ForegroundColor Yellow
             } else {
                 Write-Host ("Allowlisted packages: " + ($AllowedProductionAuditPackages -join ", ")) -ForegroundColor Yellow
-                Write-Host "This repo enforces pnpm min-release-age=7. If the fixed package versions are newer than that cooldown window, the allowlisted audit can stay red temporarily." -ForegroundColor Yellow
+                Write-Host "This repo enforces pnpm minimumReleaseAge=4320. If the fixed package versions are newer than that cooldown window, the allowlisted audit can stay red temporarily." -ForegroundColor Yellow
             }
             if ($packageStatuses.Count -gt 0) {
                 Write-Host "Per-package fix status:" -ForegroundColor Yellow
@@ -771,17 +771,17 @@ function Get-DuplicationThreshold {
 }
 
 function Get-NpmMinReleaseAgeDays {
-    if (-not (Test-Path ".npmrc" -PathType Leaf)) {
+    if (-not (Test-Path "pnpm-workspace.yaml" -PathType Leaf)) {
         return $null
     }
 
-    $npmrcContent = Get-Content ".npmrc" -Raw
-    $match = [regex]::Match($npmrcContent, '(?m)^\s*min-release-age\s*=\s*(\d+)\s*$')
+    $pnpmWorkspaceContent = Get-Content "pnpm-workspace.yaml" -Raw
+    $match = [regex]::Match($pnpmWorkspaceContent, '(?m)^\s*minimumReleaseAge:\s*(\d+)\s*(?:#.*)?$')
     if (-not $match.Success) {
         return $null
     }
 
-    return [int]$match.Groups[1].Value
+    return [int]$match.Groups[1].Value / 1440
 }
 
 function Get-PackagePublishTimestamp([string]$packageName, [string]$version) {

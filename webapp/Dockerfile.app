@@ -7,7 +7,7 @@ RUN apt-get update -y \
     && rm -rf /var/lib/apt/lists/*
 RUN mkdir -p /corepack \
     && corepack enable \
-    && corepack prepare pnpm@11.1.0 --activate
+    && corepack prepare pnpm@11.21.0 --activate
 
 FROM base AS deps
 COPY webapp/package.json webapp/pnpm-lock.yaml webapp/pnpm-workspace.yaml webapp/.npmrc ./

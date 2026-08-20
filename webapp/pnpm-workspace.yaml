@@ -1,3 +1,5 @@
+minimumReleaseAge: 4320 # nosemgrep: package_managers.pnpm.pnpm-missing-minimum-release-age.pnpm-minimum-release-age
+
 allowBuilds:
   "@parcel/watcher": true
   "@prisma/engines": true
@@ -8,3 +10,20 @@ allowBuilds:
   prisma: true
   sharp: true
   unrs-resolver: true
+overrides:
+  "@babel/core": 7.29.7
+  "@hono/node-server": 1.19.15
+  "@prisma/config>deepmerge-ts": 8.0.1
+  "brace-expansion@<1.1.18": 1.1.18
+  "brace-expansion@>=2.0.0 <2.1.4": 2.1.4
+  "brace-expansion@>=3.0.0 <5.0.9": 5.0.9
+  esbuild: 0.28.1
+  fast-uri: 3.1.5
+  hono: 4.12.34
+  js-yaml: 4.3.1
+  nanoid: 3.3.18
+  pdfjs-dist: 6.2.108
+  postcss: 8.5.23
+  sharp: 0.35.0
+  vite: 8.0.16
+  valibot: 1.4.2

@@ -1635,9 +1635,24 @@
 ## 2026-07-09 21:06:39
 
 - Included `AI_TESTING.md` in PR #9 and referenced it from `AGENTS.md`.
+
 ## 2026-07-20 14:27:58
 
 - Branch snapshot refreshed for `011-raster-import-ux`.
 - Latest non-continuity commit: 1e8fc27 Fix 011 review gaps.
 - Active specs: 011-route-refactor.
+- Next focus: no next task.
+
+## 2026-08-10 18:23:10
+
+- Branch snapshot refreshed for `codex/fix-high-dependencies`.
+- Latest non-continuity commit: b85afb9 Configure Dependabot updates.
+- Active specs: none.
+- Next focus: no next task.
+
+## 2026-08-10 19:14:36
+
+- Branch snapshot refreshed for `codex/fix-high-python-dependencies`.
+- Latest non-continuity commit: e80b057 fix: patch high-severity dependencies (#47).
+- Active specs: none.
 - Next focus: no next task.
