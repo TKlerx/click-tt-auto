@@ -304,10 +304,10 @@ function Test-DependencyCooldownSupport {
                 Write-Host "Set `min-release-age=7` in .npmrc to enforce the pnpm package release delay." -ForegroundColor Yellow
             }
             '^packageManager does not pin pnpm$' {
-                Write-Host "Set package.json `packageManager` to the pinned pnpm version, for example `pnpm@11.1.0`." -ForegroundColor Yellow
+                Write-Host "Set package.json `packageManager` to the pinned pnpm version, for example `pnpm@11.21.0`." -ForegroundColor Yellow
             }
             '^pnpm is not available$' {
-                Write-Host "Install pnpm through Corepack (`corepack enable` then `corepack prepare pnpm@11.1.0 --activate`)." -ForegroundColor Yellow
+                Write-Host "Install pnpm through Corepack (`corepack enable` then `corepack prepare pnpm@11.21.0 --activate`)." -ForegroundColor Yellow
             }
             '^installed pnpm does not match packageManager$' {
                 Write-Host "Use the pinned pnpm version from package.json so `.npmrc` min-release-age=7 is applied consistently." -ForegroundColor Yellow
