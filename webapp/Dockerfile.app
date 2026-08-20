@@ -1,4 +1,4 @@
-FROM node:24-bookworm-slim AS base
+FROM node:26-bookworm-slim AS base
 WORKDIR /repo/webapp
 ENV COREPACK_HOME=/corepack
 RUN apt-get update -y \
