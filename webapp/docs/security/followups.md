@@ -26,7 +26,7 @@ Next steps:
 Risk:
 
 - `pnpm audit --prod --no-optional` currently reports production vulnerabilities in `next` and `next-intl`.
-- The fixes exist, but the repo's `min-release-age=7` policy means they should not be installed immediately.
+- The fixes exist, but the repo's three-day `minimumReleaseAge` policy means they should not be installed immediately.
 
 Why it matters:
 
@@ -148,7 +148,7 @@ Risk:
 
 Why it matters:
 
-- The project intentionally uses `min-release-age=7`, strict production audit checks, and separate handling for runtime vs tooling dependencies.
+- The project intentionally uses a three-day pnpm `minimumReleaseAge`, strict production audit checks, and separate handling for runtime vs tooling dependencies.
 
 Next steps:
 

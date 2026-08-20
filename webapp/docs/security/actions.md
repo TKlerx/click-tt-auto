@@ -175,7 +175,7 @@ Target date: 2026-04-17
 Problem:
 
 - `pnpm audit --prod --no-optional` currently reports production vulnerabilities in `next` and `next-intl`.
-- The repo enforces `min-release-age=7` in `.npmrc`, so the fixed versions should not be installed immediately after release.
+- The repo enforces a three-day `minimumReleaseAge` in `pnpm-workspace.yaml`, so fixed versions should not be installed immediately after release.
 
 What to do on 2026-04-17:
 

@@ -73,10 +73,10 @@ sequenceDiagram
 
 ### pnpm
 
-- repo-local policy file: `.npmrc`
+- repo-local policy file: `pnpm-workspace.yaml`
 - required setting:
-  - `min-release-age=7`
-- validation fails if the local pnpm binary does not honor `min-release-age`
+  - `minimumReleaseAge: 4320`
+- validation fails if the local pnpm binary does not honor `minimumReleaseAge`
 
 ### uv
 
