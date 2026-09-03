@@ -1656,3 +1656,7 @@
 - Latest non-continuity commit: e80b057 fix: patch high-severity dependencies (#47).
 - Active specs: none.
 - Next focus: no next task.
+
+## 2026-09-04 fast-uri security patch
+
+- Patched fast-uri overrides and lockfile resolutions to 3.1.6 for GHSA-jqff-g426-hqxp, including the parent CLI workspace override. Frozen-lockfile verification and targeted URI/AJV regression checks pass. Changes are prepared in an isolated security worktree; not committed or pushed.
