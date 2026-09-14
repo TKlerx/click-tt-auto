@@ -97,12 +97,16 @@ Guidelines:
 
 ## Validation
 
-```powershell
-.\validate.ps1 precommit
-.\validate.ps1 prepush
-.\validate.ps1 all
-.\validate.ps1 e2e
-.\validate.ps1 full
+```bash
+# Cross-platform: pwsh (PowerShell 7) works on Linux, macOS and Windows.
+pwsh -NoProfile -ExecutionPolicy Bypass -File ./validate.ps1 precommit
+pwsh -NoProfile -ExecutionPolicy Bypass -File ./validate.ps1 prepush
+pwsh -NoProfile -ExecutionPolicy Bypass -File ./validate.ps1 all
+pwsh -NoProfile -ExecutionPolicy Bypass -File ./validate.ps1 e2e
+pwsh -NoProfile -ExecutionPolicy Bypass -File ./validate.ps1 full
+
+# Or via the wrapper, which auto-detects pwsh:
+./validate.sh precommit
 ```
 
 Playwright E2E defaults to a local PostgreSQL container named

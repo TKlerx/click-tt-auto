@@ -18,7 +18,7 @@
     "test": "vitest run --dir tests",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "validate": "powershell -ExecutionPolicy Bypass -File ./validate.ps1"
+    "validate": "pwsh -NoProfile -ExecutionPolicy Bypass -File ./validate.ps1"
   },
   "engines": {
     "node": ">=22"
