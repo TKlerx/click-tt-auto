@@ -15,3 +15,12 @@
 - Build an audit log page for campaigns that shows actor, timestamp, action, entity, and the new value(s) set for each recorded change.
 - Keep the audit UI explicitly non-diff-based: no side-by-side diffing required, but users should be able to see the resulting value after a change.
 - Add lightweight filtering and pagination for the audit log so the value-level history stays usable as campaigns grow.
+
+## Open Team Setup Change Requests
+
+- As a league administrator, I want to see whether any open requests for changes to team setups (Änderung der Mannschaftsaufstellung) exist without clicking through every request.
+- Allow checking only leagues assigned to the current administrator or all leagues.
+
+## Spond Game Codes
+
+- Download nuScore game-code and PIN PDFs automatically instead of requiring files in `./codes`.
