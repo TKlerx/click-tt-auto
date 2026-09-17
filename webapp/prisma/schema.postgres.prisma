@@ -215,6 +215,21 @@ enum RosterCharset {
   ISO_8859_15
 }
 
+enum RasterManualBaselineStatus {
+  IMPORTING
+  REVIEW
+  READY
+  FAILED
+}
+
+enum RasterManualBaselineRowStatus {
+  MATCHED
+  REVIEW
+  IGNORED
+  ACCEPTED_UNRESOLVED
+  INVALID
+}
+
 model User {
   id                            String                        @id @default(cuid())
   email                         String                        @unique
@@ -250,6 +265,8 @@ model User {
   rasterMatchReviews            RasterMatchReview[]           @relation("RasterMatchReviewer")
   rasterManualAssignmentDrafts  RasterManualAssignmentDraft[] @relation("RasterManualAssignmentDraftCreator")
   rasterTeamRosters             RasterTeamRoster[]            @relation("RasterTeamRosterImporter")
+  rasterManualBaselines         RasterManualBaseline[]        @relation("RasterManualBaselineStarter")
+  reviewedRasterBaselineRows    RasterManualBaselineRow[]     @relation("RasterManualBaselineReviewer")
 }
 
 model Session {
@@ -636,6 +653,7 @@ model RasterInputSet {
   matchReviews           RasterMatchReview[]
   manualAssignmentDrafts RasterManualAssignmentDraft[]
   rasterSources          RasterSource[]
+  manualBaselines        RasterManualBaseline[]
 
   @@index([scopeId, season, createdAt])
   @@index([createdById])
@@ -781,6 +799,7 @@ model RasterOptimizationRun {
   id                 String                  @id @default(cuid())
   inputSetId         String
   startedById        String
+  baselineId         String?
   jobId              String?
   status             OptimizationRunStatus   @default(PENDING)
   outcome            OptimizationRunOutcome?
@@ -795,13 +814,61 @@ model RasterOptimizationRun {
   archivedAt         DateTime?
   inputSet           RasterInputSet          @relation(fields: [inputSetId], references: [id], onDelete: Restrict)
   startedBy          User                    @relation("RasterRunStarter", fields: [startedById], references: [id], onDelete: Restrict)
+  baseline           RasterManualBaseline?   @relation(fields: [baselineId], references: [id], onDelete: Restrict)
   snapshot           RasterSnapshot?
 
   @@index([inputSetId, createdAt])
   @@index([startedById])
+  @@index([baselineId])
   @@index([status, createdAt])
   @@index([archivedAt])
   @@index([coverageComplete])
+}
+
+model RasterManualBaseline {
+  id                String                     @id @default(cuid())
+  inputSetId        String
+  startedById       String
+  status            RasterManualBaselineStatus @default(IMPORTING)
+  active            Boolean                    @default(false)
+  sourceSummaryJson String                     @default("{}")
+  errorJson         String?
+  createdAt         DateTime                   @default(now())
+  completedAt       DateTime?
+  activatedAt       DateTime?
+  inputSet          RasterInputSet             @relation(fields: [inputSetId], references: [id], onDelete: Cascade)
+  startedBy         User                       @relation("RasterManualBaselineStarter", fields: [startedById], references: [id], onDelete: Restrict)
+  rows              RasterManualBaselineRow[]
+  runs              RasterOptimizationRun[]
+
+  @@index([inputSetId, createdAt])
+  @@index([startedById])
+  @@index([inputSetId, active])
+  @@index([inputSetId, status])
+}
+
+model RasterManualBaselineRow {
+  id                String                        @id @default(cuid())
+  baselineId        String
+  sourceIdentityKey String
+  sourceGroupLabel  String
+  sourceTeamLabel   String
+  rasterzahl        Int
+  sourceLocation    String
+  importedAt        DateTime                      @default(now())
+  status            RasterManualBaselineRowStatus
+  targetTeamId      String?
+  targetTeamLabel   String?
+  issue             String?
+  reviewedById      String?
+  reviewedAt        DateTime?
+  baseline          RasterManualBaseline          @relation(fields: [baselineId], references: [id], onDelete: Cascade)
+  reviewedBy        User?                         @relation("RasterManualBaselineReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@unique([baselineId, sourceIdentityKey])
+  @@index([baselineId, status])
+  @@index([reviewedById])
+  @@index([targetTeamId])
 }
 
 model RasterSnapshot {

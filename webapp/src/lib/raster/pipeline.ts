@@ -5,6 +5,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import type { TeamRasterAssignmentRow } from "../../../../src/raster/ingest/clicktt-assignments.js";
+import { scrapeLiveBaselineAssignments } from "./live-baseline-scraper";
 import type { ParsedUpperLeagueImport } from "../../../../src/raster/ingest/groups-pdf.js";
 import type { RosterCsvParseResult } from "../../../../src/raster/ingest/roster-csv.js";
 import type { WishParseResult } from "../../../../src/raster/ingest/wishes-pdf.js";
@@ -119,10 +120,7 @@ async function buildSeasonModelFromAssignments(
 async function scrapeClickTtAssignments(options?: {
   groupNamePattern?: string;
 }): Promise<TeamRasterAssignmentRow[]> {
-  return runRasterTs<TeamRasterAssignmentRow[]>(`
-    const { scrapeCurrentTeamRasterAssignments } = await import(${JSON.stringify(ingestScrapeUrl)});
-    emit(await scrapeCurrentTeamRasterAssignments(${JSON.stringify(options)}));
-  `);
+  return scrapeLiveBaselineAssignments(options);
 }
 
 async function scrapeClickTtPublicLeagueAssignments(

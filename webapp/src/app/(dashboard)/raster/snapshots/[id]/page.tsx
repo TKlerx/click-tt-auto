@@ -5,11 +5,13 @@ import {
   getSnapshot,
   listSnapshotAssignments,
   listSnapshotConflicts,
+  getSnapshotBaselineComparison,
 } from "@/services/raster";
 import { AssignmentTable } from "@/components/raster/assignments/assignment-table";
 import { IncompleteBadge } from "@/components/raster/coverage/incomplete-badge";
 import { CoverageDetail } from "@/components/raster/coverage/coverage-detail";
 import { CombinedBadge } from "@/components/raster/coverage/combined-badge";
+import { BaselineComparison } from "@/components/raster/baseline/baseline-comparison";
 
 export default async function RasterSnapshotPage({
   params,
@@ -60,9 +62,10 @@ export default async function RasterSnapshotPage({
     ? requestedScope
     : null;
   const combined = coveredScopes.length > 1;
-  const [assignments, conflicts] = await Promise.all([
+  const [assignments, conflicts, baselineComparison] = await Promise.all([
     listSnapshotAssignments(snapshot.id, { scopeId: selectedScopeId }),
     listSnapshotConflicts(snapshot.id, { scopeId: selectedScopeId }),
+    getSnapshotBaselineComparison(snapshot.id),
   ]);
   const topClubs = summarizeConflictClubs(conflicts);
 
@@ -107,6 +110,10 @@ export default async function RasterSnapshotPage({
       </section>
 
       <CoverageDetail coverageJson={snapshot.run?.coverageJson} />
+
+      {baselineComparison ? (
+        <BaselineComparison comparison={baselineComparison} />
+      ) : null}
 
       <section className="grid gap-3 md:grid-cols-4">
         <Metric

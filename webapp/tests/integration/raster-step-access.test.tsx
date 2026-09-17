@@ -25,6 +25,18 @@ const services = vi.hoisted(() => ({
   adoptLegacyRasterSources: vi.fn(),
   listScenarios: vi.fn(),
   reviewHallCapacitiesForInputSet: vi.fn(),
+  getManualBaseline: vi.fn().mockResolvedValue({
+    active: null,
+    versions: [],
+    counts: {
+      total: 0,
+      matched: 0,
+      review: 0,
+      ignored: 0,
+      acceptedUnresolved: 0,
+      invalid: 0,
+    },
+  }),
 }));
 const matchReview = vi.hoisted(() => ({
   listMatchReviewState: vi.fn(),

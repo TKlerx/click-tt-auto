@@ -210,6 +210,30 @@ export function seedRasterCombinedReviewFixture(input: {
   >("seedRasterCombinedReviewFixture", input);
 }
 
+export function seedRasterManualBaselineFixture(input: {
+  email: string;
+  suffix: string;
+}) {
+  return runDbWorker<
+    typeof input,
+    {
+      readyInputSetId: string;
+      readyBaselineId: string;
+      reviewInputSetId: string;
+      emptyInputSetId: string;
+      withBaselineSnapshotId: string;
+      withoutBaselineSnapshotId: string;
+    }
+  >("seedRasterManualBaselineFixture", input);
+}
+
+export function countRasterManualBaselines(inputSetId: string) {
+  return runDbWorker<{ inputSetId: string }, number>(
+    "countRasterManualBaselines",
+    { inputSetId },
+  );
+}
+
 export function addAuditEntryFixture(input: {
   actorEmail: string;
   action: AuditAction;

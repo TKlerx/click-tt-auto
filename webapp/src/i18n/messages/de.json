@@ -456,6 +456,13 @@
       "combined": "Kombiniert",
       "spannedScopes": "Umfasste Scopes"
     },
+    "baseline": {
+      "title": "Manuelle Ausgangslage",
+      "import": "Ausgangslage importieren",
+      "refresh": "Ausgangslage aktualisieren",
+      "ready": "Bereit",
+      "review": "Prüfung erforderlich"
+    },
     "steps": {
       "import": "Import data",
       "review": "Review data",

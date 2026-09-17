@@ -84,6 +84,8 @@ pnpm run raster -- optimize --model reports/raster/model.json --start reports/ra
 
 Review `reports/raster/model.json` before scoring. PDF extraction is best-effort and flags review fields instead of silently trusting uncertain rows. Tune penalties with `specs/002-rasterzahl-wish-optimizer/weights.example.json`.
 
+The webapp review step can import the current click-TT Rasterzahlen as a versioned manual baseline. Imports use the same authenticated live navigation, require the three `CLICK_TT_*` variables below, and never replay captured admin URLs. Failed refreshes keep the previous active baseline. A reviewed baseline may be selected when starting a run, but it is comparison metadata only and never becomes a solver constraint. The production app image installs Debian Chromium and sets `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium`.
+
 Playwright-based CLI automation for click-TT administration.
 
 It is used to:

@@ -68,9 +68,25 @@ export const runSettingsSchema = z.object({
     .default({}),
 });
 
+export const runRequestSchema = runSettingsSchema.extend({
+  baselineId: nonEmptyString.optional(),
+});
+
+export const baselineImportSchema = z.object({}).strict();
+
+export const baselineRowDecisionSchema = z.discriminatedUnion("decision", [
+  z.object({ decision: z.literal("map"), targetTeamId: nonEmptyString }),
+  z.object({ decision: z.literal("ignore") }).strict(),
+  z.object({ decision: z.literal("accept-unresolved") }).strict(),
+]);
+
 export type RasterWeekdayInput = z.infer<typeof rasterWeekdaySchema>;
 export type WishJsonInput = z.infer<typeof wishJsonSchema>;
 export type CapacityCsvRowInput = z.infer<typeof capacityCsvRowSchema>;
 export type FixedRasterzahlInput = z.infer<typeof fixedRasterzahlSchema>;
 export type SeasonModelInput = z.infer<typeof seasonModelSchema>;
 export type RunSettingsInput = z.infer<typeof runSettingsSchema>;
+export type RunRequestInput = z.infer<typeof runRequestSchema>;
+export type BaselineRowDecisionInput = z.infer<
+  typeof baselineRowDecisionSchema
+>;

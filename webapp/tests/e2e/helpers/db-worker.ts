@@ -31,6 +31,8 @@ type Operation =
   | "seedRasterSource"
   | "seedRasterProjectionFixture"
   | "seedRasterCombinedReviewFixture"
+  | "seedRasterManualBaselineFixture"
+  | "countRasterManualBaselines"
   | "addAuditEntryFixture"
   | "seedBackgroundJob"
   | "seedNotificationTypeConfiguration"
@@ -1018,6 +1020,232 @@ async function main() {
       });
 
       process.stdout.write(JSON.stringify(notification.id));
+      break;
+    }
+
+    case "seedRasterManualBaselineFixture": {
+      const input = await readJson<{ email: string; suffix: string }>();
+      const [user, scope] = await Promise.all([
+        prisma.user.findUnique({
+          where: { email: normalizeEmail(input.email) },
+          select: { id: true },
+        }),
+        prisma.scope.findUnique({
+          where: { code: "OWL" },
+          select: { id: true },
+        }),
+      ]);
+      if (!user || !scope)
+        throw new Error("Baseline fixture user or scope missing");
+      const teams = ["A", "B", "C", "D"].map((name) => ({
+        id: `baseline-team-${name.toLowerCase()}-${input.suffix}`,
+        clubId: `baseline-club-${name.toLowerCase()}-${input.suffix}`,
+        name: `Club ${name}`,
+        label: "Erwachsene",
+        group: { league: "Liga", name: "Gruppe 1" },
+        homeWeekday: "friday",
+        hall: "1",
+        rasterzahl: { kind: "assignable" },
+        confidence: "ok",
+      }));
+      const seasonModelJson = JSON.stringify({
+        clubs: teams.map((team) => ({
+          id: team.clubId,
+          name: team.name,
+          venues: [],
+          notes: "",
+        })),
+        teams,
+        groups: [
+          {
+            ref: { league: "Liga", name: "Gruppe 1" },
+            size: 5,
+            teamIds: teams.map((team) => team.id),
+          },
+        ],
+        wishes: [],
+        absoluteConstraints: [],
+        warnings: [],
+      });
+
+      const result = await prisma.$transaction(async (tx) => {
+        const readyInputSet = await tx.rasterInputSet.create({
+          data: {
+            name: `Baseline ready ${input.suffix}`,
+            scopeId: scope.id,
+            season: "2026/27",
+            createdById: user.id,
+            status: InputSetStatus.READY,
+            seasonModelJson,
+          },
+        });
+        const readyBaseline = await tx.rasterManualBaseline.create({
+          data: {
+            inputSetId: readyInputSet.id,
+            startedById: user.id,
+            status: "READY",
+            active: true,
+            completedAt: new Date(),
+            activatedAt: new Date(),
+            rows: {
+              create: teams.slice(0, 3).map((team, index) => ({
+                sourceIdentityKey: `ready-${input.suffix}-${index}`,
+                sourceGroupLabel: "Gruppe 1",
+                sourceTeamLabel: team.name,
+                rasterzahl: index + 1,
+                sourceLocation: "fixture",
+                status: "MATCHED",
+                targetTeamId: team.id,
+                targetTeamLabel: team.name,
+              })),
+            },
+          },
+        });
+        const runWithBaseline = await tx.rasterOptimizationRun.create({
+          data: {
+            inputSetId: readyInputSet.id,
+            startedById: user.id,
+            baselineId: readyBaseline.id,
+            status: OptimizationRunStatus.SUCCEEDED,
+            outcome: OptimizationRunOutcome.PROVEN_OPTIMAL,
+          },
+        });
+        const withBaseline = await createSnapshot(tx, {
+          runId: runWithBaseline.id,
+          scopeId: scope.id,
+          assignments: [
+            assignment(
+              scope.id,
+              "Club A",
+              "Club A",
+              `baseline-a-${input.suffix}`,
+            ),
+            {
+              ...assignment(
+                scope.id,
+                "Club B",
+                "Club B",
+                `baseline-b-${input.suffix}`,
+              ),
+              rasterzahl: 4,
+            },
+            {
+              ...assignment(
+                scope.id,
+                "Club D",
+                "Club D",
+                `baseline-d-${input.suffix}`,
+              ),
+              rasterzahl: 5,
+            },
+          ],
+        });
+        const runWithoutBaseline = await tx.rasterOptimizationRun.create({
+          data: {
+            inputSetId: readyInputSet.id,
+            startedById: user.id,
+            status: OptimizationRunStatus.SUCCEEDED,
+            outcome: OptimizationRunOutcome.PROVEN_OPTIMAL,
+          },
+        });
+        const withoutBaseline = await createSnapshot(tx, {
+          runId: runWithoutBaseline.id,
+          scopeId: scope.id,
+          assignments: [
+            assignment(scope.id, "Club A", "Club A", `plain-a-${input.suffix}`),
+          ],
+        });
+        const reviewInputSet = await tx.rasterInputSet.create({
+          data: {
+            name: `Baseline review ${input.suffix}`,
+            scopeId: scope.id,
+            season: "2026/27",
+            createdById: user.id,
+            status: InputSetStatus.READY,
+            seasonModelJson,
+          },
+        });
+        await tx.rasterManualBaseline.create({
+          data: {
+            inputSetId: reviewInputSet.id,
+            startedById: user.id,
+            status: "READY",
+            completedAt: new Date(),
+            rows: {
+              create: {
+                sourceIdentityKey: `carried-${input.suffix}`,
+                sourceGroupLabel: "Gruppe 1",
+                sourceTeamLabel: "Carried Club",
+                rasterzahl: 3,
+                sourceLocation: "fixture-v1",
+                status: "IGNORED",
+              },
+            },
+          },
+        });
+        await tx.rasterManualBaseline.create({
+          data: {
+            inputSetId: reviewInputSet.id,
+            startedById: user.id,
+            status: "REVIEW",
+            active: true,
+            completedAt: new Date(),
+            activatedAt: new Date(),
+            rows: {
+              create: [
+                {
+                  sourceIdentityKey: `carried-${input.suffix}`,
+                  sourceGroupLabel: "Gruppe 1",
+                  sourceTeamLabel: "Carried Club",
+                  rasterzahl: 3,
+                  sourceLocation: "fixture-v2",
+                  status: "IGNORED",
+                },
+                {
+                  sourceIdentityKey: `review-${input.suffix}`,
+                  sourceGroupLabel: "Gruppe 1",
+                  sourceTeamLabel: "Renamed Club",
+                  rasterzahl: 2,
+                  sourceLocation: "fixture",
+                  status: "REVIEW",
+                  issue: "No exact season-model team match.",
+                },
+              ],
+            },
+          },
+        });
+        const emptyInputSet = await tx.rasterInputSet.create({
+          data: {
+            name: `Baseline empty ${input.suffix}`,
+            scopeId: scope.id,
+            season: "2026/27",
+            createdById: user.id,
+            status: InputSetStatus.READY,
+            seasonModelJson,
+          },
+        });
+        return {
+          readyInputSetId: readyInputSet.id,
+          readyBaselineId: readyBaseline.id,
+          reviewInputSetId: reviewInputSet.id,
+          emptyInputSetId: emptyInputSet.id,
+          withBaselineSnapshotId: withBaseline.id,
+          withoutBaselineSnapshotId: withoutBaseline.id,
+        };
+      });
+      process.stdout.write(JSON.stringify(result));
+      break;
+    }
+
+    case "countRasterManualBaselines": {
+      const input = await readJson<{ inputSetId: string }>();
+      process.stdout.write(
+        JSON.stringify(
+          await prisma.rasterManualBaseline.count({
+            where: { inputSetId: input.inputSetId },
+          }),
+        ),
+      );
       break;
     }
   }

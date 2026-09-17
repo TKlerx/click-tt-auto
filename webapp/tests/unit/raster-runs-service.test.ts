@@ -2,17 +2,18 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { prismaMock } from "@/lib/__mocks__/db";
 import { startOptimizationRun } from "@/services/raster/runs";
 
-const { buildCoverageRecordForInputSet, applyUpperLeagueInjectionToInputSet } = vi.hoisted(() => ({
-  buildCoverageRecordForInputSet: vi.fn().mockResolvedValue({
-    complete: true,
-    spannedScopes: ["scope-owl"],
-    spannedAll: true,
-    excludedGroups: [],
-    wishGaps: [],
-    capacityGaps: [],
-  }),
-  applyUpperLeagueInjectionToInputSet: vi.fn(),
-}));
+const { buildCoverageRecordForInputSet, applyUpperLeagueInjectionToInputSet } =
+  vi.hoisted(() => ({
+    buildCoverageRecordForInputSet: vi.fn().mockResolvedValue({
+      complete: true,
+      spannedScopes: ["scope-owl"],
+      spannedAll: true,
+      excludedGroups: [],
+      wishGaps: [],
+      capacityGaps: [],
+    }),
+    applyUpperLeagueInjectionToInputSet: vi.fn(),
+  }));
 
 vi.mock("@/lib/db", () => ({
   prisma: prismaMock,
@@ -76,5 +77,52 @@ describe("raster runs service", () => {
       prismaMock.rasterOptimizationRun.create.mock.invocationCallOrder[0],
     );
     expect(applyUpperLeagueInjectionToInputSet).toHaveBeenCalledWith("input-1");
+  });
+
+  it("links a ready same-workspace baseline without adding it to solver settings", async () => {
+    prismaMock.rasterInputSet.findUnique.mockResolvedValue({
+      id: "input-1",
+      scopeId: "scope-owl",
+      season: "2026/27",
+      seasonModelJson: "{}",
+    } as never);
+    prismaMock.scope.findFirst.mockResolvedValue(null);
+    prismaMock.$transaction.mockImplementation(async (callback) =>
+      callback(prismaMock),
+    );
+    prismaMock.rasterManualBaseline.findFirst.mockResolvedValue({
+      id: "baseline-1",
+    } as never);
+    prismaMock.rasterWishConflict.findMany.mockResolvedValue([]);
+    prismaMock.rasterOptimizationRun.create.mockResolvedValue({
+      id: "run-1",
+    } as never);
+    prismaMock.backgroundJob.create.mockResolvedValue({ id: "job-1" } as never);
+    prismaMock.rasterOptimizationRun.update.mockResolvedValue({
+      id: "run-1",
+      jobId: "job-1",
+    } as never);
+
+    await startOptimizationRun({
+      inputSetId: "input-1",
+      startedById: "user-1",
+      baselineId: "baseline-1",
+      settings: { strategy: "cp_sat", timeLimitSeconds: 60, weights: {} },
+    });
+
+    expect(prismaMock.rasterManualBaseline.findFirst).toHaveBeenCalledWith({
+      where: { id: "baseline-1", inputSetId: "input-1", status: "READY" },
+      select: { id: true },
+    });
+    expect(prismaMock.rasterOptimizationRun.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        baselineId: "baseline-1",
+        settings: JSON.stringify({
+          strategy: "cp_sat",
+          timeLimitSeconds: 60,
+          weights: {},
+        }),
+      }),
+    });
   });
 });

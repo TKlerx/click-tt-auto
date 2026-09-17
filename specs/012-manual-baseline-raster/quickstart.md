@@ -7,6 +7,10 @@
 - Playwright Chromium installed
 - A planning workspace with a parsed season model
 
+In the production app container, Chromium is installed from Debian and selected with `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium`. Local development uses Playwright's installed Chromium unless that variable is set.
+
+Imports are synchronous, reject a second concurrent import for the same workspace, and keep credentials solely in `CLICK_TT_USERNAME`, `CLICK_TT_PASSWORD`, and `CLICK_TT_URL`. Persisted failures contain only the navigation step and a sanitized message.
+
 ## Validation flow
 
 1. Open the workspace review page as a scheduler.
@@ -28,3 +32,10 @@ pnpm --dir webapp test -- --run tests/unit/raster-manual-baseline-service.test.t
 pnpm --dir webapp exec playwright test tests/e2e/raster-manual-baseline.spec.ts
 pwsh -File ./validate.ps1
 ```
+
+## Live verification (2026-09-17)
+
+- Authenticated click-TT traversal completed through the live admin UI.
+- Captured 404 assignments across 28 navigation labels; verified page titles resolved them to the workspace's season-model groups.
+- Persisted one active `READY` baseline for workspace `OWL 2026/27`: 404 matched, 0 review, 0 invalid.
+- No write was made to click-TT. Credentials, cookies, and raw page content were not persisted in baseline diagnostics.

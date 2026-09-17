@@ -3,6 +3,7 @@ import { buildCoverageRecordForInputSet } from "@/lib/raster/coverage";
 import type { RunSettingsInput } from "@/lib/raster/schemas";
 import { syncInputSetSourceCaches } from "./inputSets";
 import { applyUpperLeagueInjectionToInputSet } from "./upperLeague";
+import { BaselineValidationError } from "./manualBaselines";
 
 export async function listOptimizationRuns(inputSetId: string) {
   return prisma.rasterOptimizationRun.findMany({
@@ -64,11 +65,27 @@ export async function startOptimizationRun(params: {
   inputSetId: string;
   startedById: string;
   settings: RunSettingsInput;
+  baselineId?: string;
 }) {
   await syncInputSetSourceCaches(params.inputSetId);
   await applyUpperLeagueInjectionToInputSet(params.inputSetId);
   const coverage = await buildCoverageRecordForInputSet(params.inputSetId);
   return prisma.$transaction(async (tx) => {
+    if (params.baselineId) {
+      const baseline = await tx.rasterManualBaseline.findFirst({
+        where: {
+          id: params.baselineId,
+          inputSetId: params.inputSetId,
+          status: "READY",
+        },
+        select: { id: true },
+      });
+      if (!baseline) {
+        throw new BaselineValidationError(
+          "Selected baseline is not ready for this workspace.",
+        );
+      }
+    }
     const unresolvedWishConflicts =
       (await tx.rasterWishConflict.findMany({
         where: { inputSetId: params.inputSetId, decision: null },
@@ -86,6 +103,7 @@ export async function startOptimizationRun(params: {
       data: {
         inputSetId: params.inputSetId,
         startedById: params.startedById,
+        baselineId: params.baselineId,
         settings: JSON.stringify(params.settings),
         coverageComplete: coverageWithWishConflicts.complete,
         coverageJson: JSON.stringify(coverageWithWishConflicts),

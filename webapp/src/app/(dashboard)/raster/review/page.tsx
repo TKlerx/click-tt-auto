@@ -12,8 +12,10 @@ import {
   GroupPlanningReview,
 } from "@/components/raster/group-mode-review";
 import { ManualAssignmentForm } from "@/components/raster/manual-assignment-form";
+import { BaselineReview } from "@/components/raster/baseline/baseline-review";
 import {
   listHallCapacities,
+  getManualBaseline,
   listInputSets,
   listWishImportReview,
   reviewHallCapacitiesForInputSet,
@@ -48,13 +50,14 @@ export default async function RasterReviewPage({
     inputSets,
     params.workspace,
   ).selected;
-  const [capacityReview, matchReview, wishImportReview] = inputSet
+  const [capacityReview, matchReview, wishImportReview, baseline] = inputSet
     ? await Promise.all([
         reviewHallCapacitiesForInputSet(inputSet.id),
         listMatchReviewState(inputSet.id),
         listWishImportReview(inputSet.id),
+        getManualBaseline(inputSet.id),
       ])
-    : [null, [], null];
+    : [null, [], null, null];
   const canEdit = canUseRasterLevel(context.user, "scheduler");
   const planningGroups = inputSet
     ? extractPlanningGroups(
@@ -130,6 +133,14 @@ export default async function RasterReviewPage({
           inputSetId={inputSet.id}
           records={matchReview}
         />
+        {baseline ? (
+          <BaselineReview
+            baseline={baseline}
+            canEdit={canEdit}
+            inputSetId={inputSet.id}
+            teams={extractBaselineTeams(inputSet.seasonModelJson)}
+          />
+        ) : null}
         <details
           className="mt-3 border-t border-[var(--border)] pt-3"
           open={
@@ -177,6 +188,20 @@ export default async function RasterReviewPage({
       </section>
     </div>
   );
+}
+
+function extractBaselineTeams(seasonModelJson: string | null) {
+  try {
+    const model = JSON.parse(seasonModelJson ?? "{}") as {
+      teams?: Array<{ id: string; label: string; group?: { name?: string } }>;
+    };
+    return (model.teams ?? []).map((team) => ({
+      id: team.id,
+      label: `${team.label}${team.group?.name ? ` — ${team.group.name}` : ""}`,
+    }));
+  } catch {
+    return [];
+  }
 }
 
 function wishImportIssueCount(

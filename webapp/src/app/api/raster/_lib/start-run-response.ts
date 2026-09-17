@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
-import { runSettingsSchema, type RunSettingsInput } from "@/lib/raster/schemas";
-import { startOptimizationRun } from "@/services/raster";
+import { runRequestSchema, type RunSettingsInput } from "@/lib/raster/schemas";
+import {
+  BaselineValidationError,
+  startOptimizationRun,
+} from "@/services/raster";
 
 type StartedRun = Awaited<ReturnType<typeof startOptimizationRun>>;
 
@@ -15,7 +18,7 @@ export async function startRasterRunResponse(
     }) => Promise<void>;
   },
 ) {
-  const parsed = runSettingsSchema.safeParse(
+  const parsed = runRequestSchema.safeParse(
     await request.json().catch(() => ({})),
   );
   if (!parsed.success) {
@@ -25,12 +28,22 @@ export async function startRasterRunResponse(
     );
   }
 
-  const run = await startOptimizationRun({
-    inputSetId: params.inputSetId,
-    startedById: params.startedById,
-    settings: parsed.data,
-  });
-  await params.onStarted?.({ run, settings: parsed.data });
+  const { baselineId, ...settings } = parsed.data;
+  let run: StartedRun;
+  try {
+    run = await startOptimizationRun({
+      inputSetId: params.inputSetId,
+      startedById: params.startedById,
+      settings,
+      baselineId,
+    });
+  } catch (error) {
+    if (error instanceof BaselineValidationError) {
+      return NextResponse.json({ error: error.message }, { status: 422 });
+    }
+    throw error;
+  }
+  await params.onStarted?.({ run, settings });
 
   return NextResponse.json({ run }, { status: 202 });
 }

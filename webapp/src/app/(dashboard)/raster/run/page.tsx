@@ -3,6 +3,7 @@ import { canUseRasterLevel } from "@/lib/raster/access";
 import { resolveWorkspaceSelection } from "@/lib/raster/workspace-selection";
 import {
   listInputSets,
+  getManualBaseline,
   reviewHallCapacitiesForInputSet,
 } from "@/services/raster";
 import {
@@ -25,9 +26,12 @@ export default async function RasterRunPage({
     inputSets,
     params.workspace,
   ).selected;
-  const capacityReview = inputSet
-    ? await reviewHallCapacitiesForInputSet(inputSet.id)
-    : null;
+  const [capacityReview, baseline] = inputSet
+    ? await Promise.all([
+        reviewHallCapacitiesForInputSet(inputSet.id),
+        getManualBaseline(inputSet.id),
+      ])
+    : [null, null];
   const hasExclusions = inputSet
     ? seasonModelHasExclusions(inputSet.seasonModelJson)
     : false;
@@ -53,6 +57,16 @@ export default async function RasterRunPage({
       {canUseRasterLevel(context.user, "scheduler") ? (
         <InputSetRunActions
           capacityReview={capacityReview ?? undefined}
+          baselines={
+            baseline?.active?.status === "READY"
+              ? [
+                  {
+                    id: baseline.active.id,
+                    label: `Imported ${baseline.active.createdAt.toLocaleString()}`,
+                  },
+                ]
+              : []
+          }
           combined={inputSet.spannedScopes.length > 1}
           inputSetId={inputSet.id}
           runs={inputSet.runs}

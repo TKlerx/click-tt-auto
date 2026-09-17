@@ -3,7 +3,7 @@ WORKDIR /repo/webapp
 ENV COREPACK_HOME=/corepack
 RUN apt-get update -y \
     && apt-get upgrade -y \
-    && apt-get install -y --no-install-recommends openssl \
+    && apt-get install -y --no-install-recommends chromium openssl \
     && rm -rf /var/lib/apt/lists/*
 RUN mkdir -p /corepack \
     && corepack enable \
@@ -75,6 +75,7 @@ LABEL org.opencontainers.image.revision=$APP_REVISION
 LABEL org.opencontainers.image.created=$APP_BUILT_AT
 LABEL org.opencontainers.image.source="https://github.com/TKlerx/webapp-template"
 ENV NODE_ENV=production
+ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
 ENV PORT=3287
 ENV HOSTNAME=0.0.0.0
 ENV APP_VERSION=$APP_VERSION

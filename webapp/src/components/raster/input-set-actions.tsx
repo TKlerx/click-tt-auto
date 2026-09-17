@@ -195,6 +195,7 @@ export function InputSetRunActions({
   capacityReview,
   showCapacityReview = true,
   combined = false,
+  baselines = [],
 }: {
   inputSetId: string;
   status: string;
@@ -202,6 +203,7 @@ export function InputSetRunActions({
   capacityReview?: HallCapacityReview;
   showCapacityReview?: boolean;
   combined?: boolean;
+  baselines?: Array<{ id: string; label: string }>;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -209,6 +211,7 @@ export function InputSetRunActions({
   const [busy, setBusy] = useState<string | null>(null);
   const [strategy, setStrategy] = useState<RasterRunStrategy>("cp_sat");
   const [timeLimitSeconds, setTimeLimitSeconds] = useState(300);
+  const [baselineId, setBaselineId] = useState("");
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
   const capacityBlocked = (capacityReview?.blockingCount ?? 0) > 0;
   const capacityReviewMessage = capacityReview
@@ -255,7 +258,11 @@ export function InputSetRunActions({
         headers: { "content-type": "application/json" },
         body:
           label === "Run"
-            ? JSON.stringify({ strategy, timeLimitSeconds })
+            ? JSON.stringify({
+                strategy,
+                timeLimitSeconds,
+                ...(baselineId ? { baselineId } : {}),
+              })
             : "{}",
       });
       const body = (await response.json().catch(() => ({}))) as {
@@ -443,6 +450,24 @@ export function InputSetRunActions({
         strategy={strategy}
         timeLimitSeconds={timeLimitSeconds}
       />
+      {baselines.length ? (
+        <label className="grid max-w-xl gap-1 text-sm font-medium">
+          Manual baseline comparison (optional)
+          <select
+            className="h-10 rounded-md border border-[var(--border)] bg-transparent px-3 font-normal"
+            disabled={busy !== null || status !== "READY"}
+            onChange={(event) => setBaselineId(event.target.value)}
+            value={baselineId}
+          >
+            <option value="">No baseline</option>
+            {baselines.map((baseline) => (
+              <option key={baseline.id} value={baseline.id}>
+                {baseline.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
       <div className="flex flex-wrap items-center gap-2">
         <button
           className="h-9 rounded-md border border-[var(--border)] px-3 text-sm font-medium"

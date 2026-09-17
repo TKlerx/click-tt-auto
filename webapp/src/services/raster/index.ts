@@ -3,6 +3,7 @@ export * from "./combinedInputSets";
 export * from "./fixedRasterzahlen";
 export * from "./inputSets";
 export * from "./manualAssignments";
+export * from "./manualBaselines";
 export * from "./runs";
 export * from "./scenarios";
 export * from "./scenarioDetails";

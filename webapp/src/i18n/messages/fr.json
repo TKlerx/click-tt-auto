@@ -456,6 +456,13 @@
       "combined": "Combine",
       "spannedScopes": "Perimetres couverts"
     },
+    "baseline": {
+      "title": "Référence manuelle",
+      "import": "Importer la référence",
+      "refresh": "Actualiser la référence",
+      "ready": "Prête",
+      "review": "Révision requise"
+    },
     "steps": {
       "import": "Import data",
       "review": "Review data",

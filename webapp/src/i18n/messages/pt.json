@@ -456,6 +456,13 @@
       "combined": "Combinado",
       "spannedScopes": "Ambitos abrangidos"
     },
+    "baseline": {
+      "title": "Linha de base manual",
+      "import": "Importar linha de base",
+      "refresh": "Atualizar linha de base",
+      "ready": "Pronta",
+      "review": "Requer revisão"
+    },
     "steps": {
       "import": "Import data",
       "review": "Review data",

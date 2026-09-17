@@ -101,7 +101,10 @@ export async function scrapeSeasonModel(
   const config = loadConfig();
   const browser = await chromium.launch({
     headless: !config.headed,
-    slowMo: config.slowMoMs
+    slowMo: config.slowMoMs,
+    ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
+      ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH }
+      : {})
   });
   const context = await browser.newContext({ acceptDownloads: true });
   const page = await context.newPage();
@@ -302,7 +305,10 @@ export async function scrapePublicLeagueAssignmentsFromUrl(
 ): Promise<TeamRasterAssignmentRow[]> {
   const browser = await chromium.launch({
     headless: process.env.CLICK_TT_HEADED !== "1",
-    slowMo: Number(process.env.CLICK_TT_SLOW_MO_MS ?? 0)
+    slowMo: Number(process.env.CLICK_TT_SLOW_MO_MS ?? 0),
+    ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
+      ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH }
+      : {})
   });
   const context = await browser.newContext();
   const page = await context.newPage();

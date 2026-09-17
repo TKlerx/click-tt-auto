@@ -456,6 +456,13 @@
       "combined": "Combined",
       "spannedScopes": "Spanned scopes"
     },
+    "baseline": {
+      "title": "Manual baseline",
+      "import": "Import baseline",
+      "refresh": "Refresh baseline",
+      "ready": "Ready",
+      "review": "Needs review"
+    },
     "steps": {
       "import": "Import data",
       "review": "Review data",
