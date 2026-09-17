@@ -291,6 +291,59 @@ describe("deriveFineCandidates", () => {
 });
 
 describe("syncFineWorkbook", () => {
+  it("deduplicates by teams, date, and reason while keeping different reasons", async () => {
+    const workbookPath = await createWorkbook(
+      [
+        "Liga",
+        "Gruppe",
+        "Serie",
+        "Datum",
+        "Spielnummer",
+        "Heim",
+        "Gast",
+        "Strafe gegen",
+        "Grund",
+        "Rechtsgrundlage",
+        "Bemerkung",
+        "Kosten",
+        "Spielleiter"
+      ],
+      [["Bezirksoberliga", "", "Hinserie", "03.10.2025", "old-number", "TuRa Elsen III", "TTS Detmold", "other team", "MF fehlt", "", "", "", "Timo Klerx"]]
+    );
+
+    const result = await syncFineWorkbook({
+      workbookPath,
+      sheetName: "Sheet1",
+      ignoreColumnName: "Ignore",
+      spielleiter: "Timo Klerx",
+      defaultLiga: "Bezirksoberliga",
+      defaultGruppe: "",
+      naKosten: 100,
+      fineCatalogue: null,
+      actions: [
+        {
+          match: baseMatch(),
+          action: "skipped",
+          validation: {
+            isApprovable: false,
+            checks: [
+              { rule: "mf-present", passed: false, reason: "MF missing for TTS Detmold" },
+              { rule: "player-count", passed: false, reason: "guest has 5 numbered players" }
+            ]
+          }
+        }
+      ],
+      statusFineMatches: []
+    });
+
+    expect(result).toMatchObject({ totalCandidates: 2, appended: 1, existing: 1 });
+    const workbook = new Workbook();
+    await workbook.xlsx.readFile(workbookPath);
+    const worksheet = workbook.getWorksheet("Sheet1");
+    expect(worksheet?.rowCount).toBe(3);
+    expect(worksheet?.getCell(3, 9).value).toBe("Unvollständige Einzelaufstellung");
+  });
+
   it("adds the metadata columns and appends only missing candidates", async () => {
     const workbookPath = await createWorkbook(
       [

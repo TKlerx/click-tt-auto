@@ -119,8 +119,8 @@
 - [X] T038 Extend stdout/JSON reporting with scanned/actionable/ignored counts and fine-workbook sync summary
 - [X] T039 Implement fine workbook sync in src/fines.ts using ExcelJS with duplicate suppression and ignore-column support
 - [X] T040 Export `Nicht angetreten` fine candidates and workbook failure reasons, including already-approved search-result rows (FR-019, FR-020, FR-022 — reads `CLICK_TT_FINE_NA_KOSTEN`)
-- [ ] T041 [P] Align fine-workbook dedup key to home + guest + match date + sanction reason (`grund`) in src/fines.ts per SC-006 - exclude `spielnummer` from the key; confirm ignore-column rows are matched on the same key
-- [ ] T042 [P] Add/adjust unit test in tests/unit/fines.test.ts asserting the dedup key (heim+gast+datum+grund) suppresses duplicates and that differing `grund` on the same fixture produces separate rows
+- [x] T041 [P] Align fine-workbook dedup key to home + guest + match date + sanction reason (`grund`) in src/fines.ts per SC-006 - exclude `spielnummer` from the key; confirm ignore-column rows are matched on the same key
+- [x] T042 [P] Add/adjust unit test in tests/unit/fines.test.ts asserting the dedup key (heim+gast+datum+grund) suppresses duplicates and that differing `grund` on the same fixture produces separate rows
 
 ---
 

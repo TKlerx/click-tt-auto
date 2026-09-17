@@ -199,11 +199,11 @@
 
 **Independent Test**: Upload/refresh a group assignment and wish PDF where the same club uses an abbreviation or suffix difference; verify the UI proposes the match, an admin can confirm/correct it, and a later upload reuses the confirmed alias.
 
-- [ ] T079 [US1] Add a persisted source-identity alias model for scope/season-aware club and team name mappings.
-- [ ] T080 [US1] Add fuzzy club/team matching in input-set cache sync, using exact normalized matches automatically and marking uncertain matches for review.
-- [ ] T081 [US1] Add parsed source identity review UI so admins can accept a suggestion, pick another club/team, or create a new identity before validation/run.
-- [ ] T082 [US1] Reuse confirmed aliases on future uploads and add tests for abbreviation/suffix cases such as `SC GW Paderborn` vs `SC Grün-Weiß Paderborn`.
-- [ ] T083 [US1] Add a focused club-alias review table: parsed PDF club identity → canonical click-TT club identity, match confidence/source, admin override, and persisted alias reuse so capacity inference cannot create duplicate club rows after future imports.
+- [x] T079 [US1] Add input-set-local club alias mappings to the persisted season model in `webapp/src/services/raster/inputSets.ts`.
+- [x] T080 [US1] Add normalized and conservative fuzzy club suggestions in `webapp/src/services/raster/capacity.ts`, leaving ambiguous matches for review.
+- [x] T081 [US1] Add the editable club alias review table in `webapp/src/components/raster/capacity/club-alias-review.tsx` and its API route.
+- [x] T082 [US1] Reapply confirmed input-set club aliases during cache sync and cover abbreviation/suffix and correction cases in `webapp/tests/unit/raster-capacity-service.test.ts` and `webapp/tests/unit/raster-input-sets-service.test.ts`.
+- [ ] T083 [US1] Promote input-set-local club aliases into a scope/season-aware persisted source-identity model that also supports team mappings, match confidence/source, and reuse across planning workspaces.
 
 ---
 

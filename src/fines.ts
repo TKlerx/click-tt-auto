@@ -636,6 +636,17 @@ function buildCandidateKey(candidate: FineCandidate): string {
     .join("|");
 }
 
+function buildWorkbookKey(candidate: FineCandidate): string {
+  return [
+    normalizeDateKey(candidate.datum),
+    candidate.heim,
+    candidate.gast,
+    candidate.grund
+  ]
+    .map((value) => normalizeForSearch(String(value)))
+    .join("|");
+}
+
 function collectWorkbookKeys(
   worksheet: Worksheet,
   ignoreColumnName: string
@@ -667,7 +678,7 @@ function collectWorkbookKeys(
       fineCataloguePattern: "",
       fineLowestTeamApplied: false
     };
-    const key = buildCandidateKey(candidate);
+    const key = buildWorkbookKey(candidate);
     if (!key.replace(/\|/g, "")) {
       continue;
     }
@@ -715,7 +726,7 @@ export function getStatusFineCandidateState(
     return "disabled";
   }
 
-  const key = buildCandidateKey(buildStatusFineCandidate(match, options));
+  const key = buildWorkbookKey(buildStatusFineCandidate(match, options));
   if (workbookIndex.ignoredKeys.has(key)) {
     return "ignored";
   }
@@ -870,7 +881,7 @@ export async function syncFineWorkbook(options: FineSyncOptions): Promise<FineSy
   const catalogueMatches: FineCatalogueMatchSummary[] = [];
 
   for (const candidate of candidates) {
-    const key = buildCandidateKey(candidate);
+    const key = buildWorkbookKey(candidate);
 
     if (ignoredKeys.has(key)) {
       ignored += 1;
