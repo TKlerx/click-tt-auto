@@ -15,6 +15,7 @@
     "raster:optimize-cpsat": "uv run --python 3.12 scripts/solve-raster-cpsat.py",
     "raster:spielwoche-overages": "tsx scripts/report-spielwoche-overages.ts",
     "raster:join-review": "tsx scripts/join-admin-pdf-public-context.ts",
+    "spond:codes": "tsx src/spond/cli.ts",
     "test": "vitest run --dir tests",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",

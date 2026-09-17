@@ -2,6 +2,7 @@ node_modules/
 dist/
 reports/
 reports/raster/
+codes/
 data/*.xlsx
 data/*.pdf
 .env

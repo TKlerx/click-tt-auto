@@ -1,5 +1,33 @@
 # click-tt-automation
 
+Automation and planning tools for click-TT league administration.
+
+## Repository map
+
+| Path | Purpose |
+| --- | --- |
+| `src/` | Match-report approval CLI and shared click-TT automation |
+| `src/raster/` | Raster ingest, rules, scoring, optimization, and reports |
+| `src/spond/` | Spond event enrichment from nuScore PIN/code PDFs |
+| `scripts/` | Raster pipeline utilities and repository maintenance |
+| `webapp/` | Next.js planning and review application, worker, and database |
+| `tests/` | Root CLI and raster tests plus committed fixtures |
+| `specs/` | Feature specifications, plans, contracts, and task history |
+| `docs/` | Focused operational and data-format documentation |
+
+## Main commands
+
+| Command | Purpose |
+| --- | --- |
+| `pnpm approve -- --dry-run` | Safely inspect match-report approval work |
+| `pnpm raster -- ...` | Run the Rasterzahl planner CLI |
+| `pnpm spond:codes` | Parse local `codes/` PDFs without changing Spond |
+| `pnpm spond:codes -- --apply` | Update matching Spond events |
+| `pnpm run typecheck` | Type-check root TypeScript |
+| `pnpm run lint` | Lint root code |
+| `pnpm test` | Run root tests |
+| `pwsh -File ./validate.ps1` | Validate root and webapp |
+
 ## Rasterzahl planner
 
 ```powershell
