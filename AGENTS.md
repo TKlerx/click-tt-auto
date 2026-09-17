@@ -1,6 +1,6 @@
 # click-tt-automation Development Guidelines
 
-Auto-generated from all feature plans. Last updated: 2026-07-19
+Auto-generated from all feature plans. Last updated: 2026-09-17
 
 ## Active Technologies
 - TypeScript 5.9 (strict), Node.js LTS 22.x — both halves + CLI — Playwright, dotenv, minimist (all present). Webapp — Next.js 16, Prisma 7, zod (all present). **One new dependency is likely**: a zip reader for the webapp's bundle path (FR-019a), justified below. (009-nuliga-team-roster-import)
@@ -10,6 +10,8 @@ Auto-generated from all feature plans. Last updated: 2026-07-19
 - PostgreSQL. Reuses the existing `RasterSource` table (scope + season + `sourceType` + `parsedJson`); no schema migration (`sourceType` is free text) (010-upper-league-raster-import)
 - TypeScript 5.9 (strict), Next.js 16 App Router, React 19 + Prisma 7 (PostgreSQL), next-intl, Tailwind 4 / shadcn, better-auth (via 007 access layer) (011-raster-import-ux)
 - PostgreSQL. **One migration**: add `inputSetId String?` FK from `RasterSource` to `RasterInputSet` and re-key source uniqueness to the workspace. `RasterInputSet` already has a `name` — it *is* the planning workspace; no new entity. (011-raster-import-ux)
+- TypeScript 5.9 strict; Node.js 22+ root CLI and Node.js 24 webapp runtime + Existing Playwright scraper, Next.js 16 App Router, React 19, Prisma 7, zod, better-auth, next-intl (012-manual-baseline-raster)
+- PostgreSQL; one migration adding versioned manual baseline/row tables and an optional baseline FK on `RasterOptimizationRun` (012-manual-baseline-raster)
 
 - TypeScript 5.9 strict for webapp/root raster code; Python 3.12 for the existing CP-SAT subprocess + Existing Next.js 16, React 19, Prisma 7, better-auth, next-intl, zod, Tailwind/shadcn; existing root `src/raster/*`; existing Python OR-Tools CP-SAT script (004-compare-raster-runs)
 - Existing Prisma SQLite dev / PostgreSQL prod schema, extended with scenario/manual-assignment fields as needed (004-compare-raster-runs)
@@ -37,14 +39,9 @@ npm test; npm run lint
 TypeScript 5.x, Node.js LTS (22.x): Follow standard conventions
 
 ## Recent Changes
+- 012-manual-baseline-raster: Added TypeScript 5.9 strict; Node.js 22+ root CLI and Node.js 24 webapp runtime + Existing Playwright scraper, Next.js 16 App Router, React 19, Prisma 7, zod, better-auth, next-intl
 - 010-upper-league-raster-import: Added TypeScript 5.9 (strict) for the webapp and `src/raster` ingest; Python 3.12 for the CP-SAT solver/worker (unchanged by this feature) + Next.js 16 (App Router), Prisma 7 (PostgreSQL), `pdfjs-dist` via existing `src/raster/ingest/pdf-text.ts`; existing raster ingest/season-model pipeline
 - 011-raster-import-ux: Added TypeScript 5.9 (strict), Next.js 16 App Router, React 19 + Prisma 7 (PostgreSQL), next-intl, Tailwind 4 / shadcn, better-auth (via 007 access layer)
-- 009-nuliga-team-roster-import: Added TypeScript 5.9 (strict), Node.js LTS 22.x — both halves + CLI — Playwright, dotenv, minimist (all present). Webapp — Next.js 16, Prisma 7, zod (all present). **One new dependency is likely**: a zip reader for the webapp's bundle path (FR-019a), justified below.
-- 008-wish-import-conflicts: Added TypeScript 5.9 (strict), Node.js LTS 22.x + Next.js 16, React 19, Prisma 7, zod — all present; this feature adds none
-- 006-combined-wttv-planning: Added TypeScript 5.9 (strict), Node.js LTS 22.x; Python 3.12 for the existing CP-SAT solver, invoked as a subprocess + Next.js 16 (App Router), React 19, Prisma 7, better-auth, next-intl, zod, Tailwind 4 / shadcn — all present; this feature adds none
-- 007-scope-access-management: Added TypeScript 5.9 (strict), Node.js LTS 22.x + Next.js 16 (App Router), React 19, Prisma 7, better-auth, next-intl, zod — all present; this feature adds none
-- 005-raster-guided-navigation: Added TypeScript 5.9 (strict), Node.js LTS 22.x + Next.js 16 (App Router), React 19, Prisma 7, better-auth, next-intl, zod, Tailwind 4 / shadcn — all already present in `webapp/`; this feature adds none
-- 004-compare-raster-runs: Added TypeScript 5.9 strict for webapp/root raster code; Python 3.12 for the existing CP-SAT subprocess + Existing Next.js 16, React 19, Prisma 7, better-auth, next-intl, zod, Tailwind/shadcn; existing root `src/raster/*`; existing Python OR-Tools CP-SAT script
 
 
 <!-- MANUAL ADDITIONS START -->
