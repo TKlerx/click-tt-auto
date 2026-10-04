@@ -304,6 +304,23 @@ export async function run(): Promise<void> {
       }
     };
 
+    const returnToListAfterError = async (): Promise<boolean> => {
+      try {
+        await assertMatchListPage(page);
+      } catch {
+        try {
+          await cancelAndReturn(page);
+        } catch (cleanupError) {
+          if (isSessionExpiredError(cleanupError)) {
+            await recoverCurrentPageSession(cleanupError);
+            return true;
+          }
+          // Non-session cleanup failures remain best effort.
+        }
+      }
+      return false;
+    };
+
     pageLoop: while (true) {
       await withCurrentPageRecovery(async () => {
         await ensureSessionActive(page);
@@ -536,14 +553,9 @@ export async function run(): Promise<void> {
             currentMatchLabel: formatMatchLabel(match)
           });
 
-          try {
-            await assertMatchListPage(page);
-          } catch {
-            try {
-              await cancelAndReturn(page);
-            } catch {
-              // Best effort only. The loop will fail fast if the page cannot recover.
-            }
+          if (await returnToListAfterError()) {
+            processedKeys.delete(matchKey);
+            continue pageLoop;
           }
         }
       }
@@ -558,8 +570,9 @@ export async function run(): Promise<void> {
           debug: config.debug,
           reportDir: config.reportDir
         });
+        // A missing next link can also mean the pager redirected to login.
+        await ensureSessionActive(page);
         if (advanced) {
-          await ensureSessionActive(page);
           await assertMatchListPage(page);
         }
       } catch (error) {

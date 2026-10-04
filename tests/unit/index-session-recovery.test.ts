@@ -8,12 +8,12 @@ const mocks = vi.hoisted(() => ({
   login: vi.fn(), navigate: vi.fn(), ensure: vi.fn(), assertList: vi.fn(),
   readList: vi.fn(), findLink: vi.fn(), next: vi.fn(), waitDetail: vi.fn(), readDetail: vi.fn(),
   approval: vi.fn(), validate: vi.fn(), buildReport: vi.fn(), writeReport: vi.fn(), sync: vi.fn(),
-  progressUpdate: vi.fn(), progressLog: vi.fn(), progressFinish: vi.fn()
+  cancel: vi.fn(), progressUpdate: vi.fn(), progressLog: vi.fn(), progressFinish: vi.fn()
 }));
 vi.mock("playwright", () => ({ chromium: { launch: mocks.launch } }));
 vi.mock("../../src/config.js", () => ({ loadConfig: () => ({ baseUrl: "https://example.invalid", username: "u", password: "p", dryRun: false, headed: false, slowMoMs: 0, reportDir: "/tmp", group: undefined, fineWorkbookPath: undefined, processAll: mocks.processAll, debug: false, plainProgress: true, haltOnError: false, fineLiga: undefined, fineGruppe: undefined, fineSpielleiter: undefined, fineNaKosten: undefined, fineCatalogue: undefined, fineSheetName: undefined, fineIgnoreColumn: undefined }) }));
 vi.mock("../../src/auth.js", () => ({ login: mocks.login, ensureSessionActive: mocks.ensure }));
-vi.mock("../../src/navigation.js", () => ({ navigateToMatchSearch: mocks.navigate, cancelAndReturn: vi.fn() }));
+vi.mock("../../src/navigation.js", () => ({ navigateToMatchSearch: mocks.navigate, cancelAndReturn: mocks.cancel }));
 vi.mock("../../src/match-list.js", () => ({ assertMatchListPage: mocks.assertList, readMatchListPage: mocks.readList, findMatchLink: mocks.findLink, goToNextPage: mocks.next }));
 vi.mock("../../src/match-detail.js", () => ({ waitForMatchDetailPage: mocks.waitDetail, readMatchDetailPage: mocks.readDetail }));
 vi.mock("../../src/approver.js", () => ({ handleApproval: mocks.approval }));
@@ -207,6 +207,147 @@ describe("run session recovery", () => {
     await run();
 
     expect(mocks.login).toHaveBeenCalledTimes(3);
+  });
+
+  it("recovers a terminal false on login before restarting unfiltered traversal", async () => {
+    arrange(0, false);
+    let currentPage = 1;
+    let onLogin = false;
+    let recovered = false;
+    mocks.navigate.mockImplementation(() => {
+      currentPage = 1;
+      onLogin = false;
+      recovered = mocks.navigate.mock.calls.length > 1;
+      return Promise.resolve();
+    });
+    mocks.readList.mockImplementation(() => Promise.resolve(list(currentPage === 1
+      ? [match("Starter"), ...(recovered ? [match("Shifted")] : [])]
+      : [match("Remaining")])));
+    mocks.next.mockImplementation(() => {
+      if (!recovered) {
+        onLogin = true;
+        return Promise.resolve(false);
+      }
+      currentPage = 2;
+      return Promise.resolve(true);
+    });
+    mocks.ensure.mockImplementation(() => onLogin
+      ? Promise.reject(new SessionExpiredError()) : Promise.resolve());
+
+    await run();
+
+    expect(mocks.login).toHaveBeenCalledTimes(2);
+    expect(mocks.navigate).toHaveBeenNthCalledWith(2, expect.anything(), undefined, { onlyUnapproved: false });
+    const actions = (mocks.buildReport.mock.calls[0]?.[0] as Parameters<typeof ReporterModule.buildRunReport>[0]).actions;
+    expect(actions.map((action) => `${action.action}:${action.match.homeTeam}`)).toEqual([
+      "approved:Starter", "approved:Shifted", "approved:Remaining"
+    ]);
+    expect(mocks.approval).toHaveBeenCalledTimes(3);
+  });
+
+  it("bounds repeated terminal false login redirects with the shared page budget", async () => {
+    arrange(0, false);
+    let onLogin = false;
+    mocks.navigate.mockImplementation(() => { onLogin = false; return Promise.resolve(); });
+    mocks.readList.mockResolvedValue(list([match("Starter")]));
+    mocks.next.mockImplementation(() => { onLogin = true; return Promise.resolve(false); });
+    mocks.ensure.mockImplementation(() => onLogin
+      ? Promise.reject(new SessionExpiredError()) : Promise.resolve());
+
+    await expect(run()).rejects.toThrow("after 2 recovery attempts while processing list page 1");
+    expect(mocks.login).toHaveBeenCalledTimes(3);
+    expect(mocks.approval).toHaveBeenCalledTimes(1);
+    expect(mocks.writeReport).not.toHaveBeenCalled();
+  });
+
+  it("terminates normally for authenticated terminal false", async () => {
+    arrange(0, false);
+    mocks.readList.mockResolvedValue(list([match("Starter")]));
+    mocks.next.mockResolvedValue(false);
+
+    await run();
+
+    expect(mocks.login).toHaveBeenCalledTimes(1);
+    expect(mocks.readList).toHaveBeenCalledTimes(1);
+    expect(mocks.writeReport).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([1, 2])("retries the interrupted row after cleanup expiry with %i total pages and unique actions", async (totalPages) => {
+    arrange(0, false);
+    let currentPage = 1;
+    mocks.navigate.mockImplementation(() => { currentPage = 1; return Promise.resolve(); });
+    mocks.readList.mockImplementation(() => Promise.resolve({
+      ...list(currentPage === 1
+        ? [match("Starter"), match("Target"), match("Remaining")]
+        : [match("Continuation")]),
+      pagination: { totalPages }
+    }));
+    mocks.next.mockImplementation(() => { currentPage += 1; return Promise.resolve(true); });
+    mocks.waitDetail.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("generic detail failure"));
+    mocks.assertList.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("not on list"));
+    mocks.cancel.mockRejectedValueOnce(new SessionExpiredError());
+
+    await run();
+
+    expect(mocks.login).toHaveBeenCalledTimes(2);
+    expect(mocks.navigate).toHaveBeenNthCalledWith(2, expect.anything(), undefined, { onlyUnapproved: false });
+    const actions = (mocks.buildReport.mock.calls[0]?.[0] as Parameters<typeof ReporterModule.buildRunReport>[0]).actions;
+    expect(actions.map((action) => `${action.action}:${action.match.homeTeam}`)).toEqual([
+      "approved:Starter", "approved:Target", "approved:Remaining",
+      ...(totalPages === 2 ? ["approved:Continuation"] : [])
+    ]);
+    expect(mocks.approval).toHaveBeenCalledTimes(totalPages === 2 ? 4 : 3);
+    expect(mocks.writeReport).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([1, 2])("bounds repeated cleanup expiry with %i total pages without publishing a partial report", async (totalPages) => {
+    arrange(0, false);
+    let inDetail = false;
+    mocks.navigate.mockImplementation(() => { inDetail = false; return Promise.resolve(); });
+    mocks.findLink.mockResolvedValue({ count: () => Promise.resolve(1), click: () => { inDetail = true; return Promise.resolve(); } });
+    mocks.readList.mockResolvedValue({ ...list([match("Target"), match("Remaining")]), pagination: { totalPages } });
+    mocks.waitDetail.mockRejectedValue(new Error("generic detail failure"));
+    mocks.assertList.mockImplementation(() => inDetail ? Promise.reject(new Error("not on list")) : Promise.resolve());
+    mocks.cancel.mockRejectedValue(new SessionExpiredError());
+
+    await expect(run()).rejects.toThrow("after 2 recovery attempts while processing list page 1");
+
+    expect(mocks.login).toHaveBeenCalledTimes(3);
+    expect(mocks.cancel).toHaveBeenCalledTimes(3);
+    expect(mocks.approval).not.toHaveBeenCalled();
+    expect(mocks.next).not.toHaveBeenCalled();
+    expect(mocks.writeReport).not.toHaveBeenCalled();
+    expect(mocks.sync).not.toHaveBeenCalled();
+  });
+
+  it("shares the cleanup recovery limit with page-start and Save expiry", async () => {
+    arrange(0, false);
+    mocks.readList.mockResolvedValue({ ...list([match("Target"), match("Remaining")]), pagination: { totalPages: 1 } });
+    mocks.ensure.mockRejectedValueOnce(new SessionExpiredError());
+    mocks.approval.mockRejectedValueOnce(new SessionExpiredError());
+    mocks.waitDetail.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("generic detail failure"));
+    mocks.assertList.mockResolvedValueOnce(undefined).mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("not on list"));
+    mocks.cancel.mockRejectedValueOnce(new SessionExpiredError());
+
+    await expect(run()).rejects.toThrow("after 2 recovery attempts while processing list page 1");
+
+    expect(mocks.login).toHaveBeenCalledTimes(3);
+    expect(mocks.cancel).toHaveBeenCalledTimes(1);
+    expect(mocks.writeReport).not.toHaveBeenCalled();
+  });
+
+  it("keeps non-session cleanup failures best effort", async () => {
+    arrange(0, false);
+    mocks.readList.mockResolvedValue({ ...list([match("Target")]), pagination: { totalPages: 1 } });
+    mocks.waitDetail.mockRejectedValueOnce(new Error("generic detail failure"));
+    mocks.assertList.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("not on list"));
+    mocks.cancel.mockRejectedValueOnce(new Error("cleanup unavailable"));
+
+    await run();
+
+    expect(mocks.login).toHaveBeenCalledTimes(1);
+    const actions = (mocks.buildReport.mock.calls[0]?.[0] as Parameters<typeof ReporterModule.buildRunReport>[0]).actions;
+    expect(actions.map((action) => `${action.action}:${action.match.homeTeam}`)).toEqual(["error:Target"]);
   });
 
   it("propagates a non-session recovery failure without retrying it", async () => {
