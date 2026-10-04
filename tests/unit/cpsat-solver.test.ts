@@ -162,6 +162,81 @@ function fixedSt4DerbyModel(): SeasonModel {
   };
 }
 
+function fixedLateDerbyModel(): SeasonModel {
+  return {
+    clubs: [{ id: "elsen", name: "TuRa Elsen", venues: [], notes: "" }],
+    teams: [
+      {
+        id: "elsen-1", clubId: "elsen", label: "TuRa Elsen I", homeWeekday: "friday", hall: "1",
+        rasterzahl: { kind: "fixed", value: 1 }, confidence: "ok"
+      },
+      {
+        id: "elsen-2", clubId: "elsen", label: "TuRa Elsen II", homeWeekday: "friday", hall: "1",
+        rasterzahl: { kind: "fixed", value: 2 }, confidence: "ok"
+      }
+    ],
+    groups: [{ ref: { league: "L", name: "G12" }, size: 12, teamIds: ["elsen-1", "elsen-2"] }],
+    wishes: [], absoluteConstraints: [], warnings: []
+  };
+}
+
+function duplicateFixedScheduleNumberModel(): SeasonModel {
+  return {
+    clubs: [
+      { id: "club-a", name: "Club A", venues: [], notes: "" },
+      { id: "club-b", name: "Club B", venues: [], notes: "" }
+    ],
+    teams: [
+      {
+        id: "team-a", clubId: "club-a", label: "Team A", homeWeekday: "friday", hall: "1",
+        rasterzahl: { kind: "fixed", value: 1 }, confidence: "ok"
+      },
+      {
+        id: "team-b", clubId: "club-b", label: "Team B", homeWeekday: "friday", hall: "1",
+        rasterzahl: { kind: "fixed", value: 1 }, confidence: "ok"
+      }
+    ],
+    groups: [{ ref: { league: "L", name: "G12" }, size: 12, teamIds: ["team-a", "team-b"] }],
+    wishes: [], absoluteConstraints: [], warnings: []
+  };
+}
+
+function sixAssignableSameClubTeamsModel(): SeasonModel {
+  const teams = Array.from({ length: 6 }, (_, index) => ({
+    id: `club-team-${index + 1}`,
+    clubId: "club",
+    label: `Club Team ${index + 1}`,
+    homeWeekday: "friday" as const,
+    hall: "1",
+    rasterzahl: { kind: "assignable" as const },
+    confidence: "ok" as const
+  }));
+  return {
+    clubs: [{ id: "club", name: "Club", venues: [], notes: "" }],
+    teams,
+    groups: [{ ref: { league: "L", name: "G6" }, size: 6, teamIds: teams.map((team) => team.id) }],
+    wishes: [], absoluteConstraints: [], warnings: []
+  };
+}
+
+function sixAssignableDifferentClubTeamsModel(): SeasonModel {
+  const teams = Array.from({ length: 6 }, (_, index) => ({
+    id: `team-${index + 1}`,
+    clubId: `club-${index + 1}`,
+    label: `Team ${index + 1}`,
+    homeWeekday: "friday" as const,
+    hall: "1",
+    rasterzahl: { kind: "assignable" as const },
+    confidence: "ok" as const
+  }));
+  return {
+    clubs: teams.map((team) => ({ id: team.clubId, name: team.clubId, venues: [], notes: "" })),
+    teams,
+    groups: [{ ref: { league: "L", name: "G6" }, size: 6, teamIds: teams.map((team) => team.id) }],
+    wishes: [], absoluteConstraints: [], warnings: []
+  };
+}
+
 function fiveTeamModelWithFixedSix(): SeasonModel {
   const teams = Array.from({ length: 5 }, (_, index) => ({
     id: `team-${index + 1}`,
@@ -901,6 +976,100 @@ describe("CP-SAT raster solver", () => {
       expect(evaluation.overUsages).toContainEqual(
         expect.objectContaining({ excess: 2 })
       );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }, 120_000);
+
+  it.each([
+    ["fixed schedule numbers", duplicateFixedScheduleNumberModel(), "fixed_schedule_numbers"],
+    ["same-club derby timing", fixedLateDerbyModel(), "same_club_derby_timing"]
+  ])("reports %s as an infeasibility diagnostic", async (_name, model, family) => {
+    const dir = await mkdtemp(path.join(tmpdir(), "raster-cpsat-"));
+    try {
+      const modelPath = path.join(dir, "model.json");
+      const outPath = path.join(dir, "assignment.json");
+      const metadataPath = path.join(dir, "metadata.json");
+      await writeFile(modelPath, JSON.stringify(model), "utf8");
+
+      await expect(
+        execFileAsync(
+          "uv",
+          [
+            "run", "--python", "3.12", "scripts/solve-raster-cpsat.py",
+            "--model", modelPath, "--out", outPath, "--metadata", metadataPath, "--time-limit", "30"
+          ],
+          { cwd: process.cwd(), timeout: 120_000 }
+        )
+      ).rejects.toMatchObject({ code: 1 });
+
+      const metadata = JSON.parse(await readFile(metadataPath, "utf8")) as {
+        status: string;
+        infeasibilityDiagnostics?: Array<{ family: string; message: string }>;
+      };
+      expect(metadata.status).toBe("INFEASIBLE");
+      expect(metadata.infeasibilityDiagnostics).toHaveLength(1);
+      expect(metadata.infeasibilityDiagnostics?.[0]?.family).toBe(family);
+      expect(metadata.infeasibilityDiagnostics?.[0]?.message).toMatch(/Group L \/ G12/);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }, 120_000);
+
+  it("diagnoses a same-club derby block with no fixed schedule numbers", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "raster-cpsat-"));
+    try {
+      const modelPath = path.join(dir, "model.json");
+      const outPath = path.join(dir, "assignment.json");
+      const metadataPath = path.join(dir, "metadata.json");
+      await writeFile(modelPath, JSON.stringify(sixAssignableSameClubTeamsModel()), "utf8");
+
+      await expect(
+        execFileAsync(
+          "uv",
+          [
+            "run", "--python", "3.12", "scripts/solve-raster-cpsat.py",
+            "--model", modelPath, "--out", outPath, "--metadata", metadataPath, "--time-limit", "30"
+          ],
+          { cwd: process.cwd(), timeout: 120_000 }
+        )
+      ).rejects.toMatchObject({ code: 1 });
+
+      const metadata = JSON.parse(await readFile(metadataPath, "utf8")) as {
+        status: string;
+        infeasibilityDiagnostics?: Array<{ family: string; message: string }>;
+      };
+      expect(metadata.status).toBe("INFEASIBLE");
+      expect(metadata.infeasibilityDiagnostics).toHaveLength(1);
+      expect(metadata.infeasibilityDiagnostics?.[0]?.family).toBe("same_club_derby_timing");
+      expect(metadata.infeasibilityDiagnostics?.[0]?.message).toMatch(/Group L \/ G6 cannot assign/);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }, 120_000);
+
+  it("keeps a six-team different-club group feasible without diagnostics", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "raster-cpsat-"));
+    try {
+      const modelPath = path.join(dir, "model.json");
+      const outPath = path.join(dir, "assignment.json");
+      const metadataPath = path.join(dir, "metadata.json");
+      await writeFile(modelPath, JSON.stringify(sixAssignableDifferentClubTeamsModel()), "utf8");
+      await execFileAsync(
+        "uv",
+        [
+          "run", "--python", "3.12", "scripts/solve-raster-cpsat.py",
+          "--model", modelPath, "--out", outPath, "--metadata", metadataPath, "--time-limit", "30"
+        ],
+        { cwd: process.cwd(), timeout: 120_000 }
+      );
+
+      const metadata = JSON.parse(await readFile(metadataPath, "utf8")) as {
+        status: string;
+        infeasibilityDiagnostics?: Array<{ family: string; message: string }>;
+      };
+      expect(metadata.status).toBe("OPTIMAL");
+      expect(metadata.infeasibilityDiagnostics).toEqual([]);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

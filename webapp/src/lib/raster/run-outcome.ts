@@ -23,6 +23,14 @@ export function mapOutcomeToSnapshotOptimality(
   return null;
 }
 
+export function infeasibilityRunMessage(
+  solverStatus?: string | null,
+  coverageJson?: string | null,
+) {
+  const diagnostic = solverStatus?.trim();
+  return diagnostic || infeasibleScopeMessage(coverageJson);
+}
+
 export function infeasibleScopeMessage(coverageJson?: string | null) {
   const scope = firstSpannedScope(coverageJson);
   return scope

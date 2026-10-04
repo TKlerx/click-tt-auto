@@ -439,7 +439,7 @@ def _solve_raster_model(model: dict[str, object], settings: dict[str, object]) -
             status = str(metadata.get("status") or "").upper() if metadata else ""
             message = (completed.stderr or completed.stdout or "CP-SAT failed").strip()
             if status == "INFEASIBLE":
-                raise RasterSolverInfeasible(_infeasible_message())
+                raise RasterSolverInfeasible(_infeasible_message(metadata))
             raise ValueError(message)
         assignment = json.loads(out_path.read_text(encoding="utf-8"))
         metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
@@ -456,7 +456,23 @@ def _read_json_file(path: Path) -> dict[str, Any] | None:
     return parsed if isinstance(parsed, dict) else None
 
 
-def _infeasible_message() -> str:
+def _infeasible_message(metadata: dict[str, Any] | None = None) -> str:
+    diagnostics = metadata.get("infeasibilityDiagnostics") if metadata else None
+    if isinstance(diagnostics, list):
+        rendered: list[str] = []
+        labels = {
+            "fixed_schedule_numbers": "Fixed schedule numbers",
+            "same_club_derby_timing": "Same-club derby timing",
+        }
+        for diagnostic in diagnostics:
+            if not isinstance(diagnostic, dict):
+                continue
+            family = labels.get(str(diagnostic.get("family") or ""), "Hard constraint")
+            message = str(diagnostic.get("message") or "").strip()
+            if message:
+                rendered.append(f"{family}: {message}")
+        if rendered:
+            return "No feasible assignment exists. " + " ".join(rendered)
     return (
         "No feasible assignment exists with the current hard constraints. "
         "The remaining hard constraints are fixed schedule numbers, valid schedule tables "
