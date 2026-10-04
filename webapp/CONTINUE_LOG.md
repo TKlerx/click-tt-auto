@@ -7,6 +7,13 @@
 - Configured webapp suite: 134 files / 494 tests passed. Root focused checks, root/webapp typechecks and full ESLint, architecture, duplication, and text checks passed.
 - Evidence matrix and raw check output are under repository-root reports/delivery/baseline. No production, live scraper, credential, push, or merge actions performed; database-backed browser E2E not run.
 
+## 2026-10-04 PR67 standalone raster runtime
+
+- Kept the previously approved standalone Playwright tracing inclusion.
+- Added a narrow launcher environment fix: preserve the repository raster runtime across Next's generated `process.chdir(__dirname)` transition, without overriding an explicit runtime root.
+- Added real-process integration regressions for roster decoding, rulebook-backed scoring, the 31-league PDF fixture, and explicit runtime-root preservation. Three default-root paths fail when the fix is removed; the override control passes.
+- Existing CI gates and timeouts are unchanged. Full standalone build/browser CI requires parent review and delivery; the resource-floor pause and test evidence are documented under `reports/delivery/ci-remediation`.
+
 ## 2026-06-20 09:45:41 +02:00
 
 - Ported rag-agent-style supply-chain audit coverage into `webapp-template`.
