@@ -1,5 +1,14 @@
 # Continue Log
 
+## Manual baseline reconciliation: delivery/baseline-reconciled
+
+- Follow-up corrected independent review R1–R4 after per-finding actual-service RED→GREEN reproductions. Integrated main `9a3875f605dafdb7b25f47b35a4d82f34bca011d` without rebase/reset, preserving both continuity sections. Final focused webapp 61 tests, root 5 tests, changed-file lint and webapp non-incremental typecheck passed. Broad suite attempt failed subprocess checks before infrastructure timeout; diagnosed pnpm refusing shared symlink reconciliation rather than mutating the donor. No full-suite/CI approval claimed; see `reports/delivery/baseline/r1-r4-fixes.md`.
+
+- Reviewed specs/012 and candidate 6dc0127 against upstream e4fa2bc; retained upstream models and migration unchanged.
+- Reproduced failures before fixing numeric ranges, source group/model identity, snapshot resolution/output retention, durable ignored/accepted decisions, mapping range checks, and moved target handling.
+- Configured webapp suite: 134 files / 494 tests passed. Root focused checks, root/webapp typechecks and full ESLint, architecture, duplication, and text checks passed.
+- Evidence matrix and raw check output are under repository-root reports/delivery/baseline. No production, live scraper, credential, push, or merge actions performed; database-backed browser E2E not run.
+
 ## 2026-10-04 PR67 standalone raster runtime
 
 - Kept the previously approved standalone Playwright tracing inclusion.

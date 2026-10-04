@@ -1,5 +1,14 @@
 # Continue
 
+## Manual baseline reconciliation: delivery/baseline-reconciled
+
+- R1–R4 follow-up: complete normalized league/group/team identity; conservative legacy-key reuse; same-source-group map/refresh policy; normalized alias deduplication; stale reviewed IDs reopen before automatic matching. Post-integration focused checks: 61 webapp tests, non-incremental typecheck and changed-file lint passed. Full local suite is blocked by read-only donor dependency reconciliation; fresh review and CI remain required. PR67 main prerequisite merged locally, retaining both continuity notes.
+
+- Kept the upstream RasterManualBaseline schema/services; did not import the stale ManualBaseline implementation or migration.
+- Fixed rulebook range validation, verified source/model group identity, snapshot team identity and unresolved-output retention, durable ignore/accept decisions, and moved-target review invalidation.
+- Added regression and authorization/no-baseline parity assertions. Configured full webapp Vitest: 134 files / 494 tests passed; root focused tests, both typechecks, both full ESLint checks, architecture, duplication, and text checks passed.
+- Evidence: repository-root reports/delivery/baseline/evidence.md and adjacent logs. Browser/database-backed E2E and deployment remain unverified; no live click-TT or credentials used.
+
 ## 2026-10-04 PR67 CI remediation follow-up
 
 - Preserved the standalone Playwright browser-registry fix from `3756ec8`.
