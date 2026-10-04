@@ -1,4 +1,5 @@
 import type { Locator, Page } from "playwright";
+import { SessionExpiredError } from "./session-recovery.js";
 
 async function firstVisible(locators: Locator[]): Promise<Locator | null> {
   for (const locator of locators) {
@@ -68,6 +69,6 @@ export async function ensureSessionActive(page: Page): Promise<void> {
     .catch(() => false);
 
   if (loginFormVisible) {
-    throw new Error("Session expired or login failed.");
+    throw new SessionExpiredError();
   }
 }

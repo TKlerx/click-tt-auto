@@ -14,6 +14,7 @@ import { ProgressReporter } from "./progress.js";
 import { buildRunReport, formatStdoutReport, writeRunReport } from "./reporter.js";
 import type { MatchAction, MatchEntry } from "./types.js";
 import { validateMatch } from "./validator.js";
+import { isSessionExpiredError } from "./session-recovery.js";
 
 function formatAction(prefix: string, match: MatchEntry, reason?: string): string {
   const tail = reason ? ` - ${reason}` : "";
@@ -28,12 +29,40 @@ function shouldInspectMatch(match: MatchEntry): boolean {
   return match.status.toLowerCase() === "abgeschlossen" && !match.isApproved;
 }
 
+function shouldVisitMatchDetail(processAll: boolean, match: MatchEntry, needsStatusFineDetail: boolean): boolean {
+  return processAll || shouldInspectMatch(match) || needsStatusFineDetail;
+}
+
 function shouldCreateStatusFine(match: MatchEntry): boolean {
   return match.status.toLowerCase() === "nicht angetreten";
 }
 
+function reconcilePendingApproval(
+  pendingApprovals: Map<string, MatchAction>,
+  matchKey: string,
+  isApproved: boolean,
+  recordAction: (matchKey: string, action: MatchAction) => void
+): void {
+  const recoveredApproval = pendingApprovals.get(matchKey);
+  if (recoveredApproval && isApproved) {
+    recordAction(matchKey, recoveredApproval);
+    pendingApprovals.delete(matchKey);
+  }
+}
+
 function shouldTrackStatusFine(state: "disabled" | "missing" | "existing" | "ignored"): boolean {
   return state === "missing";
+}
+
+function getRecoveryBoundaryPage(boundaryPage: number | null, currentPage: number): number {
+  return boundaryPage ?? currentPage;
+}
+
+function getRecoveryStateAfterAdvance(boundaryPage: number | null, currentPage: number, attempts: number): { boundaryPage: number | null; attempts: number } {
+  if (boundaryPage === null || currentPage > boundaryPage) {
+    return { boundaryPage: null, attempts: 0 };
+  }
+  return { boundaryPage, attempts };
 }
 
 function createSafeSlug(value: string): string {
@@ -80,6 +109,12 @@ function isFatalDetailPageError(message: string): boolean {
 
 function isRetriableDetailParseError(message: string): boolean {
   return /^Expected detail page fields missing:/.test(message) || /^Could not find both lineup tables on match detail page\./.test(message);
+}
+
+function throwIfFatalAndHalted(isFatalDetailError: boolean, haltOnError: boolean, message: string): void {
+  if (isFatalDetailError && haltOnError) {
+    throw new Error(message);
+  }
 }
 
 async function assertReasonablePlayerCounts(
@@ -149,7 +184,7 @@ async function readMatchDetailPageWithRetry(
   throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
 
-async function run(): Promise<void> {
+export async function run(): Promise<void> {
   const config = loadConfig();
   const browser = await chromium.launch({
     headless: !config.headed,
@@ -158,6 +193,8 @@ async function run(): Promise<void> {
   const context = await browser.newContext();
   const page = await context.newPage();
   const actions: MatchAction[] = [];
+  const actionIndexesByMatchKey = new Map<string, number>();
+  const pendingApprovals = new Map<string, MatchAction>();
   const processedKeys = new Set<string>();
   const statusFineKeys = new Set<string>();
   const statusFineMatches: MatchEntry[] = [];
@@ -207,10 +244,88 @@ async function run(): Promise<void> {
 
     let pageNumber = 1;
     let totalPages = 1;
+    // This counter covers every session-expiry recovery while revisiting one list page.
+    // It resets only after the run durably advances to the next list page.
+    let recoveryAttemptsForCurrentPage = 0;
+    const maxRecoveryAttemptsPerPage = 2;
 
-    while (true) {
-      await ensureSessionActive(page);
-      await assertMatchListPage(page);
+    const recordAction = (matchKey: string, action: MatchAction): void => {
+      const existingIndex = actionIndexesByMatchKey.get(matchKey);
+      if (existingIndex === undefined) {
+        actionIndexesByMatchKey.set(matchKey, actions.length);
+        actions.push(action);
+      } else {
+        actions[existingIndex] = action;
+      }
+    };
+
+    // A new unapproved-only search can hide a Save that succeeded just before expiry,
+    // and a same-numbered page can lose rows after the result set shrinks. Restarting
+    // an unfiltered traversal keeps the ambiguous row visible for reconciliation and
+    // lets processedKeys safely skip rows already visited before the interruption.
+    let recoveryTraversalBoundaryPage: number | null = null;
+    const recoverCurrentListPage = async (): Promise<void> => {
+      console.log(`Session expired; re-authenticating and restarting traversal from page 1 (was page ${pageNumber})...`);
+      recoveryTraversalBoundaryPage = getRecoveryBoundaryPage(recoveryTraversalBoundaryPage, pageNumber);
+      await login(page, config.baseUrl, config.username, config.password);
+      await navigateToMatchSearch(page, config.group, { onlyUnapproved: false });
+      pageNumber = 1;
+    };
+
+    const recoverCurrentPageSession = async (initialError: unknown): Promise<void> => {
+      let error = initialError;
+      while (true) {
+        if (!isSessionExpiredError(error)) {
+          throw error;
+        }
+        if (recoveryAttemptsForCurrentPage >= maxRecoveryAttemptsPerPage) {
+          throw new Error(
+            `Session expired after ${maxRecoveryAttemptsPerPage} recovery attempts while processing list page ${recoveryTraversalBoundaryPage ?? pageNumber}.`,
+            { cause: error }
+          );
+        }
+        recoveryAttemptsForCurrentPage += 1;
+        try {
+          await recoverCurrentListPage();
+          return;
+        } catch (recoveryError) {
+          error = recoveryError;
+        }
+      }
+    };
+
+    const withCurrentPageRecovery = async <T>(operation: () => Promise<T>): Promise<T> => {
+      while (true) {
+        try {
+          return await operation();
+        } catch (error) {
+          await recoverCurrentPageSession(error);
+        }
+      }
+    };
+
+    const returnToListAfterError = async (): Promise<boolean> => {
+      try {
+        await assertMatchListPage(page);
+      } catch {
+        try {
+          await cancelAndReturn(page);
+        } catch (cleanupError) {
+          if (isSessionExpiredError(cleanupError)) {
+            await recoverCurrentPageSession(cleanupError);
+            return true;
+          }
+          // Non-session cleanup failures remain best effort.
+        }
+      }
+      return false;
+    };
+
+    pageLoop: while (true) {
+      await withCurrentPageRecovery(async () => {
+        await ensureSessionActive(page);
+        await assertMatchListPage(page);
+      });
       const parsedPage = await readMatchListPage(page);
       totalPages = parsedPage.pagination.totalPages;
       totalMatchCount = Math.max(totalMatchCount, parsedPage.totalMatches);
@@ -237,8 +352,9 @@ async function run(): Promise<void> {
           : "disabled";
         const trackStatusFine = shouldTrackStatusFine(statusFineState);
         const needsStatusFineDetail = shouldCreateStatusFine(match) && statusFineState === "missing" && Boolean(config.fineWorkbookPath);
-        const needsDetailVisit = config.processAll || shouldInspectMatch(match) || needsStatusFineDetail;
+        const needsDetailVisit = shouldVisitMatchDetail(config.processAll, match, needsStatusFineDetail);
 
+        reconcilePendingApproval(pendingApprovals, matchKey, match.isApproved, recordAction);
         if (!needsDetailVisit || processedKeys.has(matchKey)) {
           if (trackStatusFine && !statusFineKeys.has(matchKey)) {
             statusFineKeys.add(matchKey);
@@ -341,7 +457,8 @@ async function run(): Promise<void> {
 
           if (detail.isAlreadyApproved) {
             const action: MatchAction = { match, action: "already-approved", validation };
-            actions.push(action);
+            recordAction(matchKey, pendingApprovals.get(matchKey) ?? action);
+            pendingApprovals.delete(matchKey);
             await handleApproval(page, true, false);
             progress.update({
               dryRun: config.dryRun,
@@ -360,7 +477,7 @@ async function run(): Promise<void> {
 
           if (!validation.isApprovable) {
             const action: MatchAction = { match, action: "skipped", validation };
-            actions.push(action);
+            recordAction(matchKey, action);
             await handleApproval(page, true, false);
             progress.update({
               dryRun: config.dryRun,
@@ -376,9 +493,11 @@ async function run(): Promise<void> {
             continue;
           }
 
-          await handleApproval(page, config.dryRun, true);
           const action: MatchAction = { match, action: "approved", validation };
-          actions.push(action);
+          pendingApprovals.set(matchKey, action);
+          await handleApproval(page, config.dryRun, true);
+          recordAction(matchKey, action);
+          pendingApprovals.delete(matchKey);
           progress.update({
             dryRun: config.dryRun,
             pageNumber,
@@ -400,9 +519,15 @@ async function run(): Promise<void> {
             message = `${message}. Detail HTML saved to: ${snapshotPath}`;
           }
 
-          if (isFatalDetailError && config.haltOnError) {
-            throw new Error(message);
+          if (isSessionExpiredError(error)) {
+            // The current match may already have been saved. Re-reading the list lets the
+            // server checkmark decide whether it needs another visit, avoiding duplicate approval.
+            await recoverCurrentPageSession(error);
+            processedKeys.delete(matchKey);
+            continue pageLoop;
           }
+
+          throwIfFatalAndHalted(isFatalDetailError, config.haltOnError, message);
 
           if (trackStatusFine && !statusFineKeys.has(matchKey)) {
             statusFineKeys.add(matchKey);
@@ -411,7 +536,7 @@ async function run(): Promise<void> {
 
           if (needsDetailVisit) {
             const action: MatchAction = { match, action: "error", error: message };
-            actions.push(action);
+            recordAction(matchKey, action);
             progress.log(formatAction("[ERROR]", match, message));
           }
 
@@ -428,14 +553,9 @@ async function run(): Promise<void> {
             currentMatchLabel: formatMatchLabel(match)
           });
 
-          try {
-            await assertMatchListPage(page);
-          } catch {
-            try {
-              await cancelAndReturn(page);
-            } catch {
-              // Best effort only. The loop will fail fast if the page cannot recover.
-            }
+          if (await returnToListAfterError()) {
+            processedKeys.delete(matchKey);
+            continue pageLoop;
           }
         }
       }
@@ -444,15 +564,33 @@ async function run(): Promise<void> {
         break;
       }
 
-      const advanced = await goToNextPage(page, pageNumber, {
-        debug: config.debug,
-        reportDir: config.reportDir
-      });
+      let advanced: boolean;
+      try {
+        advanced = await goToNextPage(page, pageNumber, {
+          debug: config.debug,
+          reportDir: config.reportDir
+        });
+        // A missing next link can also mean the pager redirected to login.
+        await ensureSessionActive(page);
+        if (advanced) {
+          await assertMatchListPage(page);
+        }
+      } catch (error) {
+        await recoverCurrentPageSession(error);
+        // Recovery restarts at page one. Read it before attempting another advance.
+        continue pageLoop;
+      }
       if (!advanced) {
         break;
       }
       pageNumber += 1;
-      await assertMatchListPage(page);
+      const recoveryState = getRecoveryStateAfterAdvance(
+        recoveryTraversalBoundaryPage,
+        pageNumber,
+        recoveryAttemptsForCurrentPage
+      );
+      recoveryAttemptsForCurrentPage = recoveryState.attempts;
+      recoveryTraversalBoundaryPage = recoveryState.boundaryPage;
     }
 
     const report = buildRunReport({
@@ -511,7 +649,9 @@ async function run(): Promise<void> {
   }
 }
 
-run().catch((error) => {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exitCode = 1;
-});
+if (!process.env.VITEST) {
+  run().catch((error) => {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  });
+}
