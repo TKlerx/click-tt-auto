@@ -7,6 +7,16 @@ const normalizedBasePath = process.env.E2E_BASE_PATH ?? "/app-starter";
 const authBaseUrl = `http://localhost:${port}${normalizedBasePath}`;
 const databaseUrl = resolveE2eDatabaseUrl();
 const reuseExistingServer = process.env.E2E_REUSE_SERVER === "1";
+// Slow hosts may override this startup-only budget without changing test limits.
+const defaultWebServerStartupTimeout = 600_000;
+const configuredWebServerStartupTimeout = Number(
+  process.env.E2E_WEB_SERVER_TIMEOUT_MS ?? defaultWebServerStartupTimeout,
+);
+const webServerStartupTimeout =
+  Number.isFinite(configuredWebServerStartupTimeout) &&
+  configuredWebServerStartupTimeout > 0
+    ? configuredWebServerStartupTimeout
+    : defaultWebServerStartupTimeout;
 
 process.env.E2E_PORT = String(port);
 process.env.E2E_BASE_PATH = normalizedBasePath;
@@ -53,7 +63,7 @@ export default defineConfig({
       AZURE_AD_TENANT_ID: process.env.AZURE_AD_TENANT_ID ?? "replace-me",
     },
     port,
-    timeout: 240 * 1000,
+    timeout: webServerStartupTimeout,
     reuseExistingServer,
   },
 });
