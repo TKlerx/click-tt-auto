@@ -324,6 +324,353 @@ describe("manual baseline service", () => {
   });
 });
 
+const contextualModel: SeasonModel = {
+  ...model,
+  teams: [
+    ...model.teams,
+    {
+      ...model.teams[0]!,
+      id: "team-b",
+      group: { league: "District", name: "Group 2" },
+    },
+  ],
+  groups: [
+    ...model.groups,
+    {
+      ...model.groups[0]!,
+      ref: { league: "District", name: "Group 2" },
+      teamIds: ["team-b"],
+    },
+  ],
+};
+const contextualSources = ["Group 1", "Group 2"].map((group) => ({
+  league: "District",
+  group,
+  team: "Club A",
+  rasterzahl: 3,
+  sourceUrl: group,
+}));
+
+describe("blocking baseline mapping compatibility regressions", () => {
+  afterEach(() => vi.clearAllMocks());
+
+  it("rejects a cross-group target before entering the write transaction", async () => {
+    const prepared = prepareManualBaselineRows(
+      [{ ...contextualSources[0]!, team: "Old label" }],
+      contextualModel,
+    ).rows[0]!;
+    prismaMock.rasterManualBaselineRow.findFirst.mockResolvedValue({
+      ...prepared,
+      id: "row-1",
+      baselineId: "baseline-1",
+      baseline: {
+        inputSet: { seasonModelJson: JSON.stringify(contextualModel) },
+      },
+    } as never);
+    await expect(
+      reviewManualBaselineRow({
+        inputSetId: "input-1",
+        rowId: "row-1",
+        reviewedById: "reviewer",
+        decision: { decision: "map", targetTeamId: "team-b" },
+      }),
+    ).rejects.toBeInstanceOf(BaselineValidationError);
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    expect(prismaMock.rasterManualBaselineRow.update).not.toHaveBeenCalled();
+  });
+
+  it.each(["contextual", "legacy"])(
+    "preserves a %s same-group map through an unchanged refresh",
+    async (kind) => {
+      const source =
+        kind === "contextual"
+          ? { ...contextualSources[0]!, team: "Old label" }
+          : {
+              group: "Group 1",
+              team: "Old label",
+              rasterzahl: 3,
+              sourceUrl: "source",
+            };
+      const prepared = prepareManualBaselineRows([source], contextualModel)
+        .rows[0]!;
+      const stored = {
+        ...prepared,
+        sourceIdentityKey:
+          kind === "legacy"
+            ? baselineSourceIdentity("Group 1", "Old label")
+            : prepared.sourceIdentityKey,
+      };
+      prismaMock.rasterManualBaselineRow.findFirst.mockResolvedValue({
+        ...stored,
+        id: "row-1",
+        baselineId: "baseline-1",
+        baseline: {
+          inputSet: { seasonModelJson: JSON.stringify(contextualModel) },
+        },
+      } as never);
+      prismaMock.$transaction.mockImplementation(async (callback) =>
+        callback(prismaMock),
+      );
+      let saved = stored;
+      prismaMock.rasterManualBaselineRow.update.mockImplementation(
+        async ({ data }) => {
+          saved = { ...stored, ...data } as typeof stored;
+          return saved as never;
+        },
+      );
+      prismaMock.rasterManualBaselineRow.findMany.mockImplementation(
+        async () => [saved] as never,
+      );
+      const mapped = await reviewManualBaselineRow({
+        inputSetId: "input-1",
+        rowId: "row-1",
+        reviewedById: "reviewer",
+        decision: { decision: "map", targetTeamId: "team-a" },
+      });
+      expect(mapped.status).toBe("READY");
+      expect(
+        prepareManualBaselineRows([source], contextualModel, [saved]).rows[0],
+      ).toMatchObject({
+        status: "MATCHED",
+        targetTeamId: "team-a",
+        reviewedById: "reviewer",
+        reviewedAt: saved.reviewedAt,
+      });
+    },
+  );
+});
+
+describe("blocking normalized group alias regressions", () => {
+  it.each([" group 1 ", "GROUP 1", "Ｇｒｏｕｐ １"])(
+    "does not make a single group's normalized-equivalent league %s ambiguous",
+    (league) => {
+      const aliasModel = {
+        ...model,
+        groups: [{ ...model.groups[0]!, ref: { name: "Group 1", league } }],
+      };
+      const result = prepareManualBaselineRows(
+        [
+          {
+            league,
+            group: "Group 1",
+            team: "Club A",
+            rasterzahl: 3,
+            sourceUrl: "source",
+          },
+        ],
+        aliasModel,
+      );
+      expect(result.rejectedCount).toBe(0);
+      expect(result.rows).toMatchObject([
+        { status: "MATCHED", targetTeamId: "team-a" },
+      ]);
+    },
+  );
+
+  it("still rejects genuinely different groups sharing the same normalized alias", () => {
+    const ambiguousModel = {
+      ...model,
+      groups: [
+        model.groups[0]!,
+        { ...model.groups[0]!, ref: { league: "Other", name: " group 1 " } },
+      ],
+    };
+    expect(
+      prepareManualBaselineRows(
+        [
+          {
+            group: "Group 1",
+            team: "Club A",
+            rasterzahl: 3,
+            sourceUrl: "source",
+          },
+        ],
+        ambiguousModel,
+      ),
+    ).toMatchObject({ rows: [], rejectedCount: 1 });
+  });
+});
+
+describe("blocking invalidated reviewed target regressions", () => {
+  it.each(["moved", "removed"])(
+    "reopens review before exact matching when the reviewed target is %s and a same-name replacement exists",
+    (change) => {
+      const source = contextualSources[0]!;
+      const initial = prepareManualBaselineRows([source], contextualModel)
+        .rows[0]!;
+      const previous = [
+        { ...initial, reviewedById: "reviewer", reviewedAt: new Date(0) },
+      ];
+      const replacement = { ...model.teams[0]!, id: "replacement" };
+      const changedModel = {
+        ...contextualModel,
+        teams:
+          change === "removed"
+            ? [replacement]
+            : [
+                { ...model.teams[0]!, group: contextualModel.groups[1]!.ref },
+                replacement,
+              ],
+        groups: [
+          { ...contextualModel.groups[0]!, teamIds: ["replacement"] },
+          {
+            ...contextualModel.groups[1]!,
+            teamIds: change === "removed" ? [] : ["team-a"],
+          },
+        ],
+      };
+      expect(
+        prepareManualBaselineRows([source], changedModel, previous).rows[0],
+      ).toMatchObject({
+        status: "REVIEW",
+        targetTeamId: null,
+        targetTeamLabel: null,
+        reviewedById: null,
+        reviewedAt: null,
+        issue: expect.stringContaining("reviewed target"),
+      });
+    },
+  );
+
+  it("reopens a reviewed target whose membership has become ambiguous", () => {
+    const source = contextualSources[0]!;
+    const initial = prepareManualBaselineRows([source], contextualModel)
+      .rows[0]!;
+    const changedModel = {
+      ...contextualModel,
+      groups: [
+        contextualModel.groups[0]!,
+        { ...contextualModel.groups[1]!, teamIds: ["team-a", "team-b"] },
+      ],
+    };
+    expect(
+      prepareManualBaselineRows([source], changedModel, [
+        { ...initial, reviewedById: "reviewer", reviewedAt: new Date(0) },
+      ]).rows[0],
+    ).toMatchObject({
+      status: "REVIEW",
+      targetTeamId: null,
+      reviewedById: null,
+    });
+  });
+});
+
+describe("blocking baseline source identity regressions", () => {
+  it("matches same-league teams in distinct groups without duplicate identities", () => {
+    const { rows } = prepareManualBaselineRows(
+      contextualSources,
+      contextualModel,
+    );
+    expect(rows.map((row) => [row.status, row.targetTeamId])).toEqual([
+      ["MATCHED", "team-a"],
+      ["MATCHED", "team-b"],
+    ]);
+    expect(new Set(rows.map((row) => row.sourceIdentityKey)).size).toBe(2);
+  });
+
+  it.each(["IGNORED", "ACCEPTED_UNRESOLVED"])(
+    "keeps %s attached to full context despite reorder or disappearing group",
+    (status) => {
+      const initial = prepareManualBaselineRows(
+        contextualSources,
+        contextualModel,
+      ).rows;
+      const previous = initial.map((row, index) => ({
+        ...row,
+        status: index === 0 ? status : "MATCHED",
+        targetTeamId: index === 0 ? null : row.targetTeamId,
+        reviewedById: index === 0 ? "reviewer" : null,
+        reviewedAt: index === 0 ? new Date(0) : null,
+      }));
+      const reordered = prepareManualBaselineRows(
+        [...contextualSources].reverse(),
+        contextualModel,
+        previous,
+      ).rows;
+      expect(
+        reordered.map((row) => [
+          row.status,
+          row.targetTeamId,
+          row.reviewedById,
+        ]),
+      ).toEqual([
+        ["MATCHED", "team-b", null],
+        [status, null, "reviewer"],
+      ]);
+      const remaining = prepareManualBaselineRows(
+        [contextualSources[1]!],
+        contextualModel,
+        previous,
+      ).rows;
+      expect(remaining[0]).toMatchObject({
+        status: "MATCHED",
+        targetTeamId: "team-b",
+        reviewedById: null,
+      });
+    },
+  );
+
+  it.each(["IGNORED", "ACCEPTED_UNRESOLVED"])(
+    "does not infer missing historical navigation context for %s after a group disappears",
+    (status) => {
+      const previous = [
+        {
+          sourceIdentityKey: baselineSourceIdentity("District", "Club A"),
+          status,
+          targetTeamId: null,
+          targetTeamLabel: null,
+          reviewedById: "group-1-reviewer",
+          reviewedAt: new Date(0),
+        },
+      ];
+      // Neither one remaining source row nor one remaining model group proves
+      // that a legacy league-only decision originally referred to Group 2.
+      const onlyGroup2 = {
+        ...contextualModel,
+        teams: [contextualModel.teams[1]!],
+        groups: [contextualModel.groups[1]!],
+      };
+      expect(
+        prepareManualBaselineRows([contextualSources[1]!], onlyGroup2, previous)
+          .rows[0],
+      ).toMatchObject({
+        status: "MATCHED",
+        targetTeamId: "team-b",
+        reviewedById: null,
+      });
+    },
+  );
+
+  it("normalizes all three context labels for decision carry-forward", () => {
+    const initial = prepareManualBaselineRows(
+      [contextualSources[0]!],
+      contextualModel,
+    ).rows[0]!;
+    const previous = [
+      {
+        ...initial,
+        status: "IGNORED",
+        targetTeamId: null,
+        reviewedById: "reviewer",
+        reviewedAt: new Date(0),
+      },
+    ];
+    const source = {
+      ...contextualSources[0]!,
+      league: " ＤＩＳＴＲＩＣＴ ",
+      group: " group   1 ",
+      team: " ＣＬＵＢ Ａ ",
+    };
+    expect(
+      prepareManualBaselineRows([source], contextualModel, previous).rows[0],
+    ).toMatchObject({
+      sourceIdentityKey: initial.sourceIdentityKey,
+      status: "IGNORED",
+      reviewedById: "reviewer",
+    });
+  });
+});
+
 describe("manual baseline classification and comparison regressions", () => {
   afterEach(() => vi.clearAllMocks());
 

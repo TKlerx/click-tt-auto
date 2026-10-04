@@ -51,6 +51,18 @@ export function baselineSourceIdentity(group: string, team: string) {
   ]);
 }
 
+function contextualSourceIdentity(
+  source: Pick<TeamRasterAssignmentRow, "league" | "group" | "team">,
+) {
+  return JSON.stringify([
+    source.league === undefined
+      ? null
+      : normalizeBaselineIdentity(source.league),
+    normalizeBaselineIdentity(source.group),
+    normalizeBaselineIdentity(source.team),
+  ]);
+}
+
 function parseSeasonModel(value: string | null): SeasonModel {
   if (!value)
     throw new BaselineValidationError("The workspace has no season model.");
@@ -71,6 +83,61 @@ function rasterSize(group: SeasonModel["groups"][number]) {
   }
 }
 
+function sourceGroupIndex(model: SeasonModel) {
+  const groupsBySourceLabel = new Map<string, SeasonModel["groups"]>();
+  for (const group of model.groups) {
+    for (const key of new Set(
+      [group.ref.name, group.ref.league].map(normalizeBaselineIdentity),
+    )) {
+      groupsBySourceLabel.set(key, [
+        ...(groupsBySourceLabel.get(key) ?? []),
+        group,
+      ]);
+    }
+  }
+  return groupsBySourceLabel;
+}
+
+function resolveSourceGroup(
+  source: { league?: string; group: string },
+  groupsBySourceLabel: ReturnType<typeof sourceGroupIndex>,
+) {
+  const groupKey = normalizeBaselineIdentity(source.league ?? source.group);
+  // Scraped page titles are stored as league, navigation labels as group.
+  // Older models may instead use the verified title as their group name.
+  const matchingGroups = (groupsBySourceLabel.get(groupKey) ?? []).filter(
+    (candidate) =>
+      normalizeBaselineIdentity(candidate.ref.name) === groupKey ||
+      normalizeBaselineIdentity(candidate.ref.name) ===
+        normalizeBaselineIdentity(source.group),
+  );
+  return matchingGroups.length === 1 ? matchingGroups[0] : undefined;
+}
+
+function sourceContextFromIdentity(key: string) {
+  try {
+    const labels: unknown = JSON.parse(key.replace(/#\d+$/, ""));
+    if (!Array.isArray(labels)) return undefined;
+    if (
+      labels.length === 3 &&
+      (labels[0] === null || typeof labels[0] === "string") &&
+      typeof labels[1] === "string" &&
+      typeof labels[2] === "string"
+    ) {
+      return { league: labels[0] ?? undefined, group: labels[1] };
+    }
+    if (
+      labels.length === 2 &&
+      labels.every((label) => typeof label === "string")
+    ) {
+      return { group: labels[0] as string };
+    }
+  } catch {
+    // Unknown identity formats cannot prove a compatible target group.
+  }
+  return undefined;
+}
+
 // ponytail: keep the one-pass classification together; split only if another importer reuses part of it.
 // eslint-disable-next-line sonarjs/cognitive-complexity
 export function prepareManualBaselineRows(
@@ -85,23 +152,14 @@ export function prepareManualBaselineRows(
     reviewedAt: Date | null;
   }> = [],
 ) {
-  const groupsBySourceLabel = new Map<string, SeasonModel["groups"]>();
-  for (const group of model.groups) {
-    for (const label of new Set([group.ref.name, group.ref.league])) {
-      const key = normalizeBaselineIdentity(label);
-      groupsBySourceLabel.set(key, [
-        ...(groupsBySourceLabel.get(key) ?? []),
-        group,
-      ]);
-    }
-  }
+  const groupsBySourceLabel = sourceGroupIndex(model);
   const priorByIdentity = new Map(
     previousRows.map((row) => [row.sourceIdentityKey, row]),
   );
   const validTeamIds = new Set(model.teams.map((team) => team.id));
   const baseCounts = new Map<string, number>();
   for (const row of sourceRows) {
-    const base = baselineSourceIdentity(row.league ?? row.group, row.team);
+    const base = contextualSourceIdentity(row);
     baseCounts.set(base, (baseCounts.get(base) ?? 0) + 1);
   }
   const seen = new Map<string, number>();
@@ -111,21 +169,12 @@ export function prepareManualBaselineRows(
 
   for (const source of sourceRows) {
     const sourceGroupLabel = source.league ?? source.group;
-    const groupKey = normalizeBaselineIdentity(sourceGroupLabel);
-    // Scraped page titles are stored as league, navigation labels as group.
-    // Older models may instead use the verified title as their group name.
-    const matchingGroups = (groupsBySourceLabel.get(groupKey) ?? []).filter(
-      (candidate) =>
-        normalizeBaselineIdentity(candidate.ref.name) === groupKey ||
-        normalizeBaselineIdentity(candidate.ref.name) ===
-          normalizeBaselineIdentity(source.group),
-    );
-    const group = matchingGroups.length === 1 ? matchingGroups[0] : undefined;
+    const group = resolveSourceGroup(source, groupsBySourceLabel);
     if (!group) {
       rejectedCount += 1;
       continue;
     }
-    const base = baselineSourceIdentity(sourceGroupLabel, source.team);
+    const base = contextualSourceIdentity(source);
     const occurrence = (seen.get(base) ?? 0) + 1;
     seen.set(base, occurrence);
     const sourceIdentityKey = occurrence === 1 ? base : `${base}#${occurrence}`;
@@ -144,7 +193,40 @@ export function prepareManualBaselineRows(
       max === null ||
       source.rasterzahl > max;
     const duplicate = (baseCounts.get(base) ?? 0) > 1;
-    const prior = priorByIdentity.get(sourceIdentityKey);
+    // Legacy two-label keys have no navigation context. Only reuse a key
+    // whose complete supplied context is that one unambiguous model group.
+    // A league-only key is never upgraded by guessing from today's scrape:
+    // its original group may have disappeared, even from the current model.
+    const legacyKey = baselineSourceIdentity(source.group, source.team);
+    const legacyCompatible =
+      (source.league === undefined ||
+        normalizeBaselineIdentity(source.league) ===
+          normalizeBaselineIdentity(source.group)) &&
+      model.groups.filter(
+        (candidate) =>
+          normalizeBaselineIdentity(candidate.ref.name) ===
+          normalizeBaselineIdentity(source.group),
+      ).length === 1 &&
+      !previousRows.some((row) =>
+        row.sourceIdentityKey.startsWith(`${legacyKey}#`),
+      );
+    const prior =
+      priorByIdentity.get(sourceIdentityKey) ??
+      (legacyCompatible ? priorByIdentity.get(legacyKey) : undefined);
+    const priorTargetCompatible =
+      prior?.targetTeamId &&
+      validTeamIds.has(prior.targetTeamId) &&
+      group.teamIds.includes(prior.targetTeamId) &&
+      model.groups.filter((candidate) =>
+        candidate.teamIds.includes(prior.targetTeamId!),
+      ).length === 1;
+    // A reviewed identity must reopen before considering another exact label
+    // match. A replacement name is not evidence that the reviewed ID survived.
+    const invalidatedReviewedTarget =
+      prior?.status === "MATCHED" &&
+      prior.targetTeamId &&
+      (prior.reviewedById || prior.reviewedAt) &&
+      !priorTargetCompatible;
     let status: PreparedRow["status"] = invalidRange ? "INVALID" : "REVIEW";
     let targetTeamId: string | null = null;
     let targetTeamLabel: string | null = null;
@@ -160,7 +242,16 @@ export function prepareManualBaselineRows(
     let reviewedById: string | null = null;
     let reviewedAt: Date | null = null;
 
-    if (!invalidRange && !duplicate && candidates.length === 1) {
+    if (invalidatedReviewedTarget && !invalidRange && !duplicate) {
+      issue =
+        "The reviewed target is no longer compatible with the source group.";
+    }
+    if (
+      !invalidRange &&
+      !duplicate &&
+      !invalidatedReviewedTarget &&
+      candidates.length === 1
+    ) {
       status = "MATCHED";
       targetTeamId = candidates[0]!.id;
       targetTeamLabel = candidates[0]!.name ?? candidates[0]!.label;
@@ -180,8 +271,7 @@ export function prepareManualBaselineRows(
       !invalidRange &&
       !duplicate &&
       prior?.targetTeamId &&
-      validTeamIds.has(prior.targetTeamId) &&
-      group.teamIds.includes(prior.targetTeamId)
+      priorTargetCompatible
     ) {
       status = "MATCHED";
       targetTeamId = prior.targetTeamId;
@@ -390,6 +480,18 @@ export async function reviewManualBaselineRow(params: {
     ) {
       throw new BaselineValidationError(
         "Rasterzahl is outside the target team's group range; ignore or accept unresolved instead.",
+      );
+    }
+    // FR-005/FR-009: mapping corrects a team label inside its verified
+    // source group, not the source context itself. Refresh uses this same
+    // resolver; reject incompatible targets before any transaction/write.
+    const context = sourceContextFromIdentity(row.sourceIdentityKey);
+    const sourceGroup = context
+      ? resolveSourceGroup(context, sourceGroupIndex(model))
+      : undefined;
+    if (!sourceGroup || groups[0] !== sourceGroup) {
+      throw new BaselineValidationError(
+        "Target team is not in the baseline row's source group; ignore or accept unresolved instead.",
       );
     }
     data = {
