@@ -1668,3 +1668,5 @@
 - Next focus: no next task.
 
 - Updated security dependencies in the CLI and webapp and removed unnecessary overrides. Webapp frozen lockfile passes; CLI audit is clean. Unpatched braces remains in webapp tooling; full validation awaits PR CI.
+
+- PR #66: CLI CI passed. Webapp E2E failed after the Next.js security update because standalone output omitted playwright-core/browsers.json. Added explicit tracing of that package's runtime assets; existing E2E validation will rerun without skipping checks.
