@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import time
 from pathlib import Path
 from typing import Any
 
@@ -336,23 +337,60 @@ def infeasibility_diagnostics(season: dict[str, Any]) -> list[dict[str, str]]:
 def assumption_diagnostics(
     season: dict[str, Any],
     assumptions: dict[int, dict[str, str]],
-    core: list[int],
+    production_model: cp_model.CpModel,
+    time_limit: float,
 ) -> list[dict[str, str]]:
-    """Combine direct checks with CP-SAT's infeasible assumption core.
+    """Validate attribution on a feasibility-only clone, never a sufficient core.
 
-    Direct checks retain their detailed fixed-number messages. Assumptions cover
-    hard rules whose contradiction only becomes visible while assigning values.
-    One diagnostic per family is enough to make the outcome actionable, and
-    makes the JSON stable even when the sufficient core contains several
-    instances of the same family.
+    Optimization/parallel-search cores need not be minimal. First disable every
+    diagnostic rule to check the unconditional base. Then enable each group's
+    rule alone: only a proven INFEASIBLE singleton permits categorical blame.
+    Unresolved/joint conflicts get no individual accusation. The shared bounded
+    diagnostic budget fits inside the worker's existing subprocess allowance;
+    UNKNOWN (including budget exhaustion) is never evidence of impossibility.
     """
     diagnostics = infeasibility_diagnostics(season)
-    known_families = {item["family"] for item in diagnostics}
-    for literal in sorted(core, key=lambda value: (abs(value), value)):
-        diagnostic = assumptions.get(literal) or assumptions.get(-literal - 1)
-        if diagnostic and diagnostic["family"] not in known_families:
-            diagnostics.append(diagnostic)
-            known_families.add(diagnostic["family"])
+    if not assumptions:
+        return diagnostics
+    deadline = time.monotonic() + min(max(time_limit, 0), 10.0)
+    model = production_model.clone()
+    model.clear_objective()
+    solver = cp_model.CpSolver()
+    solver.parameters.num_search_workers = 1
+
+    def feasibility(enabled: int | None) -> int:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return cp_model.UNKNOWN
+        model.clear_assumptions()
+        for index in assumptions:
+            literal = model.get_bool_var_from_proto_index(index)
+            model.add_assumption(literal if index == enabled else literal.Not())
+        solver.parameters.max_time_in_seconds = remaining
+        return solver.solve(model)
+
+    base_status = feasibility(None)
+    if base_status == cp_model.INFEASIBLE:
+        return diagnostics or [{
+            "family": "unconditional_hard_constraints",
+            "message": "The unconditional schedule constraints are infeasible even with all diagnostic derby rules disabled.",
+        }]
+    if diagnostics:
+        # Direct contradictions are already verified against the actual rules.
+        return diagnostics
+    if base_status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+        for index in sorted(assumptions, key=lambda value: assumptions[value]["message"]):
+            if feasibility(index) == cp_model.INFEASIBLE:
+                diagnostics.append(assumptions[index])
+    if not diagnostics:
+        diagnostics.append({
+            "family": "joint_hard_constraint_conflict",
+            "message": (
+                "The complete hard-constraint model is infeasible. Individual group attribution "
+                "was not established within the diagnostic budget; the conflict may be joint "
+                "or non-minimal, so no individual group is identified as impossible."
+            ),
+        })
     return sorted(diagnostics, key=lambda item: (item["family"], item["message"]))
 
 
@@ -627,7 +665,8 @@ def main() -> None:
         "infeasibilityDiagnostics": assumption_diagnostics(
             season,
             diagnosis_assumptions,
-            list(solver.sufficient_assumptions_for_infeasibility()),
+            model,
+            args.time_limit,
         )
         if status == cp_model.INFEASIBLE
         else [],
