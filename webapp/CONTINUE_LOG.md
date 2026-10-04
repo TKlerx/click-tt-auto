@@ -6,6 +6,13 @@
 - Added real CP-SAT/worker propagation, fixed/pinned bounds, legacy fallback, and rendered run-history regressions.
 - Evidence and command logs: root `reports/delivery/diagnostics/`; local-only candidate awaits independent parent review and GitHub delivery.
 
+## 2026-10-04 PR67 standalone raster runtime
+
+- Kept the previously approved standalone Playwright tracing inclusion.
+- Added a narrow launcher environment fix: preserve the repository raster runtime across Next's generated `process.chdir(__dirname)` transition, without overriding an explicit runtime root.
+- Added real-process integration regressions for roster decoding, rulebook-backed scoring, the 31-league PDF fixture, and explicit runtime-root preservation. Three default-root paths fail when the fix is removed; the override control passes.
+- Existing CI gates and timeouts are unchanged. Full standalone build/browser CI requires parent review and delivery; the resource-floor pause and test evidence are documented under `reports/delivery/ci-remediation`.
+
 ## 2026-06-20 09:45:41 +02:00
 
 - Ported rag-agent-style supply-chain audit coverage into `webapp-template`.

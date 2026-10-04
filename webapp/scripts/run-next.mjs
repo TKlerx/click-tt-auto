@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { spawn } from "node:child_process";
 import { cpSync, existsSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 const command = process.argv[2];
 
@@ -46,7 +46,12 @@ const args =
 
 const child = spawn(process.execPath, args, {
   stdio: "inherit",
-  env: process.env,
+  // Next's standalone server changes cwd into .next/standalone/webapp. Keep
+  // raster subprocesses on the checkout's sources, ESM package and dependencies.
+  env: {
+    ...process.env,
+    RASTER_REPO_ROOT: process.env.RASTER_REPO_ROOT ?? resolve(".."),
+  },
 });
 
 child.on("exit", (code) => {
