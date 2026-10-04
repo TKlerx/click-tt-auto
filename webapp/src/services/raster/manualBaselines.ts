@@ -3,6 +3,10 @@ import { rasterIngest } from "@/lib/raster/pipeline";
 import type { BaselineRowDecisionInput } from "@/lib/raster/schemas";
 import type { TeamRasterAssignmentRow } from "../../../../src/raster/ingest/clicktt-assignments.js";
 import type { SeasonModel } from "../../../../src/raster/types.js";
+import {
+  numericRasterSize,
+  rasterSizeForGroupSize,
+} from "../../../../src/raster/rulebook/rulebook.ts";
 
 export class BaselineImportConflictError extends Error {}
 export class BaselineImportEmptyError extends Error {}
@@ -57,12 +61,14 @@ function parseSeasonModel(value: string | null): SeasonModel {
   }
 }
 
-function rasterSize(groupSize: number) {
-  if (groupSize >= 5 && groupSize <= 6) return 6;
-  if (groupSize <= 8) return 8;
-  if (groupSize <= 10) return 10;
-  if (groupSize <= 12) return 12;
-  return null;
+function rasterSize(group: SeasonModel["groups"][number]) {
+  try {
+    return numericRasterSize(
+      rasterSizeForGroupSize(group.size, group.rasterMode),
+    );
+  } catch {
+    return null;
+  }
 }
 
 // ponytail: keep the one-pass classification together; split only if another importer reuses part of it.
@@ -79,12 +85,16 @@ export function prepareManualBaselineRows(
     reviewedAt: Date | null;
   }> = [],
 ) {
-  const groups = new Map(
-    model.groups.map((group) => [
-      normalizeBaselineIdentity(group.ref.name),
-      group,
-    ]),
-  );
+  const groupsBySourceLabel = new Map<string, SeasonModel["groups"]>();
+  for (const group of model.groups) {
+    for (const label of new Set([group.ref.name, group.ref.league])) {
+      const key = normalizeBaselineIdentity(label);
+      groupsBySourceLabel.set(key, [
+        ...(groupsBySourceLabel.get(key) ?? []),
+        group,
+      ]);
+    }
+  }
   const priorByIdentity = new Map(
     previousRows.map((row) => [row.sourceIdentityKey, row]),
   );
@@ -102,7 +112,15 @@ export function prepareManualBaselineRows(
   for (const source of sourceRows) {
     const sourceGroupLabel = source.league ?? source.group;
     const groupKey = normalizeBaselineIdentity(sourceGroupLabel);
-    const group = groups.get(groupKey);
+    // Scraped page titles are stored as league, navigation labels as group.
+    // Older models may instead use the verified title as their group name.
+    const matchingGroups = (groupsBySourceLabel.get(groupKey) ?? []).filter(
+      (candidate) =>
+        normalizeBaselineIdentity(candidate.ref.name) === groupKey ||
+        normalizeBaselineIdentity(candidate.ref.name) ===
+          normalizeBaselineIdentity(source.group),
+    );
+    const group = matchingGroups.length === 1 ? matchingGroups[0] : undefined;
     if (!group) {
       rejectedCount += 1;
       continue;
@@ -117,9 +135,9 @@ export function prepareManualBaselineRows(
           (label) =>
             normalizeBaselineIdentity(label ?? "") ===
             normalizeBaselineIdentity(source.team),
-        ) && normalizeBaselineIdentity(team.group?.name ?? "") === groupKey,
+        ) && group.teamIds.includes(team.id),
     );
-    const max = rasterSize(group.size);
+    const max = rasterSize(group);
     const invalidRange =
       !Number.isInteger(source.rasterzahl) ||
       source.rasterzahl < 1 ||
@@ -148,12 +166,13 @@ export function prepareManualBaselineRows(
       targetTeamLabel = candidates[0]!.name ?? candidates[0]!.label;
     }
     if (
-      !invalidRange &&
       !duplicate &&
       prior &&
       (prior.status === "IGNORED" || prior.status === "ACCEPTED_UNRESOLVED")
     ) {
       status = prior.status;
+      targetTeamId = null;
+      targetTeamLabel = null;
       reviewedById = prior.reviewedById;
       reviewedAt = prior.reviewedAt;
       issue = null;
@@ -161,7 +180,8 @@ export function prepareManualBaselineRows(
       !invalidRange &&
       !duplicate &&
       prior?.targetTeamId &&
-      validTeamIds.has(prior.targetTeamId)
+      validTeamIds.has(prior.targetTeamId) &&
+      group.teamIds.includes(prior.targetTeamId)
     ) {
       status = "MATCHED";
       targetTeamId = prior.targetTeamId;
@@ -358,6 +378,20 @@ export async function reviewManualBaselineRow(params: {
       throw new BaselineValidationError(
         "Target team is not in this workspace season model.",
       );
+    const groups = model.groups.filter((group) =>
+      group.teamIds.includes(team.id),
+    );
+    const max = groups.length === 1 ? rasterSize(groups[0]!) : null;
+    if (
+      max === null ||
+      !Number.isInteger(row.rasterzahl) ||
+      row.rasterzahl < 1 ||
+      row.rasterzahl > max
+    ) {
+      throw new BaselineValidationError(
+        "Rasterzahl is outside the target team's group range; ignore or accept unresolved instead.",
+      );
+    }
     data = {
       status: "MATCHED" as const,
       targetTeamId: team.id,
@@ -412,9 +446,7 @@ export function projectBaselineComparison(
     group?: string;
     teamId?: string;
   }>,
-  assignmentTeamIds: Map<string, string> = new Map(
-    assignments.map((row) => [row.team, row.team]),
-  ),
+  assignmentTeamIds: Map<string, string> = new Map(),
 ) {
   const baseline = new Map(
     baselineRows
@@ -422,13 +454,14 @@ export function projectBaselineComparison(
       .map((row) => [row.targetTeamId!, row]),
   );
   const result = new Map(
-    assignments.map((row) => [
+    assignments.map((row, index) => [
       row.teamId ??
         assignmentTeamIds.get(row.team) ??
-        baselineSourceIdentity(
+        // Never collapse unresolved outputs merely because their labels match.
+        `unresolved:${index}:${baselineSourceIdentity(
           [row.league, row.group].filter(Boolean).join(" / "),
           row.team,
-        ),
+        )}`,
       row,
     ]),
   );
@@ -481,10 +514,10 @@ export async function getSnapshotBaselineComparison(snapshotId: string) {
             normalizeBaselineIdentity(label ?? "") ===
             normalizeBaselineIdentity(assignment.team),
         ) &&
-        (normalizeBaselineIdentity(team.group?.name ?? "") ===
-          normalizeBaselineIdentity(assignment.group) ||
-          normalizeBaselineIdentity(team.group?.league ?? "") ===
-            normalizeBaselineIdentity(assignment.league)),
+        normalizeBaselineIdentity(team.group?.name ?? "") ===
+          normalizeBaselineIdentity(assignment.group) &&
+        normalizeBaselineIdentity(team.group?.league ?? "") ===
+          normalizeBaselineIdentity(assignment.league),
     );
     return {
       ...assignment,

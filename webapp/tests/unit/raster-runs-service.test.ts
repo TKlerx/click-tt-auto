@@ -77,6 +77,45 @@ describe("raster runs service", () => {
       prismaMock.rasterOptimizationRun.create.mock.invocationCallOrder[0],
     );
     expect(applyUpperLeagueInjectionToInputSet).toHaveBeenCalledWith("input-1");
+    expect(prismaMock.rasterManualBaseline.findFirst).not.toHaveBeenCalled();
+    expect(prismaMock.rasterOptimizationRun.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        baselineId: undefined,
+        settings: JSON.stringify({
+          strategy: "cp_sat",
+          timeLimitSeconds: 60,
+          weights: {},
+        }),
+      }),
+    });
+  });
+
+  it("rejects a baseline unavailable in this workspace before creating a run or job", async () => {
+    prismaMock.rasterInputSet.findUnique.mockResolvedValue({
+      id: "input-1",
+      scopeId: "scope-owl",
+      season: "2026/27",
+      seasonModelJson: "{}",
+    } as never);
+    prismaMock.scope.findFirst.mockResolvedValue(null);
+    prismaMock.$transaction.mockImplementation(async (callback) =>
+      callback(prismaMock),
+    );
+    prismaMock.rasterManualBaseline.findFirst.mockResolvedValue(null);
+    await expect(
+      startOptimizationRun({
+        inputSetId: "input-1",
+        startedById: "user-1",
+        baselineId: "foreign-baseline",
+        settings: { strategy: "cp_sat", timeLimitSeconds: 60, weights: {} },
+      }),
+    ).rejects.toThrow("Selected baseline is not ready for this workspace.");
+    expect(prismaMock.rasterManualBaseline.findFirst).toHaveBeenCalledWith({
+      where: { id: "foreign-baseline", inputSetId: "input-1", status: "READY" },
+      select: { id: true },
+    });
+    expect(prismaMock.rasterOptimizationRun.create).not.toHaveBeenCalled();
+    expect(prismaMock.backgroundJob.create).not.toHaveBeenCalled();
   });
 
   it("links a ready same-workspace baseline without adding it to solver settings", async () => {

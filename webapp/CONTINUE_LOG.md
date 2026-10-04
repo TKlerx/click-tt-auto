@@ -1,5 +1,12 @@
 # Continue Log
 
+## Manual baseline reconciliation: delivery/baseline-reconciled
+
+- Reviewed specs/012 and candidate 6dc0127 against upstream e4fa2bc; retained upstream models and migration unchanged.
+- Reproduced failures before fixing numeric ranges, source group/model identity, snapshot resolution/output retention, durable ignored/accepted decisions, mapping range checks, and moved target handling.
+- Configured webapp suite: 134 files / 494 tests passed. Root focused checks, root/webapp typechecks and full ESLint, architecture, duplication, and text checks passed.
+- Evidence matrix and raw check output are under repository-root reports/delivery/baseline. No production, live scraper, credential, push, or merge actions performed; database-backed browser E2E not run.
+
 ## 2026-06-20 09:45:41 +02:00
 
 - Ported rag-agent-style supply-chain audit coverage into `webapp-template`.

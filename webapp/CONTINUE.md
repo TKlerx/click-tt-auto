@@ -1,5 +1,12 @@
 # Continue
 
+## Manual baseline reconciliation: delivery/baseline-reconciled
+
+- Kept the upstream RasterManualBaseline schema/services; did not import the stale ManualBaseline implementation or migration.
+- Fixed rulebook range validation, verified source/model group identity, snapshot team identity and unresolved-output retention, durable ignore/accept decisions, and moved-target review invalidation.
+- Added regression and authorization/no-baseline parity assertions. Configured full webapp Vitest: 134 files / 494 tests passed; root focused tests, both typechecks, both full ESLint checks, architecture, duplication, and text checks passed.
+- Evidence: repository-root reports/delivery/baseline/evidence.md and adjacent logs. Browser/database-backed E2E and deployment remain unverified; no live click-TT or credentials used.
+
 <!-- continuity:fingerprint=effa3ad62f61f522b6780b4fb9aafd40faefb35fa6bb1a2132546033797aecb1 -->
 
 ## Current Snapshot

@@ -3,6 +3,7 @@ import { prismaMock } from "@/lib/__mocks__/db";
 
 vi.mock("@/lib/db", () => ({ prisma: prismaMock }));
 import {
+  getSnapshotBaselineComparison,
   baselineSourceIdentity,
   countBaselineRows,
   prepareManualBaselineRows,
@@ -212,6 +213,44 @@ describe("manual baseline service", () => {
     },
   );
 
+  it("rejects rows outside the active workspace without writing", async () => {
+    prismaMock.rasterManualBaselineRow.findFirst.mockResolvedValue(null);
+    await expect(
+      reviewManualBaselineRow({
+        inputSetId: "input-1",
+        rowId: "foreign-row",
+        reviewedById: "reviewer",
+        decision: { decision: "ignore" },
+      }),
+    ).rejects.toBeInstanceOf(BaselineValidationError);
+    expect(prismaMock.rasterManualBaselineRow.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: "foreign-row",
+        baseline: { inputSetId: "input-1", active: true },
+      },
+      include: { baseline: { include: { inputSet: true } } },
+    });
+    expect(prismaMock.rasterManualBaselineRow.update).not.toHaveBeenCalled();
+  });
+
+  it("does not let mapping turn an invalid Rasterzahl into a ready mapped assignment", async () => {
+    prismaMock.rasterManualBaselineRow.findFirst.mockResolvedValue({
+      id: "row-invalid",
+      baselineId: "baseline-1",
+      rasterzahl: 7,
+      baseline: { inputSet: { seasonModelJson: JSON.stringify(model) } },
+    } as never);
+    await expect(
+      reviewManualBaselineRow({
+        inputSetId: "input-1",
+        rowId: "row-invalid",
+        reviewedById: "reviewer",
+        decision: { decision: "map", targetTeamId: "team-a" },
+      }),
+    ).rejects.toBeInstanceOf(BaselineValidationError);
+    expect(prismaMock.rasterManualBaselineRow.update).not.toHaveBeenCalled();
+  });
+
   it("rejects a stale mapping target outside the current season model", async () => {
     prismaMock.rasterManualBaselineRow.findFirst.mockResolvedValue({
       id: "row-1",
@@ -226,6 +265,42 @@ describe("manual baseline service", () => {
         decision: { decision: "map", targetTeamId: "removed-team" },
       }),
     ).rejects.toBeInstanceOf(BaselineValidationError);
+  });
+
+  it("matches the scraper page title to the model league while retaining its navigation group", () => {
+    const liveModel = {
+      ...model,
+      teams: [
+        {
+          ...model.teams[0]!,
+          group: { league: "Verified Group 1", name: "Navigation label" },
+        },
+      ],
+      groups: [
+        {
+          ...model.groups[0]!,
+          ref: { league: "Verified Group 1", name: "Navigation label" },
+        },
+      ],
+    };
+    const result = prepareManualBaselineRows(
+      [
+        {
+          league: "Verified Group 1",
+          group: "Navigation label",
+          team: "Club A",
+          rasterzahl: 3,
+          sourceUrl: "source",
+        },
+      ],
+      liveModel,
+    );
+    expect(result.rejectedCount).toBe(0);
+    expect(result.rows[0]).toMatchObject({
+      sourceGroupLabel: "Verified Group 1",
+      status: "MATCHED",
+      targetTeamId: "team-a",
+    });
   });
 
   it("uses the verified page title to disambiguate duplicate navigation labels", () => {
@@ -247,6 +322,76 @@ describe("manual baseline service", () => {
       targetTeamId: "team-a",
     });
   });
+});
+
+describe("manual baseline classification and comparison regressions", () => {
+  afterEach(() => vi.clearAllMocks());
+
+  it.each([0, 4, 4.5, 13, Number.NaN])(
+    "rejects unsupported rulebook group size %s instead of inventing a range",
+    (size) => {
+      const result = prepareManualBaselineRows(
+        [
+          {
+            group: "Group 1",
+            team: "Club A",
+            rasterzahl: 1,
+            sourceUrl: "source",
+          },
+        ],
+        { ...model, groups: [{ ...model.groups[0]!, size }] },
+      );
+      expect(result.rows[0]?.status).toBe("INVALID");
+    },
+  );
+
+  it.each([
+    [5, 6],
+    [6, 6],
+    [7, 8],
+    [8, 8],
+    [9, 10],
+    [10, 10],
+    [11, 12],
+    [12, 12],
+  ])(
+    "uses the numeric rulebook range for size %s in both modes",
+    (size, max) => {
+      for (const rasterMode of ["single", "double"] as const) {
+        const result = prepareManualBaselineRows(
+          [
+            {
+              group: "Group 1",
+              team: "Club A",
+              rasterzahl: max!,
+              sourceUrl: "source",
+            },
+          ],
+          {
+            ...model,
+            groups: [{ ...model.groups[0]!, size: size!, rasterMode }],
+          },
+        );
+        expect(result.rows[0]?.status).toBe("MATCHED");
+        expect(
+          prepareManualBaselineRows(
+            [
+              {
+                group: "Group 1",
+                team: "Club A",
+                rasterzahl: max! + 1,
+                sourceUrl: "source",
+              },
+            ],
+            {
+              ...model,
+              groups: [{ ...model.groups[0]!, size: size!, rasterMode }],
+            },
+          ).rows[0]?.status,
+        ).toBe("INVALID");
+      }
+    },
+  );
 
   it("routes duplicates and invalid ranges to review", () => {
     const result = prepareManualBaselineRows(
@@ -260,6 +405,94 @@ describe("manual baseline service", () => {
     expect(new Set(result.rows.map((row) => row.sourceIdentityKey)).size).toBe(
       2,
     );
+  });
+
+  it.each(["IGNORED", "ACCEPTED_UNRESOLVED"])(
+    "preserves %s decisions for invalid source rows across refresh",
+    (status) => {
+      const result = prepareManualBaselineRows(
+        [{ group: "Group 1", team: "Club A", rasterzahl: 7, sourceUrl: "new" }],
+        model,
+        [
+          {
+            sourceIdentityKey: baselineSourceIdentity("Group 1", "Club A"),
+            status,
+            targetTeamId: null,
+            targetTeamLabel: null,
+            reviewedById: "reviewer",
+            reviewedAt: new Date(0),
+          },
+        ],
+      );
+      expect(result.rows[0]).toMatchObject({
+        status,
+        targetTeamId: null,
+        reviewedById: "reviewer",
+      });
+    },
+  );
+
+  it.each(["IGNORED", "ACCEPTED_UNRESOLVED"])(
+    "does not restore an automatic target for a reviewed %s row",
+    (status) => {
+      const result = prepareManualBaselineRows(
+        [{ group: "Group 1", team: "Club A", rasterzahl: 3, sourceUrl: "new" }],
+        model,
+        [
+          {
+            sourceIdentityKey: baselineSourceIdentity("Group 1", "Club A"),
+            status,
+            targetTeamId: null,
+            targetTeamLabel: null,
+            reviewedById: "reviewer",
+            reviewedAt: new Date(0),
+          },
+        ],
+      );
+      expect(result.rows[0]).toMatchObject({
+        status,
+        targetTeamId: null,
+        targetTeamLabel: null,
+      });
+    },
+  );
+
+  it("reopens review when the previously mapped team has left the source group", () => {
+    const renamed = {
+      ...model.teams[0]!,
+      name: "New label",
+      label: "New label",
+      group: { league: "District", name: "Other group" },
+    };
+    const result = prepareManualBaselineRows(
+      [
+        {
+          group: "Group 1",
+          team: "Old label",
+          rasterzahl: 3,
+          sourceUrl: "new",
+        },
+      ],
+      {
+        ...model,
+        teams: [renamed],
+        groups: [{ ...model.groups[0]!, teamIds: [] }],
+      },
+      [
+        {
+          sourceIdentityKey: baselineSourceIdentity("Group 1", "Old label"),
+          status: "MATCHED",
+          targetTeamId: "team-a",
+          targetTeamLabel: "Old label",
+          reviewedById: "reviewer",
+          reviewedAt: new Date(0),
+        },
+      ],
+    );
+    expect(result.rows[0]).toMatchObject({
+      status: "REVIEW",
+      targetTeamId: null,
+    });
   });
 
   it("carries a compatible reviewed mapping across Rasterzahl changes", () => {
@@ -328,6 +561,101 @@ describe("manual baseline service", () => {
       new: 1,
       missing: 1,
     });
+  });
+
+  it("omits comparison for a run without a baseline even if its model is invalid", async () => {
+    prismaMock.rasterSnapshot.findUnique.mockResolvedValue({
+      assignments: [],
+      run: { baseline: null, inputSet: { seasonModelJson: "invalid" } },
+    } as never);
+    await expect(
+      getSnapshotBaselineComparison("without-baseline"),
+    ).resolves.toBeNull();
+  });
+
+  it("resolves snapshot teams by both league and group, retaining all unresolved outputs", async () => {
+    const otherTeam = {
+      ...model.teams[0]!,
+      id: "team-b",
+      group: { league: "District", name: "Group 2" },
+    };
+    const snapshotModel = { ...model, teams: [...model.teams, otherTeam] };
+    prismaMock.rasterSnapshot.findUnique.mockResolvedValue({
+      assignments: [
+        {
+          id: "a",
+          team: "Club A",
+          league: "District",
+          group: "Group 1",
+          rasterzahl: 3,
+        },
+        {
+          id: "b",
+          team: "Club A",
+          league: "District",
+          group: "Group 2",
+          rasterzahl: 4,
+        },
+        {
+          id: "c",
+          team: "Unknown",
+          league: "District",
+          group: "Group 1",
+          rasterzahl: 1,
+        },
+        {
+          id: "d",
+          team: "Unknown",
+          league: "District",
+          group: "Group 2",
+          rasterzahl: 2,
+        },
+        {
+          id: "e",
+          team: "Unknown",
+          league: "District",
+          group: "Group 2",
+          rasterzahl: 5,
+        },
+        {
+          id: "f",
+          team: "Club A",
+          league: "Other league",
+          group: "Group 1",
+          rasterzahl: 3,
+        },
+      ],
+      run: {
+        baseline: {
+          id: "original-version",
+          rows: [
+            {
+              targetTeamId: "team-a",
+              targetTeamLabel: "Club A",
+              status: "MATCHED",
+              rasterzahl: 3,
+            },
+            {
+              targetTeamId: "team-b",
+              targetTeamLabel: "Club A",
+              status: "MATCHED",
+              rasterzahl: 2,
+            },
+          ],
+        },
+        inputSet: { seasonModelJson: JSON.stringify(snapshotModel) },
+      },
+    } as never);
+    const result = await getSnapshotBaselineComparison("snapshot-1");
+    expect(result?.baselineId).toBe("original-version");
+    expect(result?.counts).toEqual({
+      unchanged: 1,
+      changed: 1,
+      new: 4,
+      missing: 0,
+    });
+    expect(result?.rows).toHaveLength(6);
+    expect(new Set(result?.rows.map((row) => row.teamId)).size).toBe(6);
   });
 
   it("uses resolved team ids when the same display name exists in multiple groups", () => {
