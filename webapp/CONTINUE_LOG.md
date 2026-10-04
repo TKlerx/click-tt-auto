@@ -1,5 +1,11 @@
 # Continue Log
 
+## 2026-10-04 solver diagnostics reconciliation
+
+- Ported missing diagnostics behavior from `c885bea` / `995517e` onto `e4fa2bc` without replacing the upstream manual baseline UI.
+- Added real CP-SAT/worker propagation, fixed/pinned bounds, legacy fallback, and rendered run-history regressions.
+- Evidence and command logs: root `reports/delivery/diagnostics/`; local-only candidate awaits independent parent review and GitHub delivery.
+
 ## 2026-06-20 09:45:41 +02:00
 
 - Ported rag-agent-style supply-chain audit coverage into `webapp-template`.

@@ -284,6 +284,78 @@ def capacity_buckets(slot_teams: list[dict[str, Any]]) -> list[list[dict[str, An
     return buckets
 
 
+def infeasibility_diagnostics(season: dict[str, Any]) -> list[dict[str, str]]:
+    """Return deterministic explanations for directly contradictory hard rules."""
+    teams = {str(team["id"]): team for team in season.get("teams", [])}
+    diagnostics: list[dict[str, str]] = []
+    for group in season.get("groups", []):
+        group_teams = [teams[team_id] for team_id in group.get("teamIds", []) if team_id in teams]
+        group_name = f"{group['ref']['league']} / {group['ref']['name']}"
+        max_raster = numeric_raster_size(raster_key_for_group(group))
+        fixed: dict[int, list[dict[str, Any]]] = {}
+        for team in group_teams:
+            rasterzahl = team.get("rasterzahl") or {}
+            if rasterzahl.get("kind") not in ("fixed", "pinned"):
+                continue
+            value = int(rasterzahl["value"])
+            if value < 1 or value > max_raster:
+                diagnostics.append({
+                    "family": "fixed_schedule_numbers",
+                    "message": f"Group {group_name} fixes {team['label']} to schedule number {value}, outside 1-{max_raster}.",
+                })
+            fixed.setdefault(value, []).append(team)
+        for value, assigned in sorted(fixed.items()):
+            if len(assigned) > 1:
+                labels = ", ".join(sorted(str(team["label"]) for team in assigned))
+                diagnostics.append({
+                    "family": "fixed_schedule_numbers",
+                    "message": f"Group {group_name} fixes schedule number {value} for more than one team: {labels}.",
+                })
+        for left_index, left in enumerate(group_teams):
+            left_rasterzahl = left.get("rasterzahl") or {}
+            if left_rasterzahl.get("kind") not in ("fixed", "pinned"):
+                continue
+            for right in group_teams[left_index + 1 :]:
+                right_rasterzahl = right.get("rasterzahl") or {}
+                if (
+                    left.get("clubId") != right.get("clubId")
+                    or (left.get("planned") is False and right.get("planned") is False)
+                    or right_rasterzahl.get("kind") not in ("fixed", "pinned")
+                ):
+                    continue
+                day = derby_spieltag_for_group(group, int(left_rasterzahl["value"]), int(right_rasterzahl["value"]))
+                if day is not None and day > 4:
+                    labels = ", ".join(sorted((str(left["label"]), str(right["label"]))))
+                    diagnostics.append({
+                        "family": "same_club_derby_timing",
+                        "message": f"Group {group_name} fixes same-club teams {labels} to matchday {day}; derbies must be on matchday 4 or earlier.",
+                    })
+    return sorted(diagnostics, key=lambda item: (item["family"], item["message"]))
+
+
+def assumption_diagnostics(
+    season: dict[str, Any],
+    assumptions: dict[int, dict[str, str]],
+    core: list[int],
+) -> list[dict[str, str]]:
+    """Combine direct checks with CP-SAT's infeasible assumption core.
+
+    Direct checks retain their detailed fixed-number messages. Assumptions cover
+    hard rules whose contradiction only becomes visible while assigning values.
+    One diagnostic per family is enough to make the outcome actionable, and
+    makes the JSON stable even when the sufficient core contains several
+    instances of the same family.
+    """
+    diagnostics = infeasibility_diagnostics(season)
+    known_families = {item["family"] for item in diagnostics}
+    for literal in sorted(core, key=lambda value: (abs(value), value)):
+        diagnostic = assumptions.get(literal) or assumptions.get(-literal - 1)
+        if diagnostic and diagnostic["family"] not in known_families:
+            diagnostics.append(diagnostic)
+            known_families.add(diagnostic["family"])
+    return sorted(diagnostics, key=lambda item: (item["family"], item["message"]))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", required=True)
@@ -307,6 +379,7 @@ def main() -> None:
     }
     rz: dict[str, cp_model.IntVar] = {}
     bye: dict[str, cp_model.IntVar] = {}
+    diagnosis_assumptions: dict[int, dict[str, str]] = {}
     for group in season["groups"]:
         group_vars = []
         for team_id in group["teamIds"]:
@@ -329,6 +402,7 @@ def main() -> None:
 
     for group in season["groups"]:
         ids = group["teamIds"]
+        derby_assumption: cp_model.IntVar | None = None
         for left_index, left_id in enumerate(ids):
             left = teams[left_id]
             for right_id in ids[left_index + 1 :]:
@@ -337,6 +411,17 @@ def main() -> None:
                     continue
                 if left.get("planned") is False and right.get("planned") is False:
                     continue
+                if derby_assumption is None:
+                    group_name = f"{group['ref']['league']} / {group['ref']['name']}"
+                    derby_assumption = model.new_bool_var(f"assume_same_club_derby_{group_key(group)}")
+                    model.add_assumption(derby_assumption)
+                    diagnosis_assumptions[derby_assumption.index] = {
+                        "family": "same_club_derby_timing",
+                        "message": (
+                            f"Group {group_name} cannot assign its same-club teams to distinct "
+                            "schedule numbers with every derby on matchday 4 or earlier."
+                        ),
+                    }
                 allowed = []
                 is_st4 = model.new_bool_var(f"same_club_st4_{left_id}_{right_id}")
                 for a in raster_values_for_group(group):
@@ -346,11 +431,13 @@ def main() -> None:
                         day = derby_spieltag_for_group(group, a, b)
                         if day is None or day <= 4:
                             allowed.append((a, b, int(day == 4)))
-                model.add_allowed_assignments([rz[left_id], rz[right_id], is_st4], allowed)
+                model.add_allowed_assignments([rz[left_id], rz[right_id], is_st4], allowed).only_enforce_if(
+                    derby_assumption
+                )
                 objective_terms.append(is_st4 * int(weights["sameClubDerbySt4"]))
 
     home_bool: dict[tuple[str, int], cp_model.IntVar] = {}
-    for team_id, team in teams.items():
+    for team_id in teams:
         group = team_group.get(team_id)
         if not group:
             continue
@@ -537,6 +624,13 @@ def main() -> None:
         "objective": solver.objective_value if status in (cp_model.OPTIMAL, cp_model.FEASIBLE) else None,
         "bestBound": solver.best_objective_bound if status in (cp_model.OPTIMAL, cp_model.FEASIBLE) else None,
         "wallTimeSeconds": solver.wall_time,
+        "infeasibilityDiagnostics": assumption_diagnostics(
+            season,
+            diagnosis_assumptions,
+            list(solver.sufficient_assumptions_for_infeasibility()),
+        )
+        if status == cp_model.INFEASIBLE
+        else [],
     }
     if args.metadata:
         Path(args.metadata).parent.mkdir(parents=True, exist_ok=True)
