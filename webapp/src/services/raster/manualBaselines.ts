@@ -222,11 +222,28 @@ export function prepareManualBaselineRows(
       ).length === 1;
     // A reviewed identity must reopen before considering another exact label
     // match. A replacement name is not evidence that the reviewed ID survived.
-    const invalidatedReviewedTarget =
-      prior?.status === "MATCHED" &&
-      prior.targetTeamId &&
-      (prior.reviewedById || prior.reviewedAt) &&
-      !priorTargetCompatible;
+    // Legacy mappings with incomplete source context are never restored, but
+    // an invalidated reviewed ID is still a reason to require explicit review.
+    // Conservatively consider all historical occurrences, not scrape order.
+    const historicalKey = baselineSourceIdentity(sourceGroupLabel, source.team);
+    const reviewedPriors = prior
+      ? [prior]
+      : previousRows.filter(
+          (row) =>
+            row.sourceIdentityKey === historicalKey ||
+            row.sourceIdentityKey.startsWith(`${historicalKey}#`),
+        );
+    const invalidatedReviewedTarget = reviewedPriors.some(
+      (row) =>
+        row.status === "MATCHED" &&
+        row.targetTeamId &&
+        (row.reviewedById || row.reviewedAt) &&
+        (!validTeamIds.has(row.targetTeamId) ||
+          !group.teamIds.includes(row.targetTeamId) ||
+          model.groups.filter((candidate) =>
+            candidate.teamIds.includes(row.targetTeamId!),
+          ).length !== 1),
+    );
     let status: PreparedRow["status"] = invalidRange ? "INVALID" : "REVIEW";
     let targetTeamId: string | null = null;
     let targetTeamLabel: string | null = null;

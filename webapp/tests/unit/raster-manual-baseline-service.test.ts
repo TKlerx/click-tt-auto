@@ -413,13 +413,13 @@ describe("blocking baseline mapping compatibility regressions", () => {
       );
       let saved = stored;
       prismaMock.rasterManualBaselineRow.update.mockImplementation(
-        async ({ data }) => {
+        ({ data }) => {
           saved = { ...stored, ...data } as typeof stored;
-          return saved as never;
+          return Promise.resolve(saved) as never;
         },
       );
       prismaMock.rasterManualBaselineRow.findMany.mockImplementation(
-        async () => [saved] as never,
+        () => Promise.resolve([saved]) as never,
       );
       const mapped = await reviewManualBaselineRow({
         inputSetId: "input-1",
@@ -528,6 +528,44 @@ describe("blocking invalidated reviewed target regressions", () => {
         reviewedById: null,
         reviewedAt: null,
         issue: expect.stringContaining("reviewed target"),
+      });
+    },
+  );
+
+  it.each(["moved", "removed"])(
+    "also reopens an incompatible %s reviewed target under a historical league-only key",
+    (change) => {
+      const source = contextualSources[0]!;
+      const initial = prepareManualBaselineRows([source], contextualModel)
+        .rows[0]!;
+      const previous = [
+        {
+          ...initial,
+          sourceIdentityKey: baselineSourceIdentity("District", "Club A"),
+          reviewedById: "reviewer",
+          reviewedAt: new Date(0),
+        },
+      ];
+      const replacement = { ...model.teams[0]!, id: "replacement" };
+      const changedModel = {
+        ...contextualModel,
+        teams:
+          change === "removed" ? [replacement] : [model.teams[0]!, replacement],
+        groups: [
+          { ...contextualModel.groups[0]!, teamIds: ["replacement"] },
+          {
+            ...contextualModel.groups[1]!,
+            teamIds: change === "removed" ? [] : ["team-a"],
+          },
+        ],
+      };
+      expect(
+        prepareManualBaselineRows([source], changedModel, previous).rows[0],
+      ).toMatchObject({
+        status: "REVIEW",
+        targetTeamId: null,
+        reviewedById: null,
+        reviewedAt: null,
       });
     },
   );
