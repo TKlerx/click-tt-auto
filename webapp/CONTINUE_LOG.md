@@ -1660,3 +1660,11 @@
 ## 2026-09-04 fast-uri security patch
 
 - Patched fast-uri overrides and lockfile resolutions to 3.1.6 for GHSA-jqff-g426-hqxp, including the parent CLI workspace override. Frozen-lockfile verification and targeted URI/AJV regression checks pass. Changes are prepared in an isolated security worktree; not committed or pushed.
+## 2026-10-04 22:57:44
+
+- Branch snapshot refreshed for `codex/security-20261004`.
+- Latest non-continuity commit: e4fa2bc Implement manual Rasterzahl baselines.
+- Active specs: none.
+- Next focus: no next task.
+
+- Updated security dependencies in the CLI and webapp and removed unnecessary overrides. Webapp frozen lockfile passes; CLI audit is clean. Unpatched braces remains in webapp tooling; full validation awaits PR CI.

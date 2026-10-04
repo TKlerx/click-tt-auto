@@ -1,25 +1,25 @@
 # Continue
 
-<!-- continuity:fingerprint=effa3ad62f61f522b6780b4fb9aafd40faefb35fa6bb1a2132546033797aecb1 -->
+<!-- continuity:fingerprint=98db1d4dad54b4065eac4b4f1973e960e3d2b15e15d7667806dbfeb8229c73f4 -->
 
 ## Current Snapshot
 
-- Updated: 2026-08-10 19:14:36
-- Branch: `codex/fix-high-python-dependencies`
+- Updated: 2026-10-04 22:57:44
+- Branch: `codex/security-20261004`
 
 ## Recent Non-Continuity Commits
 
-- e80b057 fix: patch high-severity dependencies (#47)
-- b85afb9 Configure Dependabot updates
-- 595055a Merge pull request #27 from TKlerx/011-raster-import-ux
-- e104ec3 Fix raster import e2e workspace fixtures
-- 32954e6 Cover scheduler raster source adoption
+- e4fa2bc Implement manual Rasterzahl baselines
+- ebba8c5 Upgrade Spec Kit and add convergence workflow
+- 6d40dbf Document webapp follow-up work
+- e7bdafd Plan manual baseline Rasterzahlen import
+- 6d48178 Fix fine dedup and reconcile open tasks
 
 ## Git Status
 
-- M next-env.d.ts
-- M worker/pyproject.toml
-- M worker/uv.lock
+- M package.json
+-  M pnpm-lock.yaml
+-  M pnpm-workspace.yaml
 
 ## Active Specs
 
@@ -29,6 +29,7 @@
 
 1. No unchecked tasks detected in the active specs.
 
-## 2026-09-04 fast-uri security patch
+## 2026-10-04 security dependencies
 
-- Patched fast-uri overrides and lockfile resolutions to 3.1.6 for GHSA-jqff-g426-hqxp, including the parent CLI workspace override. Frozen-lockfile verification and targeted URI/AJV regression checks pass. Changes are prepared in an isolated security worktree; not committed or pushed.
+- Updated affected CLI and webapp dependencies; removed obsolete overrides where native ranges suffice.
+- Webapp frozen lockfile passes. CLI audit is clean; webapp audit retains only the unpatched braces 3.0.3 advisory. Full application validation awaits PR CI.
