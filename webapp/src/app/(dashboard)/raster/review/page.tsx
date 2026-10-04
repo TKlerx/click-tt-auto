@@ -4,6 +4,11 @@ import { InferCapacitiesButton } from "@/components/raster/capacity/infer-capaci
 import { MatchReviewPanel } from "@/components/raster/match-review-panel";
 import { WishImportReviewPanel } from "@/components/raster/wish-import-review-panel";
 import { canUseRasterLevel } from "@/lib/raster/access";
+import { normalizeClubName } from "@/lib/raster/club-matching";
+import {
+  unresolvedSourceIdentityAliases,
+  sourceIdentityCandidates,
+} from "@/services/raster/sourceIdentityAliases";
 import { listMatchReviewState } from "@/lib/raster/match-review";
 import { resolveWorkspaceSelection } from "@/lib/raster/workspace-selection";
 import { FixedScheduleNumbersForm } from "@/components/raster/input-set-actions";
@@ -50,15 +55,57 @@ export default async function RasterReviewPage({
     inputSets,
     params.workspace,
   ).selected;
-  const [capacityReview, matchReview, wishImportReview, baseline] = inputSet
+  const [
+    capacityReview,
+    matchReview,
+    wishImportReview,
+    baseline,
+    pendingIdentityAliases,
+  ] = inputSet
     ? await Promise.all([
         reviewHallCapacitiesForInputSet(inputSet.id),
         listMatchReviewState(inputSet.id),
         listWishImportReview(inputSet.id),
         getManualBaseline(inputSet.id),
+        unresolvedSourceIdentityAliases(inputSet.id),
       ])
-    : [null, [], null, null];
+    : [null, [], null, null, []];
   const canEdit = canUseRasterLevel(context.user, "scheduler");
+  const canAdministerAliases = canUseRasterLevel(context.user, "admin");
+  const identityCandidates = [
+    ...(capacityReview?.aliasCandidates ?? [])
+      .filter(
+        (candidate) =>
+          !pendingIdentityAliases.some(
+            (alias) =>
+              alias.kind === "CLUB" &&
+              normalizeClubName(
+                candidate.wishClubName ?? candidate.modelClubName,
+              ) === alias.normalizedSourceName,
+          ),
+      )
+      .map((candidate) => ({
+        ...candidate,
+        kind: "CLUB" as const,
+      })),
+    ...pendingIdentityAliases.map((alias) => ({
+      capacityRelevant: alias.kind === "CLUB",
+      kind: alias.kind,
+      modelClubId: alias.rawSourceName,
+      modelClubName: alias.rawSourceName,
+      wishClubId: alias.canonicalIdentity ?? undefined,
+      wishClubName: alias.canonicalName ?? undefined,
+      confidence: alias.matchConfidence,
+      source: alias.source,
+    })),
+  ];
+  const identityOptions = [
+    ...(capacityReview?.wishClubOptions ?? []).map((option) => ({
+      ...option,
+      kind: "CLUB" as const,
+    })),
+    ...modelIdentityOptions(inputSet?.seasonModelJson),
+  ];
   const planningGroups = inputSet
     ? extractPlanningGroups(
         inputSet.id,
@@ -70,7 +117,7 @@ export default async function RasterReviewPage({
     planningGroups.filter(
       (group) => group.missingTeams > 0 || !group.planningStatus,
     ).length +
-    (capacityReview?.aliasCandidates.length ?? 0) +
+    identityCandidates.length +
     wishImportIssueCount(wishImportReview);
 
   if (!inputSet) {
@@ -106,10 +153,11 @@ export default async function RasterReviewPage({
           <div className="mt-3 grid gap-3">
             {capacityReview ? (
               <ClubAliasReview
-                canEdit={canEdit}
-                candidates={capacityReview.aliasCandidates}
+                key={`${inputSet.id}:${JSON.stringify(identityCandidates)}`}
+                canEdit={canAdministerAliases}
+                candidates={identityCandidates}
                 inputSetId={inputSet.id}
-                wishClubOptions={capacityReview.wishClubOptions}
+                wishClubOptions={identityOptions}
               />
             ) : null}
             {wishImportReview && wishImportIssueCount(wishImportReview) > 0 ? (
@@ -212,5 +260,17 @@ function wishImportIssueCount(
     review.conflicts.length +
     review.unmatchedRows.length +
     review.missingWishes.length
+  );
+}
+
+function modelIdentityOptions(seasonModelJson?: string | null) {
+  if (!seasonModelJson) return [];
+  const model = JSON.parse(seasonModelJson);
+  return (["CLUB", "TEAM"] as const).flatMap((kind) =>
+    sourceIdentityCandidates(model, kind).map((candidate) => ({
+      clubId: candidate.id,
+      clubName: candidate.name,
+      kind,
+    })),
   );
 }

@@ -1660,3 +1660,7 @@
 ## 2026-09-04 fast-uri security patch
 
 - Patched fast-uri overrides and lockfile resolutions to 3.1.6 for GHSA-jqff-g426-hqxp, including the parent CLI workspace override. Frozen-lockfile verification and targeted URI/AJV regression checks pass. Changes are prepared in an isolated security worktree; not committed or pushed.
+
+## 2026-10-04 alias reconciliation
+
+- Resumed the dirty delivery checkpoint; preserved upstream manual baseline review. Added persisted club/team aliases and workspace-local readiness checks, and regression/integration coverage for review, isolation, and duplicate-free cache reuse. Local delivery evidence: `reports/delivery/aliases/`.

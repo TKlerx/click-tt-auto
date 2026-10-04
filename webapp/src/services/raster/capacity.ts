@@ -52,6 +52,8 @@ export type HallCapacityReview = {
 export type HallCapacityAliasCandidate = {
   capacityRelevant: boolean;
   confirmed?: boolean;
+  confidence: "EXACT" | "FUZZY" | "MANUAL" | "REVIEW";
+  source: string;
   modelClubId: string;
   modelClubName: string;
   wishClubId?: string;
@@ -411,6 +413,8 @@ async function findCapacityAliasReview(inputSetId: string) {
     candidates.push({
       confirmed: true,
       capacityRelevant: capacityRelevantClubIds.has(alias.sourceClubId),
+      confidence: "MANUAL",
+      source: "admin-review",
       modelClubId: alias.sourceClubId,
       modelClubName: alias.sourceClubName ?? alias.sourceClubId,
       wishClubId: alias.targetClubId,
@@ -462,6 +466,8 @@ function capacityAliasCandidateForClub(
   if (wish?.clubId === club.id) return null;
   return {
     capacityRelevant: capacityRelevantClubIds.has(club.id),
+    confidence: exactWish ? "EXACT" : wish ? "FUZZY" : "REVIEW",
+    source: "capacity-review",
     modelClubId: club.id,
     modelClubName: club.name,
     wishClubId: wish?.clubId,

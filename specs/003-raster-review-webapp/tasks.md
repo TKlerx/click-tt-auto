@@ -203,7 +203,7 @@
 - [x] T080 [US1] Add normalized and conservative fuzzy club suggestions in `webapp/src/services/raster/capacity.ts`, leaving ambiguous matches for review.
 - [x] T081 [US1] Add the editable club alias review table in `webapp/src/components/raster/capacity/club-alias-review.tsx` and its API route.
 - [x] T082 [US1] Reapply confirmed input-set club aliases during cache sync and cover abbreviation/suffix and correction cases in `webapp/tests/unit/raster-capacity-service.test.ts` and `webapp/tests/unit/raster-input-sets-service.test.ts`.
-- [ ] T083 [US1] Promote input-set-local club aliases into a scope/season-aware persisted source-identity model that also supports team mappings, match confidence/source, and reuse across planning workspaces.
+- [x] T083 [US1] Promote input-set-local club aliases into a scope/season-aware persisted source-identity model that also supports team mappings, match confidence/source, and reuse across planning workspaces.
 
 ---
 
