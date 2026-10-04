@@ -4,6 +4,10 @@ import type { RunSettingsInput } from "@/lib/raster/schemas";
 import { syncInputSetSourceCaches } from "./inputSets";
 import { applyUpperLeagueInjectionToInputSet } from "./upperLeague";
 import { BaselineValidationError } from "./manualBaselines";
+import {
+  SourceIdentityReviewRequiredError,
+  unresolvedSourceIdentityAliases,
+} from "./sourceIdentityAliases";
 
 export async function listOptimizationRuns(inputSetId: string) {
   return prisma.rasterOptimizationRun.findMany({
@@ -68,6 +72,9 @@ export async function startOptimizationRun(params: {
   baselineId?: string;
 }) {
   await syncInputSetSourceCaches(params.inputSetId);
+  if ((await unresolvedSourceIdentityAliases(params.inputSetId)).length) {
+    throw new SourceIdentityReviewRequiredError();
+  }
   await applyUpperLeagueInjectionToInputSet(params.inputSetId);
   const coverage = await buildCoverageRecordForInputSet(params.inputSetId);
   return prisma.$transaction(async (tx) => {

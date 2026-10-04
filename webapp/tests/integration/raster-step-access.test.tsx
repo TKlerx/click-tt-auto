@@ -12,6 +12,10 @@ const { prisma } = vi.hoisted(() => ({
       findMany: vi.fn(),
       findFirst: vi.fn(),
     },
+    rasterInputSet: {
+      findUnique: vi.fn().mockResolvedValue(null),
+    },
+    rasterSourceIdentityAlias: { findMany: vi.fn() },
   },
 }));
 
@@ -158,6 +162,65 @@ describe("raster step access", () => {
     expect(services.adoptLegacyRasterSources).toHaveBeenCalledWith("input-1");
   });
 
+  it("keeps the upstream manual baseline and club corrections beside pending team review", async () => {
+    requireSession.mockResolvedValue({
+      id: "admin-1",
+      role: Role.PLATFORM_ADMIN,
+    });
+    prisma.scope.findMany.mockResolvedValue([scope("OWL")]);
+    services.listInputSets.mockResolvedValue([inputSet()]);
+    services.listHallCapacities.mockResolvedValue([]);
+    services.listWishImportReview.mockResolvedValue(null);
+    matchReview.listMatchReviewState.mockResolvedValue([]);
+    services.reviewHallCapacitiesForInputSet.mockResolvedValue({
+      aliasCandidates: [
+        {
+          capacityRelevant: true,
+          modelClubId: "legacy",
+          modelClubName: "Legacy club",
+        },
+      ],
+      wishClubOptions: [],
+    });
+    prisma.rasterInputSet.findUnique.mockResolvedValue({
+      scopeId: "scope-OWL",
+      season: "2026/27",
+      seasonModelJson: JSON.stringify({
+        sourceIdentityReferences: [
+          { kind: "TEAM", normalizedSourceName: "herren1" },
+        ],
+      }),
+    });
+    prisma.rasterSourceIdentityAlias.findMany.mockResolvedValue([
+      {
+        kind: "TEAM",
+        rawSourceName: "Herren 1",
+        normalizedSourceName: "herren1",
+        reviewState: "PENDING",
+        matchConfidence: "FUZZY",
+        source: "cache-sync",
+      },
+    ]);
+    const result = await ReviewPage({
+      searchParams: Promise.resolve({ scope: "OWL", season: "2026/27" }),
+    });
+    const elements = collectElements(result);
+    const aliases = elements.find((element) => element.props.candidates);
+    expect(aliases?.props.candidates).toMatchObject([
+      { kind: "CLUB", modelClubId: "legacy" },
+      { kind: "TEAM", modelClubId: "Herren 1" },
+    ]);
+    expect(aliases?.props.canEdit).toBe(true);
+    expect(
+      elements.some(
+        (element) =>
+          element.props.baseline && element.props.inputSetId === "input-1",
+      ),
+    ).toBe(true);
+    expect(services.getManualBaseline).toHaveBeenCalledWith("input-1");
+    prisma.rasterInputSet.findUnique.mockResolvedValue(null);
+  });
+
   it("loads the requested workspace on review and run steps", async () => {
     requireSession.mockResolvedValue({
       id: "scheduler-1",
@@ -232,6 +295,15 @@ function scope(code: string) {
       parent: { code: "DE", name: "Germany" },
     },
   };
+}
+
+function collectElements(
+  node: ReactNode,
+): Array<ReactElement<Record<string, unknown>>> {
+  if (Array.isArray(node)) return node.flatMap(collectElements);
+  if (!isValidElement(node)) return [];
+  const element = node as ReactElement<Record<string, unknown>>;
+  return [element, ...collectElements(element.props.children as ReactNode)];
 }
 
 function collectText(node: ReactNode): string[] {

@@ -29,6 +29,13 @@
 
 1. No unchecked tasks detected in the active specs.
 
+## 2026-10-04 source identity alias reconciliation
+
+- Reconciled source `f9966fa` onto manual-baseline integration base `e4fa2bc` in `delivery/aliases-reconciled`; retained baseline review and existing club correction controls.
+- Added scope/season/kind-aware persisted aliases, conservative exact/fuzzy resolution, club/team admin review, and workspace-specific validation/run readiness checks. Missing canonical targets block only their workspace without revoking a shared confirmed alias.
+- Real PostgreSQL integration exposed duplicate active wishes after club confirmation; cache sync now rekeys the existing active wish before reimport, retaining its ID and import provenance.
+- Delivery gate logs and the evidence matrix live in `reports/delivery/aliases/`. No live Click-TT, production database, deploy, push, or merge was used. Independent review/push/merge remain parent-owned.
+
 ## 2026-09-04 fast-uri security patch
 
 - Patched fast-uri overrides and lockfile resolutions to 3.1.6 for GHSA-jqff-g426-hqxp, including the parent CLI workspace override. Frozen-lockfile verification and targeted URI/AJV regression checks pass. Changes are prepared in an isolated security worktree; not committed or pushed.
