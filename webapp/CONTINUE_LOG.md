@@ -1,5 +1,11 @@
 # Continue Log
 
+## 2026-10-05 security PR CI repair
+
+- Integrated current main's tested standalone launcher fixes into security PR #66 and resolved the browser-registry tracing conflict using the existing dependency-resolved registry path.
+- Preserved security dependency remediation; retained every CI check and existing standalone regression test.
+- Verified the production build, both typechecks, 142 CLI tests, 14 configuration/registry tests and all four roster/scoring/PDF/runtime-root subprocess regressions. Added Windows fixture entrypoints without changing production code or skipping tests.
+
 ## 2026-10-04 PR67 standalone raster runtime
 
 - Kept the previously approved standalone Playwright tracing inclusion.
@@ -1667,3 +1673,14 @@
 ## 2026-09-04 fast-uri security patch
 
 - Patched fast-uri overrides and lockfile resolutions to 3.1.6 for GHSA-jqff-g426-hqxp, including the parent CLI workspace override. Frozen-lockfile verification and targeted URI/AJV regression checks pass. Changes are prepared in an isolated security worktree; not committed or pushed.
+
+## 2026-10-04 22:57:44
+
+- Branch snapshot refreshed for `codex/security-20261004`.
+- Latest non-continuity commit: e4fa2bc Implement manual Rasterzahl baselines.
+- Active specs: none.
+- Next focus: no next task.
+
+- Updated security dependencies in the CLI and webapp and removed unnecessary overrides. Webapp frozen lockfile passes; CLI audit is clean. Unpatched braces remains in webapp tooling; full validation awaits PR CI.
+
+- PR #66: CLI CI passed. Webapp E2E failed after the Next.js security update because standalone output omitted playwright-core/browsers.json. Added explicit tracing of that package's runtime assets; existing E2E validation will rerun without skipping checks.

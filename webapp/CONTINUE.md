@@ -1,5 +1,11 @@
 # Continue
 
+## 2026-10-05 security PR CI repair
+
+- Reconciled security PR #66 with current main, reusing its tested standalone raster-root, browser-registry and configurable build startup fixes instead of duplicating them.
+- Security dependency changes remain; no checks are disabled. Verify fresh full CI on the reconciled branch.
+- Production build, typechecks, 142 CLI tests and 14 configuration/registry tests pass locally. The four real raster subprocess regressions also pass after making their HTTP/tsx fixture portable to Windows.
+
 ## 2026-10-04 PR67 CI remediation follow-up
 
 - Preserved the standalone Playwright browser-registry fix from `3756ec8`.
@@ -12,22 +18,22 @@
 
 ## Current Snapshot
 
-- Updated: 2026-08-10 19:14:36
-- Branch: `codex/fix-high-python-dependencies`
+- Updated: 2026-10-04 22:57:44
+- Branch: `codex/security-20261004`
 
 ## Recent Non-Continuity Commits
 
-- e80b057 fix: patch high-severity dependencies (#47)
-- b85afb9 Configure Dependabot updates
-- 595055a Merge pull request #27 from TKlerx/011-raster-import-ux
-- e104ec3 Fix raster import e2e workspace fixtures
-- 32954e6 Cover scheduler raster source adoption
+- e4fa2bc Implement manual Rasterzahl baselines
+- ebba8c5 Upgrade Spec Kit and add convergence workflow
+- 6d40dbf Document webapp follow-up work
+- e7bdafd Plan manual baseline Rasterzahlen import
+- 6d48178 Fix fine dedup and reconcile open tasks
 
 ## Git Status
 
-- M next-env.d.ts
-- M worker/pyproject.toml
-- M worker/uv.lock
+- M package.json
+- M pnpm-lock.yaml
+- M pnpm-workspace.yaml
 
 ## Active Specs
 
@@ -37,6 +43,8 @@
 
 1. No unchecked tasks detected in the active specs.
 
-## 2026-09-04 fast-uri security patch
+## 2026-10-04 security dependencies
 
-- Patched fast-uri overrides and lockfile resolutions to 3.1.6 for GHSA-jqff-g426-hqxp, including the parent CLI workspace override. Frozen-lockfile verification and targeted URI/AJV regression checks pass. Changes are prepared in an isolated security worktree; not committed or pushed.
+- Updated affected CLI and webapp dependencies; removed obsolete overrides where native ranges suffice.
+- Webapp frozen lockfile passes. CLI audit is clean; webapp audit retains only the unpatched braces 3.0.3 advisory. Full application validation awaits PR CI.
+- Initial PR CI passed CLI checks but failed E2E because standalone tracing omitted Playwright runtime assets. Added a narrow playwright-core tracing include; existing E2E checks provide the regression check on the next CI run.
