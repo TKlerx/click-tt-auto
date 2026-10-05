@@ -1,5 +1,18 @@
 # Continue Log
 
+## 2026-10-05 security PR CI repair
+
+- Integrated current main's tested standalone launcher fixes into security PR #66 and resolved the browser-registry tracing conflict using the existing dependency-resolved registry path.
+- Preserved security dependency remediation; retained every CI check and existing standalone regression test.
+- Verified the production build, both typechecks, 142 CLI tests, 14 configuration/registry tests and all four roster/scoring/PDF/runtime-root subprocess regressions. Added Windows fixture entrypoints without changing production code or skipping tests.
+
+## 2026-10-04 PR67 standalone raster runtime
+
+- Kept the previously approved standalone Playwright tracing inclusion.
+- Added a narrow launcher environment fix: preserve the repository raster runtime across Next's generated `process.chdir(__dirname)` transition, without overriding an explicit runtime root.
+- Added real-process integration regressions for roster decoding, rulebook-backed scoring, the 31-league PDF fixture, and explicit runtime-root preservation. Three default-root paths fail when the fix is removed; the override control passes.
+- Existing CI gates and timeouts are unchanged. Full standalone build/browser CI requires parent review and delivery; the resource-floor pause and test evidence are documented under `reports/delivery/ci-remediation`.
+
 ## 2026-06-20 09:45:41 +02:00
 
 - Ported rag-agent-style supply-chain audit coverage into `webapp-template`.
@@ -1660,6 +1673,7 @@
 ## 2026-09-04 fast-uri security patch
 
 - Patched fast-uri overrides and lockfile resolutions to 3.1.6 for GHSA-jqff-g426-hqxp, including the parent CLI workspace override. Frozen-lockfile verification and targeted URI/AJV regression checks pass. Changes are prepared in an isolated security worktree; not committed or pushed.
+
 ## 2026-10-04 22:57:44
 
 - Branch snapshot refreshed for `codex/security-20261004`.

@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { Locator, Page } from "playwright";
+import { ensureSessionActive } from "./auth.js";
 import { createDocument, normalizeWhitespace } from "./dom.js";
 import type { MatchEntry, PaginationInfo, ParsedMatchListPage } from "./types.js";
 
@@ -246,6 +247,7 @@ export async function goToNextPage(
   const nextPageNumber = String(currentPage + 1);
   const nextLink = page.getByRole("link", { name: new RegExp(`^${nextPageNumber}$`) }).first();
   if ((await nextLink.count()) === 0) {
+    await ensureSessionActive(page);
     if (options.debug) {
       await logPagerDebug(page, currentPage, nextPageNumber, "next-link-missing", options.reportDir);
     }
@@ -272,6 +274,7 @@ export async function goToNextPage(
     }
 
     await Promise.all([page.waitForLoadState("domcontentloaded"), pagerAdvance.click()]);
+    await ensureSessionActive(page);
 
     const paginationAfterJump = await readVisiblePagination(page);
     if (paginationAfterJump.currentPage === Number(nextPageNumber)) {

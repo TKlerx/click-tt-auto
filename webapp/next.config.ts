@@ -1,6 +1,18 @@
 import type { NextConfig } from "next";
 import createNextIntlPlugin from "next-intl/plugin";
+import { createRequire } from "node:module";
+import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+
+const require = createRequire(import.meta.url);
+const playwrightRequire = createRequire(require.resolve("playwright"));
+const browserRegistry = relative(
+  dirname(fileURLToPath(import.meta.url)),
+  join(
+    dirname(playwrightRequire.resolve("playwright-core/package.json")),
+    "browsers.json",
+  ),
+).replaceAll("\\", "/");
 
 const basePath = normalizeBasePath(process.env.BASE_PATH ?? "");
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
@@ -11,11 +23,10 @@ const nextConfig: NextConfig = {
   basePath,
   output: "standalone",
   outputFileTracingRoot: repoRoot,
+  // Turbopack's standalone trace omits Playwright's dynamically loaded registry.
+  // Resolve through playwright so pnpm's versioned store and npm both work.
   outputFileTracingIncludes: {
-    // Playwright loads runtime assets such as browsers.json dynamically.
-    "/*": [
-      "./node_modules/.pnpm/playwright-core@*/node_modules/playwright-core/**/*",
-    ],
+    "/*": [browserRegistry],
   },
   outputFileTracingExcludes: {
     "/*": ["./webapp/next.config.ts", "./next.config.ts"],

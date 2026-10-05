@@ -1,6 +1,20 @@
 # Continue
 
-<!-- continuity:fingerprint=98db1d4dad54b4065eac4b4f1973e960e3d2b15e15d7667806dbfeb8229c73f4 -->
+## 2026-10-05 security PR CI repair
+
+- Reconciled security PR #66 with current main, reusing its tested standalone raster-root, browser-registry and configurable build startup fixes instead of duplicating them.
+- Security dependency changes remain; no checks are disabled. Verify fresh full CI on the reconciled branch.
+- Production build, typechecks, 142 CLI tests and 14 configuration/registry tests pass locally. The four real raster subprocess regressions also pass after making their HTTP/tsx fixture portable to Windows.
+
+## 2026-10-04 PR67 CI remediation follow-up
+
+- Preserved the standalone Playwright browser-registry fix from `3756ec8`.
+- `scripts/run-next.mjs` now passes the checkout raster root before Next's standalone server changes cwd; an explicit `RASTER_REPO_ROOT` remains authoritative.
+- New integration regressions execute the real launcher and raster subprocesses for roster bytes, assignment scoring/rulebook JSON, upper-league PDF parsing, and root overrides. Removing the launcher fix reproduces three subprocess failures; the explicit override still passes.
+- Focused roster/scoring/override checks and the real 31-league PDF check have passed. Full remote CI remains required after independent review; no push or merge is authorized for this worker.
+- Resource floor triggered a test pause; evidence and current validation limits are in root `reports/delivery/ci-remediation/FOLLOWUP-REPORT.md`.
+
+<!-- continuity:fingerprint=effa3ad62f61f522b6780b4fb9aafd40faefb35fa6bb1a2132546033797aecb1 -->
 
 ## Current Snapshot
 
@@ -18,8 +32,8 @@
 ## Git Status
 
 - M package.json
--  M pnpm-lock.yaml
--  M pnpm-workspace.yaml
+- M pnpm-lock.yaml
+- M pnpm-workspace.yaml
 
 ## Active Specs
 
