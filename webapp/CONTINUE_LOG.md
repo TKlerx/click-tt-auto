@@ -1,5 +1,11 @@
 # Continue Log
 
+## 2026-10-05 urllib3 security follow-up
+
+- Updated urllib3 alone to 2.8.0 and removed its stale package-specific date cutoff. Kept the global supply-chain cooldown and all CI checks.
+- Verified frozen installation and lock validation; no production Python vulnerabilities are reported. An unrelated development-only click advisory remains outside this urllib3 patch.
+- All 15 database-independent worker checks pass; full local testing is blocked by unavailable PostgreSQL at localhost:45432. Full CI tests remain enabled.
+
 ## 2026-10-05 security PR CI repair
 
 - Integrated current main's tested standalone launcher fixes into security PR #66 and resolved the browser-registry tracing conflict using the existing dependency-resolved registry path.
