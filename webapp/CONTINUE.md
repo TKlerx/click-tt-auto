@@ -1,5 +1,11 @@
 # Continue
 
+## 2026-10-05 urllib3 security follow-up
+
+- Removed the obsolete August 11 urllib3 resolver cutoff while retaining the global one-week cooldown; upgraded only urllib3 from 2.7.0 to 2.8.0 for GHSA-8988-9cw3-xx77, GHSA-vxq7-64xx-v4gw and GHSA-gh4c-6fx4-qh6g.
+- Frozen sync and lock validation pass. Production Python audit is clean; the development audit retains an unrelated click 8.3.2 advisory. Full PostgreSQL worker tests require the CI test database.
+- All 15 database-independent worker checks pass. Full local pytest stops on an unavailable PostgreSQL connection at localhost:45432, not on an urllib3 error; CI continues to run the complete suite.
+
 ## 2026-10-05 security PR CI repair
 
 - Reconciled security PR #66 with current main, reusing its tested standalone raster-root, browser-registry and configurable build startup fixes instead of duplicating them.
