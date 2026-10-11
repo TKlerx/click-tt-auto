@@ -1,5 +1,10 @@
 # Continue
 
+## 2026-10-11 source-map-js security follow-up
+
+- Updated only source-map-js from 1.2.1 to 1.2.2 in the CLI and webapp lockfiles for CVE-2026-93749, including CSS tooling and Prisma transitives. No new overrides or application changes.
+- Production webapp audit is clean. Full GitHub validation remains required before merge; local checks are recorded in the PR.
+
 ## 2026-10-05 urllib3 security follow-up
 
 - Removed the obsolete August 11 urllib3 resolver cutoff while retaining the global one-week cooldown; upgraded only urllib3 from 2.7.0 to 2.8.0 for GHSA-8988-9cw3-xx77, GHSA-vxq7-64xx-v4gw and GHSA-gh4c-6fx4-qh6g.
