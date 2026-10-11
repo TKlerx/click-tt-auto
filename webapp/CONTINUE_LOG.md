@@ -1695,3 +1695,8 @@
 
 - Updated source-map-js to 1.2.2 in both lockfiles for CVE-2026-93749. Dependency manifests, application code, and validation gates are unchanged; production webapp audit passed.
 - Full GitHub validation remains the merge gate. Local verification results are recorded in the security PR.
+
+## 2026-10-11 sharp security follow-up
+
+- Patched only sharp and its platform libvips packages to the first fixed release for GHSA-wq5f-xc86-pv6w. Updated the existing security override and cooldown exception.
+- Frozen installation, production audit and native PNG resize check pass. Full GitHub validation remains the merge gate.
