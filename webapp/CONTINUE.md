@@ -1,5 +1,10 @@
 # Continue
 
+## 2026-10-11 sharp security follow-up
+
+- Patched sharp to 0.35.5 and its bundled libvips packages for GHSA-wq5f-xc86-pv6w. No application changes or relaxed validation gates.
+- Frozen installation, production audit and native PNG resize check pass. Full GitHub validation remains required before merge.
+
 ## 2026-10-11 source-map-js security follow-up
 
 - Updated only source-map-js from 1.2.1 to 1.2.2 in the CLI and webapp lockfiles for CVE-2026-93749, including CSS tooling and Prisma transitives. No new overrides or application changes.

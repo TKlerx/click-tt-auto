@@ -21,7 +21,7 @@ overrides:
   nanoid: 3.3.18
   pdfjs-dist: 6.2.108
   postcss: 8.5.23
-  sharp: 0.35.4
+  sharp: 0.35.5
   vite: 8.0.16
   valibot: 1.4.2
   '@vitest/mocker@>=2.1.0 <4.1.11': ^4.1.11
@@ -31,7 +31,7 @@ overrides:
   js-yaml@>=4.0.0 <4.3.2: ^4.3.2
   mysql2@<3.22.0: ^3.22.0
   mysql2@<=3.23.0: ^3.23.1
-  sharp@<0.35.4: ^0.35.4
+  sharp@<0.35.5: ^0.35.5
   vitest@>=2.1.0 <4.1.11: ^4.1.11
 minimumReleaseAgeExclude:
   - browserslist@4.28.7
@@ -39,6 +39,6 @@ minimumReleaseAgeExclude:
   - vitest@4.1.11
   - '@vitest/mocker@4.1.11'
   - baseline-browser-mapping@2.11.0
-  - sharp@0.35.4
+  - sharp@0.35.5
   - js-yaml@4.3.2
   - hono@4.13.5
