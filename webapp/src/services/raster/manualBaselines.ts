@@ -3,6 +3,10 @@ import { rasterIngest } from "@/lib/raster/pipeline";
 import type { BaselineRowDecisionInput } from "@/lib/raster/schemas";
 import type { TeamRasterAssignmentRow } from "../../../../src/raster/ingest/clicktt-assignments.js";
 import type { SeasonModel } from "../../../../src/raster/types.js";
+import {
+  numericRasterSize,
+  rasterSizeForGroupSize,
+} from "../../../../src/raster/rulebook/rulebook.ts";
 
 export class BaselineImportConflictError extends Error {}
 export class BaselineImportEmptyError extends Error {}
@@ -47,6 +51,18 @@ export function baselineSourceIdentity(group: string, team: string) {
   ]);
 }
 
+function contextualSourceIdentity(
+  source: Pick<TeamRasterAssignmentRow, "league" | "group" | "team">,
+) {
+  return JSON.stringify([
+    source.league === undefined
+      ? null
+      : normalizeBaselineIdentity(source.league),
+    normalizeBaselineIdentity(source.group),
+    normalizeBaselineIdentity(source.team),
+  ]);
+}
+
 function parseSeasonModel(value: string | null): SeasonModel {
   if (!value)
     throw new BaselineValidationError("The workspace has no season model.");
@@ -57,12 +73,69 @@ function parseSeasonModel(value: string | null): SeasonModel {
   }
 }
 
-function rasterSize(groupSize: number) {
-  if (groupSize >= 5 && groupSize <= 6) return 6;
-  if (groupSize <= 8) return 8;
-  if (groupSize <= 10) return 10;
-  if (groupSize <= 12) return 12;
-  return null;
+function rasterSize(group: SeasonModel["groups"][number]) {
+  try {
+    return numericRasterSize(
+      rasterSizeForGroupSize(group.size, group.rasterMode),
+    );
+  } catch {
+    return null;
+  }
+}
+
+function sourceGroupIndex(model: SeasonModel) {
+  const groupsBySourceLabel = new Map<string, SeasonModel["groups"]>();
+  for (const group of model.groups) {
+    for (const key of new Set(
+      [group.ref.name, group.ref.league].map(normalizeBaselineIdentity),
+    )) {
+      groupsBySourceLabel.set(key, [
+        ...(groupsBySourceLabel.get(key) ?? []),
+        group,
+      ]);
+    }
+  }
+  return groupsBySourceLabel;
+}
+
+function resolveSourceGroup(
+  source: { league?: string; group: string },
+  groupsBySourceLabel: ReturnType<typeof sourceGroupIndex>,
+) {
+  const groupKey = normalizeBaselineIdentity(source.league ?? source.group);
+  // Scraped page titles are stored as league, navigation labels as group.
+  // Older models may instead use the verified title as their group name.
+  const matchingGroups = (groupsBySourceLabel.get(groupKey) ?? []).filter(
+    (candidate) =>
+      normalizeBaselineIdentity(candidate.ref.name) === groupKey ||
+      normalizeBaselineIdentity(candidate.ref.name) ===
+        normalizeBaselineIdentity(source.group),
+  );
+  return matchingGroups.length === 1 ? matchingGroups[0] : undefined;
+}
+
+function sourceContextFromIdentity(key: string) {
+  try {
+    const labels: unknown = JSON.parse(key.replace(/#\d+$/, ""));
+    if (!Array.isArray(labels)) return undefined;
+    if (
+      labels.length === 3 &&
+      (labels[0] === null || typeof labels[0] === "string") &&
+      typeof labels[1] === "string" &&
+      typeof labels[2] === "string"
+    ) {
+      return { league: labels[0] ?? undefined, group: labels[1] };
+    }
+    if (
+      labels.length === 2 &&
+      labels.every((label) => typeof label === "string")
+    ) {
+      return { group: labels[0] as string };
+    }
+  } catch {
+    // Unknown identity formats cannot prove a compatible target group.
+  }
+  return undefined;
 }
 
 // ponytail: keep the one-pass classification together; split only if another importer reuses part of it.
@@ -79,19 +152,14 @@ export function prepareManualBaselineRows(
     reviewedAt: Date | null;
   }> = [],
 ) {
-  const groups = new Map(
-    model.groups.map((group) => [
-      normalizeBaselineIdentity(group.ref.name),
-      group,
-    ]),
-  );
+  const groupsBySourceLabel = sourceGroupIndex(model);
   const priorByIdentity = new Map(
     previousRows.map((row) => [row.sourceIdentityKey, row]),
   );
   const validTeamIds = new Set(model.teams.map((team) => team.id));
   const baseCounts = new Map<string, number>();
   for (const row of sourceRows) {
-    const base = baselineSourceIdentity(row.league ?? row.group, row.team);
+    const base = contextualSourceIdentity(row);
     baseCounts.set(base, (baseCounts.get(base) ?? 0) + 1);
   }
   const seen = new Map<string, number>();
@@ -101,13 +169,12 @@ export function prepareManualBaselineRows(
 
   for (const source of sourceRows) {
     const sourceGroupLabel = source.league ?? source.group;
-    const groupKey = normalizeBaselineIdentity(sourceGroupLabel);
-    const group = groups.get(groupKey);
+    const group = resolveSourceGroup(source, groupsBySourceLabel);
     if (!group) {
       rejectedCount += 1;
       continue;
     }
-    const base = baselineSourceIdentity(sourceGroupLabel, source.team);
+    const base = contextualSourceIdentity(source);
     const occurrence = (seen.get(base) ?? 0) + 1;
     seen.set(base, occurrence);
     const sourceIdentityKey = occurrence === 1 ? base : `${base}#${occurrence}`;
@@ -117,16 +184,66 @@ export function prepareManualBaselineRows(
           (label) =>
             normalizeBaselineIdentity(label ?? "") ===
             normalizeBaselineIdentity(source.team),
-        ) && normalizeBaselineIdentity(team.group?.name ?? "") === groupKey,
+        ) && group.teamIds.includes(team.id),
     );
-    const max = rasterSize(group.size);
+    const max = rasterSize(group);
     const invalidRange =
       !Number.isInteger(source.rasterzahl) ||
       source.rasterzahl < 1 ||
       max === null ||
       source.rasterzahl > max;
     const duplicate = (baseCounts.get(base) ?? 0) > 1;
-    const prior = priorByIdentity.get(sourceIdentityKey);
+    // Legacy two-label keys have no navigation context. Only reuse a key
+    // whose complete supplied context is that one unambiguous model group.
+    // A league-only key is never upgraded by guessing from today's scrape:
+    // its original group may have disappeared, even from the current model.
+    const legacyKey = baselineSourceIdentity(source.group, source.team);
+    const legacyCompatible =
+      (source.league === undefined ||
+        normalizeBaselineIdentity(source.league) ===
+          normalizeBaselineIdentity(source.group)) &&
+      model.groups.filter(
+        (candidate) =>
+          normalizeBaselineIdentity(candidate.ref.name) ===
+          normalizeBaselineIdentity(source.group),
+      ).length === 1 &&
+      !previousRows.some((row) =>
+        row.sourceIdentityKey.startsWith(`${legacyKey}#`),
+      );
+    const prior =
+      priorByIdentity.get(sourceIdentityKey) ??
+      (legacyCompatible ? priorByIdentity.get(legacyKey) : undefined);
+    const priorTargetCompatible =
+      prior?.targetTeamId &&
+      validTeamIds.has(prior.targetTeamId) &&
+      group.teamIds.includes(prior.targetTeamId) &&
+      model.groups.filter((candidate) =>
+        candidate.teamIds.includes(prior.targetTeamId!),
+      ).length === 1;
+    // A reviewed identity must reopen before considering another exact label
+    // match. A replacement name is not evidence that the reviewed ID survived.
+    // Legacy mappings with incomplete source context are never restored, but
+    // an invalidated reviewed ID is still a reason to require explicit review.
+    // Conservatively consider all historical occurrences, not scrape order.
+    const historicalKey = baselineSourceIdentity(sourceGroupLabel, source.team);
+    const reviewedPriors = prior
+      ? [prior]
+      : previousRows.filter(
+          (row) =>
+            row.sourceIdentityKey === historicalKey ||
+            row.sourceIdentityKey.startsWith(`${historicalKey}#`),
+        );
+    const invalidatedReviewedTarget = reviewedPriors.some(
+      (row) =>
+        row.status === "MATCHED" &&
+        row.targetTeamId &&
+        (row.reviewedById || row.reviewedAt) &&
+        (!validTeamIds.has(row.targetTeamId) ||
+          !group.teamIds.includes(row.targetTeamId) ||
+          model.groups.filter((candidate) =>
+            candidate.teamIds.includes(row.targetTeamId!),
+          ).length !== 1),
+    );
     let status: PreparedRow["status"] = invalidRange ? "INVALID" : "REVIEW";
     let targetTeamId: string | null = null;
     let targetTeamLabel: string | null = null;
@@ -142,18 +259,28 @@ export function prepareManualBaselineRows(
     let reviewedById: string | null = null;
     let reviewedAt: Date | null = null;
 
-    if (!invalidRange && !duplicate && candidates.length === 1) {
+    if (invalidatedReviewedTarget && !invalidRange && !duplicate) {
+      issue =
+        "The reviewed target is no longer compatible with the source group.";
+    }
+    if (
+      !invalidRange &&
+      !duplicate &&
+      !invalidatedReviewedTarget &&
+      candidates.length === 1
+    ) {
       status = "MATCHED";
       targetTeamId = candidates[0]!.id;
       targetTeamLabel = candidates[0]!.name ?? candidates[0]!.label;
     }
     if (
-      !invalidRange &&
       !duplicate &&
       prior &&
       (prior.status === "IGNORED" || prior.status === "ACCEPTED_UNRESOLVED")
     ) {
       status = prior.status;
+      targetTeamId = null;
+      targetTeamLabel = null;
       reviewedById = prior.reviewedById;
       reviewedAt = prior.reviewedAt;
       issue = null;
@@ -161,7 +288,7 @@ export function prepareManualBaselineRows(
       !invalidRange &&
       !duplicate &&
       prior?.targetTeamId &&
-      validTeamIds.has(prior.targetTeamId)
+      priorTargetCompatible
     ) {
       status = "MATCHED";
       targetTeamId = prior.targetTeamId;
@@ -358,6 +485,32 @@ export async function reviewManualBaselineRow(params: {
       throw new BaselineValidationError(
         "Target team is not in this workspace season model.",
       );
+    const groups = model.groups.filter((group) =>
+      group.teamIds.includes(team.id),
+    );
+    const max = groups.length === 1 ? rasterSize(groups[0]!) : null;
+    if (
+      max === null ||
+      !Number.isInteger(row.rasterzahl) ||
+      row.rasterzahl < 1 ||
+      row.rasterzahl > max
+    ) {
+      throw new BaselineValidationError(
+        "Rasterzahl is outside the target team's group range; ignore or accept unresolved instead.",
+      );
+    }
+    // FR-005/FR-009: mapping corrects a team label inside its verified
+    // source group, not the source context itself. Refresh uses this same
+    // resolver; reject incompatible targets before any transaction/write.
+    const context = sourceContextFromIdentity(row.sourceIdentityKey);
+    const sourceGroup = context
+      ? resolveSourceGroup(context, sourceGroupIndex(model))
+      : undefined;
+    if (!sourceGroup || groups[0] !== sourceGroup) {
+      throw new BaselineValidationError(
+        "Target team is not in the baseline row's source group; ignore or accept unresolved instead.",
+      );
+    }
     data = {
       status: "MATCHED" as const,
       targetTeamId: team.id,
@@ -412,9 +565,7 @@ export function projectBaselineComparison(
     group?: string;
     teamId?: string;
   }>,
-  assignmentTeamIds: Map<string, string> = new Map(
-    assignments.map((row) => [row.team, row.team]),
-  ),
+  assignmentTeamIds: Map<string, string> = new Map(),
 ) {
   const baseline = new Map(
     baselineRows
@@ -422,13 +573,14 @@ export function projectBaselineComparison(
       .map((row) => [row.targetTeamId!, row]),
   );
   const result = new Map(
-    assignments.map((row) => [
+    assignments.map((row, index) => [
       row.teamId ??
         assignmentTeamIds.get(row.team) ??
-        baselineSourceIdentity(
+        // Never collapse unresolved outputs merely because their labels match.
+        `unresolved:${index}:${baselineSourceIdentity(
           [row.league, row.group].filter(Boolean).join(" / "),
           row.team,
-        ),
+        )}`,
       row,
     ]),
   );
@@ -481,10 +633,10 @@ export async function getSnapshotBaselineComparison(snapshotId: string) {
             normalizeBaselineIdentity(label ?? "") ===
             normalizeBaselineIdentity(assignment.team),
         ) &&
-        (normalizeBaselineIdentity(team.group?.name ?? "") ===
-          normalizeBaselineIdentity(assignment.group) ||
-          normalizeBaselineIdentity(team.group?.league ?? "") ===
-            normalizeBaselineIdentity(assignment.league)),
+        normalizeBaselineIdentity(team.group?.name ?? "") ===
+          normalizeBaselineIdentity(assignment.group) &&
+        normalizeBaselineIdentity(team.group?.league ?? "") ===
+          normalizeBaselineIdentity(assignment.league),
     );
     return {
       ...assignment,

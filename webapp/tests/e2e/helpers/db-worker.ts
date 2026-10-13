@@ -1202,7 +1202,12 @@ async function main() {
                   status: "IGNORED",
                 },
                 {
-                  sourceIdentityKey: `review-${input.suffix}`,
+                  // Use the persisted source-context format required by baseline review.
+                  sourceIdentityKey: JSON.stringify([
+                    "liga",
+                    "gruppe 1",
+                    "renamed club",
+                  ]),
                   sourceGroupLabel: "Gruppe 1",
                   sourceTeamLabel: "Renamed Club",
                   rasterzahl: 2,

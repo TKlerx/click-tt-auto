@@ -47,10 +47,37 @@ describe("manual baseline API", () => {
     });
     expect(response.status).toBe(200);
     expect(services.importManualBaseline).not.toHaveBeenCalled();
+    expect(services.reviewManualBaselineRow).not.toHaveBeenCalled();
+    expect(audit.logRasterAudit).not.toHaveBeenCalled();
+    expect(routeContext.requireRasterInputSet).toHaveBeenCalledWith(
+      expect.any(Request),
+      "input-1",
+      "viewer",
+    );
     expect(await response.json()).toMatchObject({
       active: null,
       canEdit: false,
     });
+  });
+
+  it("denies read-only imports before crawling or auditing", async () => {
+    routeContext.requireRasterInputSet.mockResolvedValue({
+      error: new Response(null, { status: 403 }),
+    });
+    const response = await POST(
+      new Request("http://test/baseline", { method: "POST", body: "{}" }),
+      {
+        params: Promise.resolve({ id: "input-1" }),
+      },
+    );
+    expect(response.status).toBe(403);
+    expect(routeContext.requireRasterInputSet).toHaveBeenCalledWith(
+      expect.any(Request),
+      "input-1",
+      "scheduler",
+    );
+    expect(services.importManualBaseline).not.toHaveBeenCalled();
+    expect(audit.logRasterAudit).not.toHaveBeenCalled();
   });
 
   it("imports for schedulers and returns concurrent imports as 409", async () => {
