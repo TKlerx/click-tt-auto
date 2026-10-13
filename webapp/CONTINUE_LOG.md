@@ -1,5 +1,10 @@
 # Continue Log
 
+## 2026-10-04 solver diagnostics reconciliation
+
+- Ported missing diagnostics behavior from `c885bea` / `995517e` onto `e4fa2bc` without replacing the upstream manual baseline UI.
+- Added real CP-SAT/worker propagation, fixed/pinned bounds, legacy fallback, and rendered run-history regressions.
+- Evidence and command logs: root `reports/delivery/diagnostics/`; local-only candidate awaits independent parent review and GitHub delivery.
 ## 2026-10-05 urllib3 security follow-up
 
 - Updated urllib3 alone to 2.8.0 and removed its stale package-specific date cutoff. Kept the global supply-chain cooldown and all CI checks.
@@ -1700,3 +1705,7 @@
 
 - Patched only sharp and its platform libvips packages to the first fixed release for GHSA-wq5f-xc86-pv6w. Updated the existing security override and cooldown exception.
 - Frozen installation, production audit and native PNG resize check pass. Full GitHub validation remains the merge gate.
+
+## 2026-10-14 PR63 reconciliation
+
+- Retained current security/runtime fixes and the diagnostic delivery history while merging current main.

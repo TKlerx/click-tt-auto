@@ -598,7 +598,16 @@ class WorkerTests(unittest.TestCase):
     def test_raster_solver_maps_infeasible_metadata_to_domain_error(self) -> None:
         def run_solver(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
             metadata_path = Path(command[command.index("--metadata") + 1])
-            metadata_path.write_text('{"status": "INFEASIBLE"}', encoding="utf-8")
+            metadata_path.write_text(
+                json.dumps({
+                    "status": "INFEASIBLE",
+                    "infeasibilityDiagnostics": [{
+                        "family": "fixed_schedule_numbers",
+                        "message": "Group L / G12 fixes schedule number 1 twice.",
+                    }],
+                }),
+                encoding="utf-8",
+            )
             return subprocess.CompletedProcess(
                 args=command,
                 returncode=1,
@@ -607,7 +616,9 @@ class WorkerTests(unittest.TestCase):
             )
 
         with patch("starter_worker.main.subprocess.run", side_effect=run_solver):
-            with self.assertRaisesRegex(RasterSolverInfeasible, "No feasible assignment"):
+            with self.assertRaisesRegex(
+                RasterSolverInfeasible, "Fixed schedule numbers: Group L / G12 fixes schedule number 1 twice."
+            ):
                 _solve_raster_model({"clubs": [], "teams": [], "groups": []}, {})
 
     def test_persisted_overages_use_inferred_capacity(self) -> None:
