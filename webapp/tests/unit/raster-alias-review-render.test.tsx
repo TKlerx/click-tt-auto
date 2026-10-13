@@ -120,7 +120,7 @@ describe("rendered source identity review", () => {
   it.each(["CLUB", "TEAM"])(
     "posts a create action for %s from the rendered UI",
     async (kind) => {
-      await render(true);
+      await render(true, true);
       const row = host.querySelectorAll("tbody tr")[kind === "CLUB" ? 0 : 1];
       await act(async () =>
         Array.from(row.querySelectorAll("button"))
@@ -142,5 +142,10 @@ describe("rendered source identity review", () => {
     expect(choices.join(" ")).not.toContain("wish-only");
     expect(choices.join(" ")).toContain("club-1");
     expect(choices.join(" ")).toContain("team-1");
+  });
+  it("does not offer planning-target creation for legacy wish-target mappings", async () => {
+    await render(true);
+    expect(host.textContent).not.toContain("Create mapping");
+    expect(host.textContent).toContain("Choose different identity");
   });
 });

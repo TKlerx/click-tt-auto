@@ -288,21 +288,23 @@ export function ClubAliasReview({
                               Accept suggestion
                             </button>
                           ) : null}
-                          <button
-                            className="ml-2 h-9 rounded-md border border-[var(--border)] px-3 text-sm font-medium"
-                            disabled={
-                              busy ||
-                              !availableOptions.some(
-                                (option) =>
-                                  clubOptionText(option) ===
-                                  targets[aliasReviewKey(candidate)],
-                              )
-                            }
-                            onClick={() => void apply(candidate, "create")}
-                            type="button"
-                          >
-                            Create mapping
-                          </button>
+                          {candidate.planningIdentityOnly ? (
+                            <button
+                              className="ml-2 h-9 rounded-md border border-[var(--border)] px-3 text-sm font-medium"
+                              disabled={
+                                busy ||
+                                !availableOptions.some(
+                                  (option) =>
+                                    clubOptionText(option) ===
+                                    targets[aliasReviewKey(candidate)],
+                                )
+                              }
+                              onClick={() => void apply(candidate, "create")}
+                              type="button"
+                            >
+                              Create mapping
+                            </button>
+                          ) : null}
                         </div>
                       ) : (
                         <span className="text-[var(--muted-foreground)]">
