@@ -4,7 +4,7 @@ import { RefreshCw } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { withBasePath } from "@/lib/base-path";
-import { infeasibleScopeMessage } from "@/lib/raster/run-outcome";
+import { infeasibilityRunMessage } from "@/lib/raster/run-outcome";
 import { putGymCapacity } from "@/components/raster/capacity/capacity-client";
 import {
   RunSettingsFields,
@@ -962,10 +962,9 @@ function RunPhaseBar({
       </div>
       {failed ? (
         <p className="text-xs text-red-300">
-          {solverStatus ||
-            (outcome === "INFEASIBLE"
-              ? infeasibleScopeMessage(coverageJson)
-              : "The optimizer failed because of a software or worker error.")}
+          {outcome === "INFEASIBLE"
+            ? infeasibilityRunMessage(solverStatus, coverageJson)
+            : solverStatus || "The optimizer failed because of a software or worker error."}
         </p>
       ) : null}
     </div>

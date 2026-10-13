@@ -12,6 +12,10 @@
 - Fixed rulebook range validation, verified source/model group identity, snapshot team identity and unresolved-output retention, durable ignore/accept decisions, and moved-target review invalidation.
 - Added regression and authorization/no-baseline parity assertions. Configured full webapp Vitest: 134 files / 494 tests passed; root focused tests, both typechecks, both full ESLint checks, architecture, duplication, and text checks passed.
 - Evidence: repository-root reports/delivery/baseline/evidence.md and adjacent logs. Browser/database-backed E2E and deployment remain unverified; no live click-TT or credentials used.
+## 2026-10-14 PR63 reconciliation
+
+- Reconciled the diagnostic changes with current main; preserved both continuity histories. Fresh focused checks and GitHub validation are required before merge.
+
 ## 2026-10-11 sharp security follow-up
 
 - Patched sharp to 0.35.5 and its bundled libvips packages for GHSA-wq5f-xc86-pv6w. No application changes or relaxed validation gates.
@@ -73,6 +77,14 @@
 
 ## 2026-10-04 security dependencies
 
+- Patched fast-uri overrides and lockfile resolutions to 3.1.6 for GHSA-jqff-g426-hqxp, including the parent CLI workspace override. Frozen-lockfile verification and targeted URI/AJV regression checks pass. Changes are prepared in an isolated security worktree; not committed or pushed.
+
+## 2026-10-04 solver diagnostics reconciliation
+
+- Reconciled solver diagnostics commits `c885bea` and `995517e` onto upstream `e4fa2bc` in `delivery/diagnostics-reconciled`; preserved the manual baseline selector, request payload, and upstream updates.
+- CP-SAT metadata now explains direct fixed/pinned-number contradictions and non-fixed same-club derby blocks via assumption cores; feasible results contain an empty diagnostic list.
+- Worker no-solution messages and rendered run history carry the diagnostics with a scoped legacy fallback. Regression tests cover actual solver-to-worker propagation, fixed bounds, and baseline UI preservation.
+- Delivery evidence is persisted in root `reports/delivery/diagnostics/`. Independent review and GitHub delivery remain the parent's responsibility; no push, merge, deploy, live Click-TT access, or gateway restart was performed.
 - Updated affected CLI and webapp dependencies; removed obsolete overrides where native ranges suffice.
 - Webapp frozen lockfile passes. CLI audit is clean; webapp audit retains only the unpatched braces 3.0.3 advisory. Full application validation awaits PR CI.
 - Initial PR CI passed CLI checks but failed E2E because standalone tracing omitted Playwright runtime assets. Added a narrow playwright-core tracing include; existing E2E checks provide the regression check on the next CI run.

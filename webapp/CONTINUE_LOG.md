@@ -8,6 +8,11 @@
 - Reproduced failures before fixing numeric ranges, source group/model identity, snapshot resolution/output retention, durable ignored/accepted decisions, mapping range checks, and moved target handling.
 - Configured webapp suite: 134 files / 494 tests passed. Root focused checks, root/webapp typechecks and full ESLint, architecture, duplication, and text checks passed.
 - Evidence matrix and raw check output are under repository-root reports/delivery/baseline. No production, live scraper, credential, push, or merge actions performed; database-backed browser E2E not run.
+## 2026-10-04 solver diagnostics reconciliation
+
+- Ported missing diagnostics behavior from `c885bea` / `995517e` onto `e4fa2bc` without replacing the upstream manual baseline UI.
+- Added real CP-SAT/worker propagation, fixed/pinned bounds, legacy fallback, and rendered run-history regressions.
+- Evidence and command logs: root `reports/delivery/diagnostics/`; local-only candidate awaits independent parent review and GitHub delivery.
 ## 2026-10-05 urllib3 security follow-up
 
 - Updated urllib3 alone to 2.8.0 and removed its stale package-specific date cutoff. Kept the global supply-chain cooldown and all CI checks.
@@ -1712,3 +1717,6 @@
 ## 2026-10-14 PR64 reconciliation
 
 - Preserved current security/runtime fixes while reconciling the baseline branch.
+## 2026-10-14 PR63 reconciliation
+
+- Retained current security/runtime fixes and the diagnostic delivery history while merging current main.
