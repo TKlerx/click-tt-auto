@@ -1693,6 +1693,9 @@
 
 - Patched fast-uri overrides and lockfile resolutions to 3.1.6 for GHSA-jqff-g426-hqxp, including the parent CLI workspace override. Frozen-lockfile verification and targeted URI/AJV regression checks pass. Changes are prepared in an isolated security worktree; not committed or pushed.
 
+## 2026-10-04 alias reconciliation
+
+- Resumed the dirty delivery checkpoint; preserved upstream manual baseline review. Added persisted club/team aliases and workspace-local readiness checks, and regression/integration coverage for review, isolation, and duplicate-free cache reuse. Local delivery evidence: `reports/delivery/aliases/`.
 ## 2026-10-04 22:57:44
 
 - Branch snapshot refreshed for `codex/security-20261004`.
@@ -1714,6 +1717,9 @@
 - Patched only sharp and its platform libvips packages to the first fixed release for GHSA-wq5f-xc86-pv6w. Updated the existing security override and cooldown exception.
 - Frozen installation, production audit and native PNG resize check pass. Full GitHub validation remains the merge gate.
 
+## 2026-10-14 alias correction
+
+- Removed missing-target bypasses, aligned creation with model-backed targets, and reconciled current main. Fresh local and GitHub checks required before merge.
 ## 2026-10-14 PR64 reconciliation
 
 - Preserved current security/runtime fixes while reconciling the baseline branch.

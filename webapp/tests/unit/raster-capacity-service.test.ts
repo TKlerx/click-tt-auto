@@ -534,6 +534,8 @@ describe("raster capacity service", () => {
       aliasCandidates: [
         {
           confirmed: true,
+          confidence: "MANUAL",
+          source: "admin-review",
           modelClubId: "fc-bu-hne",
           wishClubId: "fc-b-hne-1929-42518",
         },

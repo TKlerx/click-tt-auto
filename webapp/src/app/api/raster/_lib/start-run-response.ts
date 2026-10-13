@@ -5,6 +5,8 @@ import {
   startOptimizationRun,
 } from "@/services/raster";
 
+import { SourceIdentityReviewRequiredError } from "@/services/raster/sourceIdentityAliases";
+
 type StartedRun = Awaited<ReturnType<typeof startOptimizationRun>>;
 
 export async function startRasterRunResponse(
@@ -38,6 +40,9 @@ export async function startRasterRunResponse(
       baselineId,
     });
   } catch (error) {
+    if (error instanceof SourceIdentityReviewRequiredError) {
+      return NextResponse.json({ error: error.message }, { status: 409 });
+    }
     if (error instanceof BaselineValidationError) {
       return NextResponse.json({ error: error.message }, { status: 422 });
     }

@@ -206,6 +206,23 @@ enum ReviewDecisionStatus {
   ACCEPTED_UNAVOIDABLE
 }
 
+enum RasterSourceIdentityKind {
+  CLUB
+  TEAM
+}
+
+enum RasterSourceIdentityReviewState {
+  PENDING
+  CONFIRMED
+}
+
+enum RasterSourceIdentityMatchConfidence {
+  EXACT
+  FUZZY
+  MANUAL
+  CREATED
+}
+
 enum RasterMatchRecordType {
   TEAM
 }
@@ -332,6 +349,7 @@ model Scope {
   rasterSnapshots      RasterSnapshot[]
   rasterTeamRosters    RasterTeamRoster[]
   rasterSnapshotScopes RasterSnapshotScope[]
+  rasterSourceIdentityAliases RasterSourceIdentityAlias[]
 
   @@index([parentId])
 }
@@ -628,6 +646,26 @@ model TeamsDelegatedGrant {
   user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([expiresAt])
+}
+
+model RasterSourceIdentityAlias {
+  id                   String                              @id @default(cuid())
+  scopeId              String
+  season               String
+  kind                 RasterSourceIdentityKind
+  rawSourceName        String
+  normalizedSourceName String
+  canonicalIdentity    String?
+  canonicalName        String?
+  matchConfidence      RasterSourceIdentityMatchConfidence
+  source               String
+  reviewState          RasterSourceIdentityReviewState      @default(PENDING)
+  createdAt            DateTime                            @default(now())
+  updatedAt            DateTime                            @updatedAt
+  scope                Scope                               @relation(fields: [scopeId], references: [id], onDelete: Cascade)
+
+  @@unique([scopeId, season, kind, normalizedSourceName])
+  @@index([scopeId, season, reviewState])
 }
 
 model RasterInputSet {

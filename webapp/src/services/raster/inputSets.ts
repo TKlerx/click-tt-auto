@@ -3,7 +3,7 @@ import { rasterScopeWhere } from "@/lib/raster/access";
 import { rasterIngest } from "@/lib/raster/pipeline";
 import { normalizeRasterSeason } from "@/lib/raster/season";
 import { seasonModelSchema, type SeasonModelInput } from "@/lib/raster/schemas";
-import { closestClubId, normalizeClubName } from "@/lib/raster/club-matching";
+import { normalizeClubName } from "@/lib/raster/club-matching";
 import { InputSetStatus } from "../../../generated/prisma/enums";
 import type { TeamRasterAssignmentRow } from "../../../../src/raster/ingest/clicktt-assignments.js";
 import type { WishParseResult } from "../../../../src/raster/ingest/wishes-pdf.js";
@@ -15,6 +15,14 @@ import {
 } from "./sources";
 import { importParsedWishes } from "./wishes";
 import { reviewHallCapacitiesForInputSet } from "./capacity";
+import {
+  resolveSourceIdentityAlias,
+  saveSourceIdentityAlias,
+  unresolvedSourceIdentityAliases,
+  sourceIdentityCandidates,
+  teamSourceIdentity,
+  type SourceIdentityReference,
+} from "./sourceIdentityAliases";
 
 const INPUT_SET_SOURCE_TYPES = [
   "GROUP_ASSIGNMENT",
@@ -69,6 +77,7 @@ type SeasonModelWithClubs = {
   teams?: SeasonModelTeam[];
   wishes?: unknown[];
   clubAliases?: ClubAliasMapping[];
+  sourceIdentityReferences?: SourceIdentityReference[];
 };
 
 export async function listInputSets(
@@ -218,6 +227,12 @@ export async function validateInputSet(id: string) {
       }
     }
   }
+  const unresolvedAliases = await unresolvedSourceIdentityAliases(id);
+  if (unresolvedAliases.length) {
+    errors.push(
+      `Review ${unresolvedAliases.length} uncertain source identity alias(es): ${unresolvedAliases.map((alias) => alias.rawSourceName).join(", ")}.`,
+    );
+  }
   const capacityReview = await reviewHallCapacitiesForInputSet(id);
   if (capacityReview.blockingCount > 0) {
     errors.push(
@@ -318,16 +333,28 @@ export async function syncInputSetSourceCaches(inputSetId: string) {
       const manualWishMatches = manualWishMatchesByTeamId(
         inputSet.seasonModelJson,
       );
-      const manualWeekPrefs = manualWeekPrefsByTeamId(
-        inputSet.seasonModelJson,
-      );
+      const manualWeekPrefs = manualWeekPrefsByTeamId(inputSet.seasonModelJson);
       const clubAliases = clubAliasesFromModel(inputSet.seasonModelJson);
       const model =
         await rasterIngest.buildSeasonModelFromAssignments(
           supportedAssignments,
         );
+      (model as SeasonModelWithClubs).sourceIdentityReferences = [];
       applyClubAliasesToModel(model, clubAliases);
-      alignParsedWishClubIds(model, parsedWishes);
+      const parsedClubAliases = await alignParsedWishClubIds(
+        model,
+        parsedWishes,
+        inputSet.scopeId,
+        inputSet.season,
+      );
+      // Rekey active wishes before importing the remapped cache. Otherwise the importer
+      // inserts a second wish under the canonical club ID and loses the reviewed row.
+      for (const [sourceClubId, targetClubId] of parsedClubAliases) {
+        await prisma.rasterWish.updateMany({
+          where: { inputSetId: inputSet.id, clubId: sourceClubId },
+          data: { clubId: targetClubId },
+        });
+      }
       if (wishSources.length) {
         data.wishesJson = stringifyWishSources(wishSources, parsedWishes);
         await importWishesIfChanged(inputSet, parsedWishes, data.wishesJson);
@@ -339,6 +366,7 @@ export async function syncInputSetSourceCaches(inputSetId: string) {
         parsedWishes,
         manualWishMatches,
         manualWeekPrefs,
+        { scopeId: inputSet.scopeId, season: inputSet.season },
       );
       const existingReviews = groupReviewsByKey(inputSet.seasonModelJson);
       model.groups = model.groups.map((group) => ({
@@ -412,32 +440,48 @@ function stringifyWishSources(
   });
 }
 
-function alignParsedWishClubIds(
+async function alignParsedWishClubIds(
   model: SeasonModelWithClubs,
   parsedWishes: WishParseResult[],
+  scopeId: string,
+  season: string,
 ) {
-  const modelClubIdByName = new Map<string, string>();
-  for (const club of model.clubs ?? []) {
-    modelClubIdByName.set(normalizeClubName(club.name), club.id);
-  }
   const clubIdMap = new Map<string, string>();
   for (const parsed of parsedWishes) {
-    parsed.clubs = (parsed.clubs ?? []).map((club) => {
-      const modelClubId =
-        modelClubIdByName.get(normalizeClubName(club.name)) ??
-        closestClubId(normalizeClubName(club.name), modelClubIdByName);
-      if (!modelClubId || modelClubId === club.id) return club;
-      clubIdMap.set(club.id, modelClubId);
-      return { ...club, id: modelClubId };
-    });
+    parsed.clubs = await Promise.all(
+      (parsed.clubs ?? []).map(async (club) => {
+        model.sourceIdentityReferences?.push({
+          kind: "CLUB",
+          normalizedSourceName: normalizeClubName(club.name),
+        });
+        const resolved = await resolveSourceIdentityAlias({
+          scopeId,
+          season,
+          kind: "CLUB",
+          rawIdentity: club.name,
+          canonicalCandidates: (model.clubs ?? []).map((candidate) => ({
+            id: candidate.id,
+            name: candidate.name ?? candidate.id,
+          })),
+        });
+        const modelClubId =
+          resolved.state === "confirmed"
+            ? resolved.canonicalIdentity
+            : undefined;
+        if (!modelClubId || modelClubId === club.id) return club;
+        clubIdMap.set(club.id, modelClubId);
+        return { ...club, id: modelClubId };
+      }),
+    );
   }
-  if (!clubIdMap.size) return;
+  if (!clubIdMap.size) return clubIdMap;
   for (const parsed of parsedWishes) {
     parsed.teams = (parsed.teams ?? []).map((team) => ({
       ...team,
       clubId: clubIdMap.get(team.clubId) ?? team.clubId,
     }));
   }
+  return clubIdMap;
 }
 
 async function applyActiveWishDetails(
@@ -446,6 +490,7 @@ async function applyActiveWishDetails(
   parsedWishes: WishParseResult[],
   manualWishMatches = new Map<string, string>(),
   manualWeekPrefs = new Map<string, "A" | "B">(),
+  identityContext?: { scopeId: string; season: string },
 ) {
   const wishClubById = new Map(
     parsedWishes
@@ -465,18 +510,31 @@ async function applyActiveWishDetails(
   const activeWishes = await prisma.rasterWish.findMany({
     where: { inputSetId },
   });
-  const wishTeamByClubAndLabel = new Map(
-    activeWishes.map((wish) => [
-      teamIdentityKey(wish.clubId, wish.teamLabel ?? undefined),
-      wish,
-    ]),
-  );
+  const confirmedWishByTeamId = new Map<
+    string,
+    (typeof activeWishes)[number]
+  >();
+  for (const wish of activeWishes ?? []) {
+    const rawIdentity = teamSourceIdentity(wish.clubName, wish.teamLabel ?? "");
+    model.sourceIdentityReferences?.push({
+      kind: "TEAM",
+      normalizedSourceName: normalizeClubName(rawIdentity),
+    });
+    if (!identityContext) continue;
+    const resolved = await resolveSourceIdentityAlias({
+      ...identityContext,
+      kind: "TEAM",
+      rawIdentity,
+      canonicalCandidates: sourceIdentityCandidates(model, "TEAM"),
+    });
+    if (resolved.state === "confirmed")
+      confirmedWishByTeamId.set(resolved.canonicalIdentity, wish);
+  }
   model.teams = (model.teams ?? []).map((team) => {
-    const wishTeam = wishTeamByClubAndLabel.get(
-      teamIdentityKey(team.clubId, team.label),
-    );
-    if (!wishTeam) return team;
-    return applyWishToTeam(team, wishTeam, team.wishMatchSource ?? "auto");
+    const wishTeam = confirmedWishByTeamId.get(team.id);
+    return wishTeam
+      ? applyWishToTeam(team, wishTeam, team.wishMatchSource ?? "auto")
+      : team;
   });
 
   const activeWishById = new Map(activeWishes.map((wish) => [wish.id, wish]));
@@ -547,11 +605,7 @@ function manualWishMatchesByTeamId(seasonModelJson?: string | null) {
       }>;
     };
     for (const team of model.teams ?? []) {
-      if (
-        team.id &&
-        team.wishMatchId &&
-        team.wishMatchSource === "manual"
-      ) {
+      if (team.id && team.wishMatchId && team.wishMatchSource === "manual") {
         matches.set(team.id, team.wishMatchId);
       }
     }
@@ -585,13 +639,6 @@ function manualWeekPrefsByTeamId(seasonModelJson?: string | null) {
     return prefs;
   }
   return prefs;
-}
-
-function teamIdentityKey(
-  clubId: string | undefined,
-  label: string | undefined,
-) {
-  return `${clubId ?? ""}|${(label ?? "").trim().toLowerCase()}`;
 }
 
 function groupReviewsByKey(seasonModelJson?: string | null) {
@@ -775,7 +822,9 @@ export async function updateClubAliasMapping(
   const previousAlias = existingAliases.find(
     (alias) => alias.sourceClubId === sourceClubId,
   );
-  const sourceClub = typedModel.clubs?.find((club) => club.id === sourceClubId) ?? {
+  const sourceClub = typedModel.clubs?.find(
+    (club) => club.id === sourceClubId,
+  ) ?? {
     id: previousAlias?.sourceClubId ?? "",
     name: previousAlias?.sourceClubName,
   };
@@ -791,9 +840,7 @@ export async function updateClubAliasMapping(
       return {
         ...row,
         clubId:
-          row.clubId === previousAlias.targetClubId
-            ? sourceClubId
-            : row.clubId,
+          row.clubId === previousAlias.targetClubId ? sourceClubId : row.clubId,
       };
     });
   }
@@ -812,6 +859,16 @@ export async function updateClubAliasMapping(
   });
   applyClubAliasesToModel(typedModel, aliases);
   typedModel.clubAliases = aliases;
+  await saveSourceIdentityAlias({
+    scopeId: inputSet.scopeId,
+    season: inputSet.season,
+    kind: "CLUB",
+    rawIdentity: sourceClub.name ?? sourceClubId,
+    canonicalIdentity: targetWish.clubId,
+    canonicalName: targetWish.clubName,
+    matchConfidence: "MANUAL",
+    source: "admin-review",
+  });
 
   return updateSeasonModel(inputSetId, model);
 }

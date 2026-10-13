@@ -3,6 +3,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const prisma = vi.hoisted(() => ({
   $transaction: vi.fn((callback) => callback(prisma)),
   rasterWishConflict: { findMany: vi.fn() },
+  rasterInputSet: {
+    findUnique: vi.fn().mockResolvedValue({ seasonModelJson: "{}" }),
+  },
   rasterOptimizationRun: { create: vi.fn(), update: vi.fn() },
   backgroundJob: { create: vi.fn() },
 }));
