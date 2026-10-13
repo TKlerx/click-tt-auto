@@ -5,6 +5,17 @@
 - Ported missing diagnostics behavior from `c885bea` / `995517e` onto `e4fa2bc` without replacing the upstream manual baseline UI.
 - Added real CP-SAT/worker propagation, fixed/pinned bounds, legacy fallback, and rendered run-history regressions.
 - Evidence and command logs: root `reports/delivery/diagnostics/`; local-only candidate awaits independent parent review and GitHub delivery.
+## 2026-10-05 urllib3 security follow-up
+
+- Updated urllib3 alone to 2.8.0 and removed its stale package-specific date cutoff. Kept the global supply-chain cooldown and all CI checks.
+- Verified frozen installation and lock validation; no production Python vulnerabilities are reported. An unrelated development-only click advisory remains outside this urllib3 patch.
+- All 15 database-independent worker checks pass; full local testing is blocked by unavailable PostgreSQL at localhost:45432. Full CI tests remain enabled.
+
+## 2026-10-05 security PR CI repair
+
+- Integrated current main's tested standalone launcher fixes into security PR #66 and resolved the browser-registry tracing conflict using the existing dependency-resolved registry path.
+- Preserved security dependency remediation; retained every CI check and existing standalone regression test.
+- Verified the production build, both typechecks, 142 CLI tests, 14 configuration/registry tests and all four roster/scoring/PDF/runtime-root subprocess regressions. Added Windows fixture entrypoints without changing production code or skipping tests.
 
 ## 2026-10-04 PR67 standalone raster runtime
 
@@ -1673,3 +1684,28 @@
 ## 2026-09-04 fast-uri security patch
 
 - Patched fast-uri overrides and lockfile resolutions to 3.1.6 for GHSA-jqff-g426-hqxp, including the parent CLI workspace override. Frozen-lockfile verification and targeted URI/AJV regression checks pass. Changes are prepared in an isolated security worktree; not committed or pushed.
+
+## 2026-10-04 22:57:44
+
+- Branch snapshot refreshed for `codex/security-20261004`.
+- Latest non-continuity commit: e4fa2bc Implement manual Rasterzahl baselines.
+- Active specs: none.
+- Next focus: no next task.
+
+- Updated security dependencies in the CLI and webapp and removed unnecessary overrides. Webapp frozen lockfile passes; CLI audit is clean. Unpatched braces remains in webapp tooling; full validation awaits PR CI.
+
+- PR #66: CLI CI passed. Webapp E2E failed after the Next.js security update because standalone output omitted playwright-core/browsers.json. Added explicit tracing of that package's runtime assets; existing E2E validation will rerun without skipping checks.
+
+## 2026-10-11 source-map-js security follow-up
+
+- Updated source-map-js to 1.2.2 in both lockfiles for CVE-2026-93749. Dependency manifests, application code, and validation gates are unchanged; production webapp audit passed.
+- Full GitHub validation remains the merge gate. Local verification results are recorded in the security PR.
+
+## 2026-10-11 sharp security follow-up
+
+- Patched only sharp and its platform libvips packages to the first fixed release for GHSA-wq5f-xc86-pv6w. Updated the existing security override and cooldown exception.
+- Frozen installation, production audit and native PNG resize check pass. Full GitHub validation remains the merge gate.
+
+## 2026-10-14 PR63 reconciliation
+
+- Retained current security/runtime fixes and the diagnostic delivery history while merging current main.

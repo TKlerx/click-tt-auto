@@ -59,6 +59,12 @@ function prepareRuntime(root: string) {
     join(dirname(require.resolve("tsx/package.json")), "dist/cli.mjs"),
     join(root, "node_modules/.bin/tsx"),
   );
+  if (process.platform === "win32") {
+    writeFileSync(
+      join(root, "node_modules/.bin/tsx.cmd"),
+      `@echo off\r\n"${process.execPath}" "${join(dirname(require.resolve("tsx/package.json")), "dist/cli.mjs")}" %*\r\n`,
+    );
+  }
   symlinkSync(
     dirname(require.resolve("pdfjs-dist/package.json")),
     join(root, "node_modules/pdfjs-dist"),
@@ -97,6 +103,16 @@ ${operation}.then(result => {
 `,
   );
   const env = { ...process.env };
+  if (process.platform === "win32") {
+    // The Windows launcher uses next start instead of the standalone entrypoint.
+    // Replace only that HTTP entrypoint, with the same fixture server as Linux.
+    const nextBin = join(app, "node_modules/next/dist/bin");
+    mkdirSync(nextBin, { recursive: true });
+    writeFileSync(
+      join(nextBin, "next"),
+      `require(${JSON.stringify(join(serverDirectory, "server.js"))});`,
+    );
+  }
   delete env.RASTER_REPO_ROOT;
   if (override) env.RASTER_REPO_ROOT = runtimeRoot;
   const result = spawnSync(

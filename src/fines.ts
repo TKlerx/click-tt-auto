@@ -77,6 +77,12 @@ const EVENT_MF_FEHLT = "mf-fehlt";
 const EVENT_UNVOLLSTAENDIGE_EINZELAUFSTELLUNG = "unvollstaendige-einzelaufstellung";
 const EVENT_ERROR_MESSAGE = "error-message";
 
+function formatCalendarDate(value: Date): string {
+  const day = String(value.getDate()).padStart(2, "0");
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  return `${day}.${month}.${value.getFullYear()}`;
+}
+
 function cellValueToString(value: unknown): string {
   if (value === null || value === undefined) {
     return "";
@@ -87,7 +93,7 @@ function cellValueToString(value: unknown): string {
   }
 
   if (value instanceof Date) {
-    return value.toISOString();
+    return formatCalendarDate(value);
   }
 
   if (typeof value === "object") {
@@ -147,10 +153,7 @@ function parseWorkbookDate(value: string): Date | null {
 
 function normalizeDateKey(value: Date | string): string {
   if (value instanceof Date) {
-    const year = value.getFullYear();
-    const month = String(value.getMonth() + 1).padStart(2, "0");
-    const day = String(value.getDate()).padStart(2, "0");
-    return `${day}.${month}.${year}`;
+    return formatCalendarDate(value);
   }
 
   const parsed = parseWorkbookDate(value);
