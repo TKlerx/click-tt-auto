@@ -2,7 +2,8 @@
 
 ## 2026-10-14 PR64 reconciliation
 
-- Reconciled baseline identity/review fixes with current main and retained both continuity histories. Fresh regression tests and CI are required before merge.
+- Reconciled baseline identity/review fixes with current main and retained both continuity histories.
+- Corrected the browser test fixture to use a real contextual source identity instead of an opaque placeholder, so its Map action exercises the new source-group validation. All existing review/readiness assertions remain.
 
 ## Manual baseline reconciliation: delivery/baseline-reconciled
 
