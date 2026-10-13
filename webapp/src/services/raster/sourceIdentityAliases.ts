@@ -64,10 +64,9 @@ export async function resolveSourceIdentityAlias(input: {
   if (
     saved?.reviewState === "CONFIRMED" &&
     saved.canonicalIdentity &&
-    (saved.matchConfidence === "CREATED" ||
-      input.canonicalCandidates.some(
-        (candidate) => candidate.id === saved.canonicalIdentity,
-      ))
+    input.canonicalCandidates.some(
+      (candidate) => candidate.id === saved.canonicalIdentity,
+    )
   ) {
     return {
       state: "confirmed" as const,
@@ -195,21 +194,11 @@ export async function reviewSourceIdentityAlias(input: {
   )
     return null;
   const candidates = sourceIdentityCandidates(model, input.kind);
-  if (input.kind === "CLUB") {
-    const wishes = await prisma.rasterWish.findMany({
-      where: { inputSetId: inputSet.id },
-      select: { clubId: true, clubName: true },
-    });
-    candidates.push(
-      ...(wishes ?? []).map((wish) => ({
-        id: wish.clubId,
-        name: wish.clubName,
-      })),
-    );
-  }
-  const target = input.createNewIdentity
-    ? { id: input.rawIdentity, name: input.rawIdentity }
-    : candidates.find((candidate) => candidate.id === input.targetIdentity);
+  // Alias review maps to a planning identity; it cannot create a group/team
+  // from a display name alone. Wish-only IDs are not projection targets.
+  const target = candidates.find(
+    (candidate) => candidate.id === input.targetIdentity,
+  );
   if (!target) return null;
   await saveSourceIdentityAlias({
     scopeId: inputSet.scopeId,
@@ -242,23 +231,11 @@ export async function unresolvedSourceIdentityAliases(inputSetId: string) {
       },
       orderBy: [{ kind: "asc" }, { rawSourceName: "asc" }],
     })) ?? [];
-  const wishes = aliases.some(
-    (alias) => alias.kind === "CLUB" && alias.reviewState === "CONFIRMED",
-  )
-    ? ((await prisma.rasterWish.findMany({
-        where: { inputSetId },
-        select: { clubId: true, clubName: true },
-      })) ?? [])
-    : [];
   return aliases.flatMap((alias) => {
     if (alias.reviewState !== "CONFIRMED") return [alias];
-    if (alias.matchConfidence === "CREATED") return [];
-    const targetExists =
-      sourceIdentityCandidates(model, alias.kind).some(
-        (candidate) => candidate.id === alias.canonicalIdentity,
-      ) ||
-      (alias.kind === "CLUB" &&
-        wishes.some((wish) => wish.clubId === alias.canonicalIdentity));
+    const targetExists = sourceIdentityCandidates(model, alias.kind).some(
+      (candidate) => candidate.id === alias.canonicalIdentity,
+    );
     return targetExists
       ? []
       : [

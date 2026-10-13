@@ -53,14 +53,31 @@ describe("rendered source identity review", () => {
     { kind: "CLUB" as const, clubId: "club-1", clubName: "Canonical club" },
     { kind: "TEAM" as const, clubId: "team-1", clubName: "Canonical team" },
   ];
-  async function render(canEdit: boolean) {
+  async function render(canEdit: boolean, planningOnly = false) {
     await act(async () =>
       root.render(
         <ClubAliasReview
           inputSetId="workspace"
           canEdit={canEdit}
-          candidates={candidates}
-          wishClubOptions={options}
+          candidates={candidates.map((candidate) => ({
+            ...candidate,
+            planningIdentityOnly: planningOnly,
+          }))}
+          wishClubOptions={
+            planningOnly
+              ? [
+                  ...options.map((option) => ({
+                    ...option,
+                    planningIdentity: true,
+                  })),
+                  {
+                    kind: "CLUB",
+                    clubId: "wish-only",
+                    clubName: "Outside the model",
+                  },
+                ]
+              : options
+          }
         />,
       ),
     );
@@ -107,13 +124,23 @@ describe("rendered source identity review", () => {
       const row = host.querySelectorAll("tbody tr")[kind === "CLUB" ? 0 : 1];
       await act(async () =>
         Array.from(row.querySelectorAll("button"))
-          .find((b) => b.textContent === "Create new identity")!
+          .find((b) => b.textContent === "Create mapping")!
           .click(),
       );
       expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({
         kind,
+        targetClubId: kind === "CLUB" ? "club-1" : "team-1",
         createNewIdentity: true,
       });
     },
   );
+  it("shows only model targets for persisted aliases", async () => {
+    await render(true, true);
+    const choices = Array.from(host.querySelectorAll("datalist option")).map(
+      (option) => option.getAttribute("value") ?? option.textContent,
+    );
+    expect(choices.join(" ")).not.toContain("wish-only");
+    expect(choices.join(" ")).toContain("club-1");
+    expect(choices.join(" ")).toContain("team-1");
+  });
 });

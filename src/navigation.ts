@@ -1,4 +1,6 @@
 import type { Locator, Page } from "playwright";
+import { ensureSessionActive } from "./auth.js";
+import { isSessionExpiredError } from "./session-recovery.js";
 import { assertMatchListPage } from "./match-list.js";
 
 async function clickAndSettle(page: Page, locator: Locator): Promise<void> {
@@ -33,24 +35,28 @@ async function clickByText(page: Page, texts: RegExp[]): Promise<void> {
       const roleLink = page.getByRole("link", { name: text }).first();
       if ((await roleLink.count()) > 0) {
         await clickAndSettle(page, roleLink);
+        await ensureSessionActive(page);
         return;
       }
 
       const roleButton = page.getByRole("button", { name: text }).first();
       if ((await roleButton.count()) > 0) {
         await clickAndSettle(page, roleButton);
+        await ensureSessionActive(page);
         return;
       }
 
       const textLink = page.locator("a").filter({ hasText: text }).first();
       if ((await textLink.count()) > 0) {
         await clickAndSettle(page, textLink);
+        await ensureSessionActive(page);
         return;
       }
 
       const textButton = page.locator("button, input[type='submit'], input[type='button']").filter({ hasText: text }).first();
       if ((await textButton.count()) > 0) {
         await clickAndSettle(page, textButton);
+        await ensureSessionActive(page);
         return;
       }
     }
@@ -176,10 +182,13 @@ export async function navigateToMatchSearch(
   }
 
   await clickAndSettle(page, searchButton);
+  await ensureSessionActive(page);
   await assertMatchListPage(page);
 }
 
 export async function returnToListAfterSave(page: Page): Promise<void> {
+  await ensureSessionActive(page);
+
   try {
     await assertMatchListPage(page);
     return;
@@ -198,6 +207,7 @@ export async function returnToListAfterSave(page: Page): Promise<void> {
     const roleTarget = page.getByRole("link", { name: pattern }).first();
     if ((await roleTarget.count()) > 0) {
       await clickAndSettle(page, roleTarget);
+      await ensureSessionActive(page);
       await assertMatchListPage(page);
       return;
     }
@@ -205,6 +215,7 @@ export async function returnToListAfterSave(page: Page): Promise<void> {
     const textTarget = page.locator("a").filter({ hasText: pattern }).first();
     if ((await textTarget.count()) > 0) {
       await clickAndSettle(page, textTarget);
+      await ensureSessionActive(page);
       await assertMatchListPage(page);
       return;
     }
@@ -212,6 +223,7 @@ export async function returnToListAfterSave(page: Page): Promise<void> {
     const buttonTarget = await findButtonLikeControl(page, pattern);
     if (buttonTarget) {
       await clickAndSettle(page, buttonTarget);
+      await ensureSessionActive(page);
       await assertMatchListPage(page);
       return;
     }
@@ -219,9 +231,13 @@ export async function returnToListAfterSave(page: Page): Promise<void> {
 
   try {
     await page.goBack({ waitUntil: "domcontentloaded" });
+    await ensureSessionActive(page);
     await assertMatchListPage(page);
     return;
-  } catch {
+  } catch (error) {
+    if (isSessionExpiredError(error)) {
+      throw error;
+    }
     // Fall through to final error.
   }
 
@@ -235,5 +251,6 @@ export async function cancelAndReturn(page: Page): Promise<void> {
   }
 
   await clickAndSettle(page, cancelControl);
+  await ensureSessionActive(page);
   await assertMatchListPage(page);
 }

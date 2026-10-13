@@ -76,7 +76,7 @@ describe("admin source identity review route", () => {
     },
   );
   it.each(["CLUB", "TEAM"])(
-    "creates a %s identity without taking the legacy mapping path",
+    "creates a %s mapping to an existing model target",
     async (kind) => {
       const raw = kind === "CLUB" ? "SC Alfa" : "SC Alpha :: Herren 1";
       expect(
@@ -84,7 +84,7 @@ describe("admin source identity review route", () => {
           await post({
             kind,
             sourceClubId: raw,
-            targetClubId: raw,
+            targetClubId: kind === "CLUB" ? "club-a" : "team-a",
             createNewIdentity: true,
           })
         ).status,
@@ -94,7 +94,7 @@ describe("admin source identity review route", () => {
         expect.objectContaining({
           create: expect.objectContaining({
             matchConfidence: "CREATED",
-            canonicalIdentity: raw,
+            canonicalIdentity: kind === "CLUB" ? "club-a" : "team-a",
           }),
         }),
       );
@@ -144,4 +144,31 @@ describe("admin source identity review route", () => {
       ).not.toHaveBeenCalled();
     },
   );
+  it("does not confirm a wish-only club target outside the model", async () => {
+    prismaMock.rasterWish.findMany.mockResolvedValue([
+      { clubId: "wish-only", clubName: "SC Alpha" },
+    ] as never);
+    expect(
+      (
+        await post({
+          kind: "CLUB",
+          sourceClubId: "SC Alfa",
+          targetClubId: "wish-only",
+        })
+      ).status,
+    ).toBe(404);
+    expect(prismaMock.rasterSourceIdentityAlias.upsert).not.toHaveBeenCalled();
+  });
+  it("requires a model target even for a create-mapping request", async () => {
+    expect(
+      (
+        await post({
+          kind: "TEAM",
+          sourceClubId: "SC Alpha :: Herren 1",
+          createNewIdentity: true,
+        })
+      ).status,
+    ).toBe(422);
+    expect(prismaMock.rasterSourceIdentityAlias.upsert).not.toHaveBeenCalled();
+  });
 });

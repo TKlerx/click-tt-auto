@@ -1,5 +1,24 @@
 # Continue Log
 
+## 2026-10-05 urllib3 security follow-up
+
+- Updated urllib3 alone to 2.8.0 and removed its stale package-specific date cutoff. Kept the global supply-chain cooldown and all CI checks.
+- Verified frozen installation and lock validation; no production Python vulnerabilities are reported. An unrelated development-only click advisory remains outside this urllib3 patch.
+- All 15 database-independent worker checks pass; full local testing is blocked by unavailable PostgreSQL at localhost:45432. Full CI tests remain enabled.
+
+## 2026-10-05 security PR CI repair
+
+- Integrated current main's tested standalone launcher fixes into security PR #66 and resolved the browser-registry tracing conflict using the existing dependency-resolved registry path.
+- Preserved security dependency remediation; retained every CI check and existing standalone regression test.
+- Verified the production build, both typechecks, 142 CLI tests, 14 configuration/registry tests and all four roster/scoring/PDF/runtime-root subprocess regressions. Added Windows fixture entrypoints without changing production code or skipping tests.
+
+## 2026-10-04 PR67 standalone raster runtime
+
+- Kept the previously approved standalone Playwright tracing inclusion.
+- Added a narrow launcher environment fix: preserve the repository raster runtime across Next's generated `process.chdir(__dirname)` transition, without overriding an explicit runtime root.
+- Added real-process integration regressions for roster decoding, rulebook-backed scoring, the 31-league PDF fixture, and explicit runtime-root preservation. Three default-root paths fail when the fix is removed; the override control passes.
+- Existing CI gates and timeouts are unchanged. Full standalone build/browser CI requires parent review and delivery; the resource-floor pause and test evidence are documented under `reports/delivery/ci-remediation`.
+
 ## 2026-06-20 09:45:41 +02:00
 
 - Ported rag-agent-style supply-chain audit coverage into `webapp-template`.
@@ -1664,3 +1683,27 @@
 ## 2026-10-04 alias reconciliation
 
 - Resumed the dirty delivery checkpoint; preserved upstream manual baseline review. Added persisted club/team aliases and workspace-local readiness checks, and regression/integration coverage for review, isolation, and duplicate-free cache reuse. Local delivery evidence: `reports/delivery/aliases/`.
+## 2026-10-04 22:57:44
+
+- Branch snapshot refreshed for `codex/security-20261004`.
+- Latest non-continuity commit: e4fa2bc Implement manual Rasterzahl baselines.
+- Active specs: none.
+- Next focus: no next task.
+
+- Updated security dependencies in the CLI and webapp and removed unnecessary overrides. Webapp frozen lockfile passes; CLI audit is clean. Unpatched braces remains in webapp tooling; full validation awaits PR CI.
+
+- PR #66: CLI CI passed. Webapp E2E failed after the Next.js security update because standalone output omitted playwright-core/browsers.json. Added explicit tracing of that package's runtime assets; existing E2E validation will rerun without skipping checks.
+
+## 2026-10-11 source-map-js security follow-up
+
+- Updated source-map-js to 1.2.2 in both lockfiles for CVE-2026-93749. Dependency manifests, application code, and validation gates are unchanged; production webapp audit passed.
+- Full GitHub validation remains the merge gate. Local verification results are recorded in the security PR.
+
+## 2026-10-11 sharp security follow-up
+
+- Patched only sharp and its platform libvips packages to the first fixed release for GHSA-wq5f-xc86-pv6w. Updated the existing security override and cooldown exception.
+- Frozen installation, production audit and native PNG resize check pass. Full GitHub validation remains the merge gate.
+
+## 2026-10-14 alias correction
+
+- Removed missing-target bypasses, aligned creation with model-backed targets, and reconciled current main. Fresh local and GitHub checks required before merge.

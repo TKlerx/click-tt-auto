@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { prismaMock } from "@/lib/__mocks__/db";
 import {
   resolveSourceIdentityAlias,
+  reviewSourceIdentityAlias,
   unresolvedSourceIdentityAliases,
 } from "@/services/raster/sourceIdentityAliases";
 vi.mock("@/lib/db", () => ({ prisma: prismaMock }));
@@ -119,5 +120,62 @@ describe("reconciled alias isolation", () => {
         }),
       }),
     );
+  });
+  it.each(["CREATED", "MANUAL"])(
+    "keeps a missing %s target pending for both resolution and readiness",
+    async (confidence) => {
+      const saved = {
+        kind: "CLUB",
+        canonicalIdentity: "wish-only",
+        reviewState: "CONFIRMED",
+        matchConfidence: confidence,
+      };
+      prismaMock.rasterInputSet.findUnique.mockResolvedValue({
+        scopeId: "owl",
+        season: "2026/27",
+        seasonModelJson: JSON.stringify({
+          clubs: input.canonicalCandidates,
+          sourceIdentityReferences: [
+            { kind: "CLUB", normalizedSourceName: "scexample" },
+          ],
+        }),
+      } as never);
+      prismaMock.rasterSourceIdentityAlias.findUnique.mockResolvedValue(
+        saved as never,
+      );
+      prismaMock.rasterSourceIdentityAlias.findMany.mockResolvedValue([
+        saved,
+      ] as never);
+      prismaMock.rasterWish.findMany.mockResolvedValue([
+        { clubId: "wish-only", clubName: "SC Example" },
+      ] as never);
+      expect(await resolveSourceIdentityAlias(input)).toEqual({
+        state: "pending",
+      });
+      expect(await unresolvedSourceIdentityAliases("workspace")).toMatchObject([
+        { reviewState: "PENDING", canonicalIdentity: null },
+      ]);
+    },
+  );
+  it("rejects creation of a placeholder ID without a planning target", async () => {
+    prismaMock.rasterInputSet.findUnique.mockResolvedValue({
+      scopeId: "owl",
+      season: "2026/27",
+      seasonModelJson: JSON.stringify({
+        clubs: input.canonicalCandidates,
+        sourceIdentityReferences: [
+          { kind: "CLUB", normalizedSourceName: "scexample" },
+        ],
+      }),
+    } as never);
+    expect(
+      await reviewSourceIdentityAlias({
+        inputSetId: "workspace",
+        kind: "CLUB",
+        rawIdentity: "SC Example",
+        createNewIdentity: true,
+      }),
+    ).toBeNull();
+    expect(prismaMock.rasterSourceIdentityAlias.upsert).not.toHaveBeenCalled();
   });
 });

@@ -10,6 +10,7 @@ export type AliasReviewAction = (typeof aliasReviewActions)[number];
 
 export type ClubAliasCandidate = {
   capacityRelevant: boolean;
+  planningIdentityOnly?: boolean;
   confirmed?: boolean;
   confidence?: string;
   source?: string;
@@ -55,6 +56,7 @@ export function buildAliasReviewPayload(
 }
 
 type WishClubOption = {
+  planningIdentity?: boolean;
   clubId: string;
   clubName: string;
   kind?: AliasReviewKind;
@@ -95,17 +97,19 @@ export function ClubAliasReview({
     action: AliasReviewAction = "override",
   ) {
     const availableOptions = wishClubOptions.filter(
-      (option) => (option.kind ?? "CLUB") === (candidate.kind ?? "CLUB"),
+      (option) =>
+        (option.kind ?? "CLUB") === (candidate.kind ?? "CLUB") &&
+        (candidate.planningIdentityOnly
+          ? option.planningIdentity === true
+          : !option.planningIdentity),
     );
     const selected =
-      action === "create"
-        ? { clubId: candidate.modelClubId, clubName: candidate.modelClubName }
-        : action === "accept" && candidate.wishClubId && candidate.wishClubName
-          ? { clubId: candidate.wishClubId, clubName: candidate.wishClubName }
-          : availableOptions.find(
-              (option) =>
-                clubOptionText(option) === targets[aliasReviewKey(candidate)],
-            );
+      action === "accept" && candidate.wishClubId && candidate.wishClubName
+        ? { clubId: candidate.wishClubId, clubName: candidate.wishClubName }
+        : availableOptions.find(
+            (option) =>
+              clubOptionText(option) === targets[aliasReviewKey(candidate)],
+          );
     if (!selected) {
       setMessage("Choose a canonical identity from the list.");
       return;
@@ -167,7 +171,7 @@ export function ClubAliasReview({
       <p className="mt-2 text-sm text-[var(--muted-foreground)]">
         Review parsed club and team identities before they can be used for
         validation or a run. Accept the suggestion, choose a different canonical
-        identity, or create a new identity.
+        identity, or save a new mapping to an existing planning identity.
       </p>
       <label className="mt-3 flex items-center gap-2 text-sm text-[var(--muted-foreground)]">
         <input
@@ -196,7 +200,10 @@ export function ClubAliasReview({
                 const busy = busyIds[aliasReviewKey(candidate)] === true;
                 const availableOptions = wishClubOptions.filter(
                   (option) =>
-                    (option.kind ?? "CLUB") === (candidate.kind ?? "CLUB"),
+                    (option.kind ?? "CLUB") === (candidate.kind ?? "CLUB") &&
+                    (candidate.planningIdentityOnly
+                      ? option.planningIdentity === true
+                      : !option.planningIdentity),
                 );
                 return (
                   <tr
@@ -283,11 +290,18 @@ export function ClubAliasReview({
                           ) : null}
                           <button
                             className="ml-2 h-9 rounded-md border border-[var(--border)] px-3 text-sm font-medium"
-                            disabled={busy}
+                            disabled={
+                              busy ||
+                              !availableOptions.some(
+                                (option) =>
+                                  clubOptionText(option) ===
+                                  targets[aliasReviewKey(candidate)],
+                              )
+                            }
                             onClick={() => void apply(candidate, "create")}
                             type="button"
                           >
-                            Create new identity
+                            Create mapping
                           </button>
                         </div>
                       ) : (

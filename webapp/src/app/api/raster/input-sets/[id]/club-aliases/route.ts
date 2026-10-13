@@ -37,9 +37,9 @@ export async function POST(
     );
   }
 
-  if (!parsed.data.targetClubId && !parsed.data.createNewIdentity) {
+  if (!parsed.data.targetClubId) {
     return NextResponse.json(
-      { error: "Choose a target or create a new identity" },
+      { error: "Choose an existing planning identity" },
       { status: 422 },
     );
   }

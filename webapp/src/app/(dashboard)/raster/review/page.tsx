@@ -90,6 +90,7 @@ export default async function RasterReviewPage({
       })),
     ...pendingIdentityAliases.map((alias) => ({
       capacityRelevant: alias.kind === "CLUB",
+      planningIdentityOnly: true,
       kind: alias.kind,
       modelClubId: alias.rawSourceName,
       modelClubName: alias.rawSourceName,
@@ -269,6 +270,7 @@ function modelIdentityOptions(seasonModelJson?: string | null) {
   return (["CLUB", "TEAM"] as const).flatMap((kind) =>
     sourceIdentityCandidates(model, kind).map((candidate) => ({
       clubId: candidate.id,
+      planningIdentity: true,
       clubName: candidate.name,
       kind,
     })),

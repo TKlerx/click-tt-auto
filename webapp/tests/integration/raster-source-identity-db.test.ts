@@ -200,6 +200,7 @@ describe.skipIf(!enabled)(
           inputSetId: "alias-workspace-a",
           kind: "CLUB",
           rawIdentity: "New club",
+          targetIdentity: "gw",
           createNewIdentity: true,
         }),
       ).not.toBeNull();
