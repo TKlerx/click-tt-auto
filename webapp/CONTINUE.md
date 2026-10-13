@@ -1,5 +1,9 @@
 # Continue
 
+## 2026-10-14 PR64 reconciliation
+
+- Reconciled baseline identity/review fixes with current main and retained both continuity histories. Fresh regression tests and CI are required before merge.
+
 ## Manual baseline reconciliation: delivery/baseline-reconciled
 
 - R1–R4 follow-up: complete normalized league/group/team identity; conservative legacy-key reuse; same-source-group map/refresh policy; normalized alias deduplication; stale reviewed IDs reopen before automatic matching. Post-integration focused checks: 61 webapp tests, non-incremental typecheck and changed-file lint passed. Full local suite is blocked by read-only donor dependency reconciliation; fresh review and CI remain required. PR67 main prerequisite merged locally, retaining both continuity notes.
@@ -8,6 +12,27 @@
 - Fixed rulebook range validation, verified source/model group identity, snapshot team identity and unresolved-output retention, durable ignore/accept decisions, and moved-target review invalidation.
 - Added regression and authorization/no-baseline parity assertions. Configured full webapp Vitest: 134 files / 494 tests passed; root focused tests, both typechecks, both full ESLint checks, architecture, duplication, and text checks passed.
 - Evidence: repository-root reports/delivery/baseline/evidence.md and adjacent logs. Browser/database-backed E2E and deployment remain unverified; no live click-TT or credentials used.
+## 2026-10-11 sharp security follow-up
+
+- Patched sharp to 0.35.5 and its bundled libvips packages for GHSA-wq5f-xc86-pv6w. No application changes or relaxed validation gates.
+- Frozen installation, production audit and native PNG resize check pass. Full GitHub validation remains required before merge.
+
+## 2026-10-11 source-map-js security follow-up
+
+- Updated only source-map-js from 1.2.1 to 1.2.2 in the CLI and webapp lockfiles for CVE-2026-93749, including CSS tooling and Prisma transitives. No new overrides or application changes.
+- Production webapp audit is clean. Full GitHub validation remains required before merge; local checks are recorded in the PR.
+
+## 2026-10-05 urllib3 security follow-up
+
+- Removed the obsolete August 11 urllib3 resolver cutoff while retaining the global one-week cooldown; upgraded only urllib3 from 2.7.0 to 2.8.0 for GHSA-8988-9cw3-xx77, GHSA-vxq7-64xx-v4gw and GHSA-gh4c-6fx4-qh6g.
+- Frozen sync and lock validation pass. Production Python audit is clean; the development audit retains an unrelated click 8.3.2 advisory. Full PostgreSQL worker tests require the CI test database.
+- All 15 database-independent worker checks pass. Full local pytest stops on an unavailable PostgreSQL connection at localhost:45432, not on an urllib3 error; CI continues to run the complete suite.
+
+## 2026-10-05 security PR CI repair
+
+- Reconciled security PR #66 with current main, reusing its tested standalone raster-root, browser-registry and configurable build startup fixes instead of duplicating them.
+- Security dependency changes remain; no checks are disabled. Verify fresh full CI on the reconciled branch.
+- Production build, typechecks, 142 CLI tests and 14 configuration/registry tests pass locally. The four real raster subprocess regressions also pass after making their HTTP/tsx fixture portable to Windows.
 
 ## 2026-10-04 PR67 CI remediation follow-up
 
@@ -21,22 +46,22 @@
 
 ## Current Snapshot
 
-- Updated: 2026-08-10 19:14:36
-- Branch: `codex/fix-high-python-dependencies`
+- Updated: 2026-10-04 22:57:44
+- Branch: `codex/security-20261004`
 
 ## Recent Non-Continuity Commits
 
-- e80b057 fix: patch high-severity dependencies (#47)
-- b85afb9 Configure Dependabot updates
-- 595055a Merge pull request #27 from TKlerx/011-raster-import-ux
-- e104ec3 Fix raster import e2e workspace fixtures
-- 32954e6 Cover scheduler raster source adoption
+- e4fa2bc Implement manual Rasterzahl baselines
+- ebba8c5 Upgrade Spec Kit and add convergence workflow
+- 6d40dbf Document webapp follow-up work
+- e7bdafd Plan manual baseline Rasterzahlen import
+- 6d48178 Fix fine dedup and reconcile open tasks
 
 ## Git Status
 
-- M next-env.d.ts
-- M worker/pyproject.toml
-- M worker/uv.lock
+- M package.json
+- M pnpm-lock.yaml
+- M pnpm-workspace.yaml
 
 ## Active Specs
 
@@ -46,6 +71,8 @@
 
 1. No unchecked tasks detected in the active specs.
 
-## 2026-09-04 fast-uri security patch
+## 2026-10-04 security dependencies
 
-- Patched fast-uri overrides and lockfile resolutions to 3.1.6 for GHSA-jqff-g426-hqxp, including the parent CLI workspace override. Frozen-lockfile verification and targeted URI/AJV regression checks pass. Changes are prepared in an isolated security worktree; not committed or pushed.
+- Updated affected CLI and webapp dependencies; removed obsolete overrides where native ranges suffice.
+- Webapp frozen lockfile passes. CLI audit is clean; webapp audit retains only the unpatched braces 3.0.3 advisory. Full application validation awaits PR CI.
+- Initial PR CI passed CLI checks but failed E2E because standalone tracing omitted Playwright runtime assets. Added a narrow playwright-core tracing include; existing E2E checks provide the regression check on the next CI run.

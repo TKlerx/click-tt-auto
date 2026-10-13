@@ -108,7 +108,7 @@
 
 **Purpose**: Final cleanup and robustness improvements
 
-- [ ] T030 [P] Rework session-expiry handling in src/auth.ts + src/navigation.ts (FR-023) - detect login-page redirect mid-run, re-authenticate automatically with the same credentials, and resume from the current page/match instead of aborting. Rely on checkmark-skip to stay idempotent. (Supersedes prior abort-gracefully behavior.)
+- [X] T030 [P] Rework session-expiry handling in src/auth.ts + src/navigation.ts (FR-023) - detect login-page redirect mid-run, re-authenticate automatically with the same credentials, and resume the interrupted traversal instead of aborting. Restart an unfiltered search from page one to reconcile ambiguous saves and shifted rows; share a bounded recovery budget until traversal passes the interrupted page. Rely on checkmark-skip to stay idempotent. (Supersedes prior abort-gracefully behavior.)
 - [X] T031 [P] Add match format detection in src/match-detail.ts - check page heading for "Sechser-Paarkreuz-System" and report unsupported formats
 - [X] T032 [P] Create README.md with setup instructions, usage examples, and explanation of validation rules
 - [X] T033 Run validate.ps1 and fix any typecheck/lint issues

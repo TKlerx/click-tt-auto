@@ -482,6 +482,126 @@ describe("syncFineWorkbook", () => {
     });
   });
 
+  it("matches an existing fine by home, guest, date, and reason despite a different match number", async () => {
+    const workbookPath = await createWorkbook(
+      [
+        "Liga",
+        "Gruppe",
+        "Serie",
+        "Datum",
+        "Spielnummer",
+        "Heim",
+        "Gast",
+        "Strafe gegen",
+        "Grund",
+        "Rechtsgrundlage",
+        "Bemerkung",
+        "Kosten",
+        "Spielleiter",
+        "Eingetragen am",
+        "Ignore"
+      ],
+      [["Bezirksoberliga", "", "Hinserie", "2025-10-03", "previous-match-number", "SC Wewer", "SV Heide Paderborn", "SC Wewer", "MF fehlt", "", "", "", "Timo Klerx", "", ""]]
+    );
+
+    const result = await syncFineWorkbook({
+      workbookPath,
+      sheetName: "Sheet1",
+      ignoreColumnName: "Ignore",
+      spielleiter: "Timo Klerx",
+      defaultLiga: "Bezirksoberliga",
+      defaultGruppe: "",
+      naKosten: 100,
+      fineCatalogue: null,
+      actions: [
+        {
+          match: baseMatch({ homeTeam: "SC Wewer", guestTeam: "SV Heide Paderborn" }),
+          action: "skipped",
+          validation: {
+            isApprovable: false,
+            checks: [{ rule: "mf-present", passed: false, reason: "MF missing for SV Heide Paderborn" }]
+          }
+        }
+      ],
+      statusFineMatches: []
+    });
+
+    expect(result).toMatchObject({ totalCandidates: 1, appended: 0, existing: 1, ignored: 0 });
+  });
+
+  it("keeps fines distinct when the sanction reason differs", async () => {
+    const workbookPath = await createWorkbook(
+      [
+        "Liga",
+        "Gruppe",
+        "Serie",
+        "Datum",
+        "Spielnummer",
+        "Heim",
+        "Gast",
+        "Strafe gegen",
+        "Grund",
+        "Rechtsgrundlage",
+        "Bemerkung",
+        "Kosten",
+        "Spielleiter"
+      ],
+      [["Bezirksoberliga", "", "Hinserie", "03.10.2025", "previous-match-number", "SC Wewer", "SV Heide Paderborn", "SV Heide Paderborn", "MF fehlt", "", "", "", "Timo Klerx"]]
+    );
+
+    const result = await syncFineWorkbook({
+      workbookPath,
+      sheetName: "Sheet1",
+      ignoreColumnName: "Ignore",
+      spielleiter: "Timo Klerx",
+      defaultLiga: "Bezirksoberliga",
+      defaultGruppe: "",
+      naKosten: 100,
+      fineCatalogue: null,
+      actions: [
+        {
+          match: baseMatch({ homeTeam: "SC Wewer", guestTeam: "SV Heide Paderborn" }),
+          action: "skipped",
+          validation: {
+            isApprovable: false,
+            checks: [{ rule: "player-count", passed: false, reason: "guest has 5 numbered players" }]
+          }
+        }
+      ],
+      statusFineMatches: []
+    });
+
+    expect(result).toMatchObject({ totalCandidates: 1, appended: 1, existing: 0, ignored: 0 });
+  });
+
+  it("keeps native Excel calendar dates stable across a Berlin write, reopen, and resync", async () => {
+    const headers = [
+      "Liga", "Gruppe", "Serie", "Datum", "Spielnummer", "Heim", "Gast", "Strafe gegen", "Grund", "Rechtsgrundlage", "Bemerkung", "Kosten", "Spielleiter", "Eingetragen am", "Ignore"
+    ];
+    const workbookPath = await createWorkbook(headers, []);
+    const options = {
+      workbookPath, sheetName: "Sheet1", ignoreColumnName: "Ignore", spielleiter: "Timo Klerx", defaultLiga: "Bezirksoberliga", defaultGruppe: "", naKosten: 100, fineCatalogue: null, actions: [],
+      statusFineMatches: [baseMatch({ status: "nicht angetreten", points: "2:0", isApproved: true })]
+    };
+
+    expect(await syncFineWorkbook(options)).toMatchObject({ appended: 1, existing: 0, ignored: 0 });
+    expect(await syncFineWorkbook(options)).toMatchObject({ appended: 0, existing: 1, ignored: 0 });
+
+    const reopenedIndex = await loadFineWorkbookIndex(options);
+    expect(getStatusFineCandidateState(options.statusFineMatches[0]!, reopenedIndex, options)).toBe("existing");
+
+    const workbook = new Workbook();
+    await workbook.xlsx.readFile(workbookPath);
+    const worksheet = workbook.getWorksheet("Sheet1");
+    expect(worksheet?.rowCount).toBe(2);
+    if (!worksheet) { throw new Error("Expected Sheet1"); }
+    worksheet.getCell(2, 15).value = "x";
+    await workbook.xlsx.writeFile(workbookPath);
+
+    const ignoredIndex = await loadFineWorkbookIndex(options);
+    expect(getStatusFineCandidateState(options.statusFineMatches[0]!, ignoredIndex, options)).toBe("ignored");
+  });
+
   it("reports workbook additions without writing them during dry run", async () => {
     const workbookPath = await createWorkbook(
       [
