@@ -1,20 +1,21 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { createInterface } from "node:readline/promises";
 import { chromium } from "playwright";
 import type { Page } from "playwright";
 import { handleApproval } from "./approver.js";
 import { ensureSessionActive, login } from "./auth.js";
-import { loadConfig } from "./config.js";
+import { describeGroupScope, isGroupInScope, loadConfig } from "./config.js";
 import { getStatusFineCandidateState, loadFineWorkbookIndex, syncFineWorkbook } from "./fines.js";
 import { assertMatchListPage, findMatchLink, goToNextPage, readMatchListPage } from "./match-list.js";
-import { readMatchDetailPage, waitForMatchDetailPage } from "./match-detail.js";
+import { IncompleteMatchReportError, isIncompleteFinishedReport, isPastMatch, readMatchDetailPage, waitForMatchDetailPage } from "./match-detail.js";
 import { cancelAndReturn, navigateToMatchSearch } from "./navigation.js";
 import { ProgressReporter } from "./progress.js";
 import { buildRunReport, formatStdoutReport, writeRunReport } from "./reporter.js";
-import type { MatchAction, MatchEntry } from "./types.js";
-import { validateMatch } from "./validator.js";
 import { isSessionExpiredError } from "./session-recovery.js";
+import type { AppConfig, MatchAction, MatchEntry, RunReport } from "./types.js";
+import { shouldInspectMatch, validateMatch } from "./validator.js";
 
 function formatAction(prefix: string, match: MatchEntry, reason?: string): string {
   const tail = reason ? ` - ${reason}` : "";
@@ -25,12 +26,8 @@ function formatMatchLabel(match: MatchEntry): string {
   return `${match.homeTeam} vs ${match.guestTeam} (${match.date})`;
 }
 
-function shouldInspectMatch(match: MatchEntry): boolean {
-  return match.status.toLowerCase() === "abgeschlossen" && !match.isApproved;
-}
-
-function shouldVisitMatchDetail(processAll: boolean, match: MatchEntry, needsStatusFineDetail: boolean): boolean {
-  return processAll || shouldInspectMatch(match) || needsStatusFineDetail;
+function shouldVisitMatchDetail(config: AppConfig, inspectMatch: boolean, needsStatusFineDetail: boolean): boolean {
+  return (!config.recheck && config.processAll) || inspectMatch || needsStatusFineDetail;
 }
 
 function shouldCreateStatusFine(match: MatchEntry): boolean {
@@ -172,7 +169,7 @@ async function readMatchDetailPageWithRetry(
     } catch (error) {
       lastError = error;
       const message = error instanceof Error ? error.message : String(error);
-      if (!isRetriableDetailParseError(message) || attempt === retryDelaysMs.length) {
+      if (!(error instanceof IncompleteMatchReportError || isRetriableDetailParseError(message)) || attempt === retryDelaysMs.length) {
         throw error;
       }
 
@@ -184,8 +181,48 @@ async function readMatchDetailPageWithRetry(
   throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
 
+async function readFineIndex(config: AppConfig) {
+  try {
+    return await loadFineWorkbookIndex({
+      workbookPath: config.fineWorkbookPath,
+      sheetName: config.fineSheetName,
+      ignoreColumnName: config.fineIgnoreColumn,
+      createIfMissing: config.recheck
+    });
+  } catch (error) {
+    if (config.recheck) throw error;
+    return { enabled: false, existingKeys: new Set<string>(), ignoredKeys: new Set<string>() };
+  }
+}
+
+async function exportFines(config: AppConfig, report: RunReport, statusFineMatches: MatchEntry[]): Promise<void> {
+  try {
+    report.fineSync = await syncFineWorkbook({
+      workbookPath: config.fineWorkbookPath,
+      sheetName: config.fineSheetName,
+      ignoreColumnName: config.fineIgnoreColumn,
+      spielleiter: config.fineSpielleiter,
+      defaultLiga: config.fineLiga,
+      defaultGruppe: config.fineGruppe,
+      naKosten: config.fineNaKosten,
+      fineCatalogue: config.fineCatalogue,
+      dryRun: config.dryRun,
+      createIfMissing: config.recheck,
+      actions: report.actions,
+      statusFineMatches
+    });
+  } catch (error) {
+    report.fineSync = {
+      enabled: true, totalCandidates: 0, appended: 0, existing: 0, ignored: 0,
+      ...(config.fineWorkbookPath ? { workbookPath: config.fineWorkbookPath } : {}),
+      error: error instanceof Error ? error.message : String(error)
+    };
+  }
+}
+
 export async function run(): Promise<void> {
   const config = loadConfig();
+  const startedAt = Date.now();
   const browser = await chromium.launch({
     headless: !config.headed,
     slowMo: config.slowMoMs
@@ -203,7 +240,6 @@ export async function run(): Promise<void> {
   let totalMatchCount = 0;
   let scannedCount = 0;
   let openedCount = 0;
-  let fineWorkbookIndex = { enabled: false, existingKeys: new Set<string>(), ignoredKeys: new Set<string>() };
 
   const fineLookupOptions = {
     defaultLiga: config.fineLiga,
@@ -216,6 +252,7 @@ export async function run(): Promise<void> {
   try {
     const modeSuffix = [
       config.dryRun ? "DRY RUN" : null,
+      config.recheck ? "RECHECK (NO APPROVAL CHANGES)" : null,
       config.processAll ? "PROCESS ALL" : null,
       config.debug ? "DEBUG" : null,
       config.plainProgress ? "PLAIN PROGRESS" : null,
@@ -224,22 +261,13 @@ export async function run(): Promise<void> {
       .filter(Boolean)
       .join(" | ");
     console.log(`click-TT Match Auto-Approval${modeSuffix ? ` [${modeSuffix}]` : ""}`);
-    if (config.fineWorkbookPath) {
-      try {
-        fineWorkbookIndex = await loadFineWorkbookIndex({
-          workbookPath: config.fineWorkbookPath,
-          sheetName: config.fineSheetName,
-          ignoreColumnName: config.fineIgnoreColumn
-        });
-      } catch {
-        fineWorkbookIndex = { enabled: false, existingKeys: new Set<string>(), ignoredKeys: new Set<string>() };
-      }
-    }
+    console.log(`Responsible groups: ${describeGroupScope(config)}`);
+    const fineWorkbookIndex = await readFineIndex(config);
     console.log("Logging in...");
     await login(page, config.baseUrl, config.username, config.password);
     console.log("Navigating to Begegnungen...");
     await navigateToMatchSearch(page, config.group, {
-      onlyUnapproved: !config.fineWorkbookPath && !config.processAll
+      onlyUnapproved: !config.recheck && !config.fineWorkbookPath && !config.processAll
     });
 
     let pageNumber = 1;
@@ -327,6 +355,7 @@ export async function run(): Promise<void> {
         await assertMatchListPage(page);
       });
       const parsedPage = await readMatchListPage(page);
+      scannedCount += parsedPage.allMatches.length;
       totalPages = parsedPage.pagination.totalPages;
       totalMatchCount = Math.max(totalMatchCount, parsedPage.totalMatches);
 
@@ -344,15 +373,18 @@ export async function run(): Promise<void> {
         pageMatchCount
       });
 
-      for (const [matchIndex, match] of parsedPage.allMatches.entries()) {
-        scannedCount += 1;
+      const scopedMatches = parsedPage.allMatches.filter((match) =>
+        isGroupInScope(match.group, config.groups) && isGroupInScope(match.group, config.group ? [config.group] : []) &&
+        (!config.recheck || isPastMatch(match, startedAt)));
+      for (const [matchIndex, match] of scopedMatches.entries()) {
         const matchKey = `${match.date}|${match.homeTeam}|${match.guestTeam}|${match.group}`;
         const statusFineState = shouldCreateStatusFine(match)
           ? getStatusFineCandidateState(match, fineWorkbookIndex, fineLookupOptions)
           : "disabled";
         const trackStatusFine = shouldTrackStatusFine(statusFineState);
         const needsStatusFineDetail = shouldCreateStatusFine(match) && statusFineState === "missing" && Boolean(config.fineWorkbookPath);
-        const needsDetailVisit = shouldVisitMatchDetail(config.processAll, match, needsStatusFineDetail);
+        const inspectMatch = shouldInspectMatch(match, config.recheck);
+        const needsDetailVisit = shouldVisitMatchDetail(config, inspectMatch, needsStatusFineDetail);
 
         reconcilePendingApproval(pendingApprovals, matchKey, match.isApproved, recordAction);
         if (!needsDetailVisit || processedKeys.has(matchKey)) {
@@ -384,9 +416,9 @@ export async function run(): Promise<void> {
             statusFineMatches.push(match);
           }
 
-          if (shouldInspectMatch(match)) {
+          if (inspectMatch) {
             const action: MatchAction = { match, action: "error", error: "Match link not found on current list page" };
-            actions.push(action);
+            recordAction(matchKey, action);
             progress.log(formatAction("[ERROR]", match, action.error));
           }
 
@@ -430,7 +462,7 @@ export async function run(): Promise<void> {
             statusFineMatches.push(match);
           }
 
-          if (!shouldInspectMatch(match)) {
+          if (!inspectMatch) {
             await handleApproval(page, true, false);
             progress.update({
               dryRun: config.dryRun,
@@ -453,9 +485,9 @@ export async function run(): Promise<void> {
             detail.homeTeam.playerCount,
             detail.guestTeam.playerCount
           );
-          const validation = validateMatch(match, detail);
+          const validation = validateMatch(match, detail, config.recheck);
 
-          if (detail.isAlreadyApproved) {
+          if (detail.isAlreadyApproved && !config.recheck) {
             const action: MatchAction = { match, action: "already-approved", validation };
             recordAction(matchKey, pendingApprovals.get(matchKey) ?? action);
             pendingApprovals.delete(matchKey);
@@ -475,8 +507,8 @@ export async function run(): Promise<void> {
             continue;
           }
 
-          if (!validation.isApprovable) {
-            const action: MatchAction = { match, action: "skipped", validation };
+          if (!validation.isApprovable || config.recheck) {
+            const action: MatchAction = { match, action: validation.isApprovable ? "checked" : "skipped", validation };
             recordAction(matchKey, action);
             await handleApproval(page, true, false);
             progress.update({
@@ -534,11 +566,11 @@ export async function run(): Promise<void> {
             statusFineMatches.push(match);
           }
 
-          if (needsDetailVisit) {
-            const action: MatchAction = { match, action: "error", error: message };
-            recordAction(matchKey, action);
-            progress.log(formatAction("[ERROR]", match, message));
-          }
+          const action: MatchAction = isIncompleteFinishedReport(error, match, startedAt, config.recheck)
+            ? { match, action: "skipped", validation: { isApprovable: false, checks: [{ rule: "report-entry", passed: false, reason: message }] } }
+            : { match, action: "error", error: message };
+          recordAction(matchKey, action);
+          progress.log(formatAction(`[${action.action.toUpperCase()}]`, match, message));
 
           progress.update({
             dryRun: config.dryRun,
@@ -595,38 +627,15 @@ export async function run(): Promise<void> {
 
     const report = buildRunReport({
       dryRun: config.dryRun,
-      group: config.group,
+      group: describeGroupScope(config),
       actions,
-      totalFound: totalMatchCount || scannedCount,
+      totalFound: Math.max(totalMatchCount, scannedCount),
       totalScanned: scannedCount,
       totalOpened: openedCount
     });
+    report.recheck = config.recheck;
 
-    try {
-      report.fineSync = await syncFineWorkbook({
-        workbookPath: config.fineWorkbookPath,
-        sheetName: config.fineSheetName,
-        ignoreColumnName: config.fineIgnoreColumn,
-        spielleiter: config.fineSpielleiter,
-        defaultLiga: config.fineLiga,
-        defaultGruppe: config.fineGruppe,
-        naKosten: config.fineNaKosten,
-        fineCatalogue: config.fineCatalogue,
-        dryRun: config.dryRun,
-        actions,
-        statusFineMatches
-      });
-    } catch (error) {
-      report.fineSync = {
-        enabled: true,
-        totalCandidates: 0,
-        appended: 0,
-        existing: 0,
-        ignored: 0,
-        ...(config.fineWorkbookPath ? { workbookPath: config.fineWorkbookPath } : {}),
-        error: error instanceof Error ? error.message : String(error)
-      };
-    }
+    await exportFines(config, report, statusFineMatches);
 
     report.reportPath = await writeRunReport(report, config.reportDir);
     progress.finish();
@@ -649,7 +658,7 @@ export async function run(): Promise<void> {
   }
 }
 
-if (!process.env.VITEST) {
+if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   run().catch((error) => {
     console.error(error instanceof Error ? error.message : String(error));
     process.exitCode = 1;

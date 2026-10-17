@@ -11,13 +11,13 @@ const mocks = vi.hoisted(() => ({
   cancel: vi.fn(), progressUpdate: vi.fn(), progressLog: vi.fn(), progressFinish: vi.fn()
 }));
 vi.mock("playwright", () => ({ chromium: { launch: mocks.launch } }));
-vi.mock("../../src/config.js", () => ({ loadConfig: () => ({ baseUrl: "https://example.invalid", username: "u", password: "p", dryRun: false, headed: false, slowMoMs: 0, reportDir: "/tmp", group: undefined, fineWorkbookPath: undefined, processAll: mocks.processAll, debug: false, plainProgress: true, haltOnError: false, fineLiga: undefined, fineGruppe: undefined, fineSpielleiter: undefined, fineNaKosten: undefined, fineCatalogue: undefined, fineSheetName: undefined, fineIgnoreColumn: undefined }) }));
+vi.mock("../../src/config.js", async (original) => ({ ...await original<object>(), loadConfig: () => ({ baseUrl: "https://example.invalid", username: "u", password: "p", dryRun: false, recheck: false, groups: [], headed: false, slowMoMs: 0, reportDir: "/tmp", group: undefined, fineWorkbookPath: undefined, processAll: mocks.processAll, debug: false, plainProgress: true, haltOnError: false, fineLiga: undefined, fineGruppe: undefined, fineSpielleiter: undefined, fineNaKosten: undefined, fineCatalogue: undefined, fineSheetName: undefined, fineIgnoreColumn: undefined }) }));
 vi.mock("../../src/auth.js", () => ({ login: mocks.login, ensureSessionActive: mocks.ensure }));
 vi.mock("../../src/navigation.js", () => ({ navigateToMatchSearch: mocks.navigate, cancelAndReturn: mocks.cancel }));
 vi.mock("../../src/match-list.js", () => ({ assertMatchListPage: mocks.assertList, readMatchListPage: mocks.readList, findMatchLink: mocks.findLink, goToNextPage: mocks.next }));
-vi.mock("../../src/match-detail.js", () => ({ waitForMatchDetailPage: mocks.waitDetail, readMatchDetailPage: mocks.readDetail }));
+vi.mock("../../src/match-detail.js", async (original) => ({ ...await original<object>(), waitForMatchDetailPage: mocks.waitDetail, readMatchDetailPage: mocks.readDetail }));
 vi.mock("../../src/approver.js", () => ({ handleApproval: mocks.approval }));
-vi.mock("../../src/validator.js", () => ({ validateMatch: mocks.validate }));
+vi.mock("../../src/validator.js", async (original) => ({ ...await original<object>(), validateMatch: mocks.validate }));
 vi.mock("../../src/progress.js", () => ({ ProgressReporter: class { update = mocks.progressUpdate; log = mocks.progressLog; finish = mocks.progressFinish; } }));
 vi.mock("../../src/reporter.js", async () => {
   const actual = await vi.importActual<typeof ReporterModule>("../../src/reporter.js");

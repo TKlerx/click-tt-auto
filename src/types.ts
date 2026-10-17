@@ -45,7 +45,9 @@ export type ValidationRule =
   | "status"
   | "match-format"
   | "error-messages"
+  | "report-entry"
   | "mf-present"
+  | "mf-comment-review"
   | "player-count"
   | "already-approved";
 
@@ -60,7 +62,7 @@ export interface ValidationResult {
   checks: ValidationCheck[];
 }
 
-export type MatchActionType = "approved" | "skipped" | "already-approved" | "error";
+export type MatchActionType = "approved" | "checked" | "skipped" | "already-approved" | "error";
 
 export interface MatchAction {
   match: MatchEntry;
@@ -72,6 +74,7 @@ export interface MatchAction {
 export interface RunReport {
   timestamp: string;
   dryRun: boolean;
+  recheck?: boolean;
   group: string | null;
   totalFound: number;
   totalScanned: number;
@@ -93,6 +96,7 @@ export interface AppConfig {
   baseUrl: string;
   dryRun: boolean;
   processAll: boolean;
+  recheck: boolean;
   debug: boolean;
   headed: boolean;
   haltOnError: boolean;
@@ -100,6 +104,7 @@ export interface AppConfig {
   slowMoMs: number;
   group: string | null;
   reportDir: string;
+  groups: string[];
   fineWorkbookPath: string | null;
   fineSheetName: string | null;
   fineIgnoreColumn: string;
@@ -153,6 +158,7 @@ export interface FineCatalogueFineDetails {
 }
 
 export interface FineCatalogueEntry extends FineCatalogueFineDetails {
+  perMissingPlayer?: boolean;
   patterns?: FineCataloguePattern[];
   lowestTeam?: FineCatalogueFineDetails;
 }
@@ -167,6 +173,7 @@ export interface FineCatalogueLeague {
 }
 
 export interface FineCatalogueSeason {
+  leagueNames?: string[];
   events?: Record<string, FineCatalogueEntry>;
   leagues?: Record<string, FineCatalogueLeague>;
   lowestTeams?: string[];

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { parseMatchDetailHtml } from "../../src/match-detail.js";
+import { IncompleteMatchReportError, isIncompleteFinishedReport, parseMatchDetailHtml } from "../../src/match-detail.js";
+import type { MatchEntry } from "../../src/types.js";
 
 function detailHtml(contentBetween = "", bemerkungen = ""): string {
   return `
@@ -48,6 +49,40 @@ function detailHtml(contentBetween = "", bemerkungen = ""): string {
 }
 
 describe("parseMatchDetailHtml", () => {
+  it.each(["keine Bemerkungen", "MF A3 / B3"])("keeps following equipment/approval controls out of comments: %s", (comment) => {
+    const html = detailHtml("", comment).replace('<label for="approval">',
+      '<p><input type="checkbox" checked>Heimmannschaft in einheitlichen Trikots: Ja.</p><label for="approval">');
+    const detail = parseMatchDetailHtml(html, { homeTeam: "TSV Eintracht Belle", guestTeam: "TTC Paderborn" });
+    expect(detail.bemerkungen).toBe(comment === "keine Bemerkungen" ? "" : comment);
+  });
+  it("only fines completed unapproved reports after the 24-hour entry deadline", () => {
+    const match: MatchEntry = { index: 0, date: "04.09.2026 20:00", homeTeam: "Home", guestTeam: "Guest",
+      scoreHome: 0, scoreGuest: 0, status: "abgeschlossen", points: "", isApproved: false, erfassenUrl: "", group: "" };
+    const error = new IncompleteMatchReportError("lineup step");
+    const deadline = new Date(2026, 8, 5, 20).getTime();
+    expect(isIncompleteFinishedReport(error, match, deadline)).toBe(true);
+    expect(isIncompleteFinishedReport(error, match, deadline - 1)).toBe(false);
+    expect(isIncompleteFinishedReport(error, { ...match, status: "offen" }, deadline)).toBe(false);
+    expect(isIncompleteFinishedReport(error, { ...match, isApproved: true }, deadline)).toBe(false);
+    expect(isIncompleteFinishedReport(error, { ...match, date: "unknown" }, deadline)).toBe(false);
+    expect(isIncompleteFinishedReport(new Error("timeout"), match, deadline)).toBe(false);
+  });
+  it("identifies the specific incomplete lineup-entry screen while rejecting unrelated pages", () => {
+    const hints = { homeTeam: "TSV Eintracht Belle", guestTeam: "TuS Bad Wünnenberg" };
+    const html = `<h1>Ergebniserfassung (Sechser-Paarkreuz-System)<br>
+      Bezirksoberliga Erwachsene, TSV Eintracht Belle - TuS Bad Wünnenberg</h1>
+      <h2>1. Mannschaftsaufstellung</h2><form name="playerFormationForm">
+      <input type="submit" value="Abbrechen"><input type="submit" value="Weiter &gt;&gt;"></form>`;
+    expect(() => parseMatchDetailHtml(html, hints)).toThrow(IncompleteMatchReportError);
+    for (const invalid of [
+      html.replace('name="playerFormationForm"', ''),
+      html.replace("TSV Eintracht Belle - TuS Bad Wünnenberg", "Other home - Other guest"),
+      html.replace('<input type="submit" value="Abbrechen">', '')
+    ]) {
+      expect(() => parseMatchDetailHtml(invalid, hints)).toThrow(/Expected detail page fields missing:/);
+      expect(() => parseMatchDetailHtml(invalid, hints)).not.toThrow(IncompleteMatchReportError);
+    }
+  });
   it("parses a normal match detail page", () => {
     const detail = parseMatchDetailHtml(detailHtml(), {
       homeTeam: "TSV Eintracht Belle",

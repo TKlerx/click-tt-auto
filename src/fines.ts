@@ -1,4 +1,6 @@
 import ExcelJS, { type Workbook as ExcelWorkbook, type Worksheet } from "exceljs";
+import fs from "node:fs/promises";
+import path from "node:path";
 import { normalizeForSearch, normalizeWhitespace } from "./dom.js";
 import type {
   FineCandidate,
@@ -48,6 +50,7 @@ interface FineSyncOptions {
   naKosten: number;
   fineCatalogue: FineCatalogue | null;
   dryRun?: boolean;
+  createIfMissing?: boolean;
   actions: MatchAction[];
   statusFineMatches: MatchEntry[];
 }
@@ -139,13 +142,13 @@ function parseWorkbookDate(value: string): Date | null {
   const dotMatch = normalizedValue.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
   if (dotMatch) {
     const [, day, month, year] = dotMatch;
-    return new Date(Number(year), Number(month) - 1, Number(day));
+    return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
   }
 
   const isoMatch = normalizedValue.match(/^(\d{4})-(\d{2})-(\d{2})(?:T.*)?$/);
   if (isoMatch) {
     const [, year, month, day] = isoMatch;
-    return new Date(Number(year), Number(month) - 1, Number(day));
+    return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
   }
 
   return null;
@@ -172,7 +175,7 @@ function deriveSerie(value: string): string {
   }
 
   const month = Number(match[2]);
-  return month >= 8 ? "Hinserie" : "Rückserie";
+  return month >= 7 ? "Hinserie" : "Rückserie";
 }
 
 function deriveSeason(value: string): string {
@@ -184,7 +187,7 @@ function deriveSeason(value: string): string {
 
   const month = Number(match[2]);
   const year = Number(match[3]);
-  const startYear = month >= 8 ? year : year - 1;
+  const startYear = month >= 7 ? year : year - 1;
   return `${startYear}-${startYear + 1}`;
 }
 
@@ -240,6 +243,9 @@ function resolveCatalogueSeasonEntry(
   }
 
   const normalizedLiga = normalizeForSearch(leagueInfo.liga);
+  if (seasonCatalogue.leagueNames && !seasonCatalogue.leagueNames.some((name) => normalizeForSearch(name) === normalizedLiga)) {
+    return null;
+  }
   const exactLeague = Object.entries(seasonCatalogue.leagues ?? {}).find(
     ([leagueName]) => normalizeForSearch(leagueName) === normalizedLiga
   )?.[1];
@@ -337,6 +343,9 @@ function resolveCatalogueEntry(
 
   const normalizedText = normalizeForSearch(text);
   const pattern = entry.patterns?.find((candidate) => normalizedText.includes(normalizeForSearch(candidate.match)));
+  if (entry.patterns?.length && !pattern) {
+    return { entry: null, matched: false, pattern: "", lowestTeamApplied: false };
+  }
   const patternedEntry = pattern ? applyFineDetails(entry, pattern) : entry;
 
   if (!patternedEntry.lowestTeam || !isLowestTeam(catalogue, season, leagueInfo, strafeGegen)) {
@@ -439,6 +448,7 @@ function buildCandidate(
     eventCode: string;
     matchText?: string;
     clickTtText?: string;
+    missingPlayers?: number;
     strafeGegen: string;
     grund: string;
     bemerkung?: string;
@@ -457,6 +467,9 @@ function buildCandidate(
     input.strafeGegen
   );
   const fineDetails = applyCatalogueEntry(input, catalogueResolution.entry);
+  if (catalogueResolution.entry?.perMissingPlayer && typeof fineDetails.kosten === "number") {
+    fineDetails.kosten *= input.missingPlayers ?? 1;
+  }
 
   return {
     liga: leagueInfo.liga,
@@ -470,7 +483,12 @@ function buildCandidate(
     grund: fineDetails.grund,
     rechtsgrundlage: fineDetails.rechtsgrundlage ?? "",
     clickTtText: input.clickTtText ?? "",
-    bemerkung: input.bemerkung ?? "",
+    bemerkung: [
+      input.bemerkung,
+      catalogueResolution.entry?.perMissingPlayer
+        ? `${input.missingPlayers ?? 1} fehlende Spieler; ${catalogueResolution.lowestTeamApplied ? "unterste Mannschaft: straffrei" : "unterste Mannschaft gemäß Vereinsmeldung prüfen (A 20.1.6)"}`
+        : ""
+    ].filter(Boolean).join("; "),
     kosten: fineDetails.kosten ?? "",
     spielleiter: options.spielleiter ?? "",
     eingetragenAm: "",
@@ -530,26 +548,28 @@ function extractPlayerCountCandidates(
   const homeMatch = reason.match(/home has (\d+) numbered players/i);
   const guestMatch = reason.match(/guest has (\d+) numbered players/i);
 
-  if (homeMatch) {
+  if (homeMatch && Number(homeMatch[1]) < 6) {
     candidates.push(
       buildCandidate(match, options, {
         eventCode: EVENT_UNVOLLSTAENDIGE_EINZELAUFSTELLUNG,
         matchText: reason,
         strafeGegen: match.homeTeam,
         grund: "Unvollständige Einzelaufstellung",
-        bemerkung: failureSummary
+        bemerkung: failureSummary,
+        missingPlayers: 6 - Number(homeMatch[1])
       })
     );
   }
 
-  if (guestMatch) {
+  if (guestMatch && Number(guestMatch[1]) < 6) {
     candidates.push(
       buildCandidate(match, options, {
         eventCode: EVENT_UNVOLLSTAENDIGE_EINZELAUFSTELLUNG,
         matchText: reason,
         strafeGegen: match.guestTeam,
         grund: "Unvollständige Einzelaufstellung",
-        bemerkung: failureSummary
+        bemerkung: failureSummary,
+        missingPlayers: 6 - Number(guestMatch[1])
       })
     );
   }
@@ -605,13 +625,27 @@ export function deriveFineCandidates(
       if (check.rule === "mf-present") {
         candidates.push(...extractMfCandidates(action, check, options));
       }
+      if (check.rule === "mf-comment-review") {
+        candidates.push(buildCandidate(action.match, options, {
+          eventCode: "mf-kommentar-pruefen", strafeGegen: "",
+          grund: "MF-Angabe in Bemerkungen prüfen", bemerkung: check.reason ?? ""
+        }));
+      }
 
-      if (check.rule === "player-count") {
+      if (check.rule === "player-count" && !getFailedChecks(action).some((failed) => failed.rule === "match-format")) {
         candidates.push(...extractPlayerCountCandidates(action, check, options));
       }
 
       if (check.rule === "error-messages") {
         candidates.push(...extractErrorMessageCandidates(action, check, options));
+      }
+      if (check.rule === "report-entry") {
+        candidates.push(buildCandidate(action.match, options, {
+          eventCode: "fehlerhafte-berichtseingabe",
+          strafeGegen: action.match.homeTeam,
+          grund: "Fehlerhafte Eintragung eines Spielberichts in click-TT",
+          bemerkung: check.reason ?? "Unvollständige Berichtseingabe"
+        }));
       }
     }
   }
@@ -633,17 +667,6 @@ function buildCandidateKey(candidate: FineCandidate): string {
     candidate.heim,
     candidate.gast,
     candidate.strafeGegen,
-    candidate.grund
-  ]
-    .map((value) => normalizeForSearch(String(value)))
-    .join("|");
-}
-
-function buildWorkbookKey(candidate: FineCandidate): string {
-  return [
-    normalizeDateKey(candidate.datum),
-    candidate.heim,
-    candidate.gast,
     candidate.grund
   ]
     .map((value) => normalizeForSearch(String(value)))
@@ -681,7 +704,7 @@ function collectWorkbookKeys(
       fineCataloguePattern: "",
       fineLowestTeamApplied: false
     };
-    const key = buildWorkbookKey(candidate);
+    const key = buildCandidateKey(candidate);
     if (!key.replace(/\|/g, "")) {
       continue;
     }
@@ -699,6 +722,7 @@ export async function loadFineWorkbookIndex(options: {
   workbookPath: string | null;
   sheetName: string | null;
   ignoreColumnName: string;
+  createIfMissing?: boolean;
 }): Promise<FineWorkbookIndex> {
   if (!options.workbookPath) {
     return {
@@ -708,8 +732,7 @@ export async function loadFineWorkbookIndex(options: {
     };
   }
 
-  const workbook = new ExcelWorkbookCtor();
-  await workbook.xlsx.readFile(options.workbookPath);
+  const workbook = await openFineWorkbook(options.workbookPath, options.sheetName, options.ignoreColumnName, options.createIfMissing);
   const worksheet = getWorksheet(workbook, options.sheetName);
   const { existingKeys, ignoredKeys } = collectWorkbookKeys(worksheet, options.ignoreColumnName);
 
@@ -718,6 +741,32 @@ export async function loadFineWorkbookIndex(options: {
     existingKeys,
     ignoredKeys
   };
+}
+
+async function openFineWorkbook(workbookPath: string, sheetName: string | null, ignoreColumn: string, createIfMissing = false): Promise<ExcelWorkbook> {
+  const workbook = new ExcelWorkbookCtor();
+  let missing = false;
+  try {
+    await fs.stat(workbookPath);
+  } catch (error) {
+    if (!createIfMissing || (error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    missing = true;
+  }
+  if (!missing) {
+    await workbook.xlsx.readFile(workbookPath);
+    return workbook;
+  }
+
+  const worksheet = workbook.addWorksheet(sheetName ?? "Sheet1");
+  const headers = [...BASE_HEADERS.slice(0, -1), ignoreColumn, ADDED_AT_COLUMN_NAME, CLICK_TT_TEXT_COLUMN_NAME];
+  worksheet.addRow(headers).font = { bold: true };
+  worksheet.views = [{ state: "frozen", ySplit: 1 }];
+  worksheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: headers.length } };
+  worksheet.columns.forEach((column) => { column.width = 22; });
+  worksheet.getColumn("I").width = 48;
+  worksheet.getColumn("K").width = 70;
+  worksheet.getColumn("P").width = 70;
+  return workbook;
 }
 
 export function getStatusFineCandidateState(
@@ -729,7 +778,7 @@ export function getStatusFineCandidateState(
     return "disabled";
   }
 
-  const key = buildWorkbookKey(buildStatusFineCandidate(match, options));
+  const key = buildCandidateKey(buildStatusFineCandidate(match, options));
   if (workbookIndex.ignoredKeys.has(key)) {
     return "ignored";
   }
@@ -870,8 +919,7 @@ export async function syncFineWorkbook(options: FineSyncOptions): Promise<FineSy
     fineCatalogue: options.fineCatalogue
   });
 
-  const workbook = new ExcelWorkbookCtor();
-  await workbook.xlsx.readFile(options.workbookPath);
+  const workbook = await openFineWorkbook(options.workbookPath, options.sheetName, options.ignoreColumnName, options.createIfMissing);
   const worksheet = getWorksheet(workbook, options.sheetName);
   const headerMap = ensureWorkbookColumns(worksheet, options.ignoreColumnName);
   const { existingKeys, ignoredKeys } = collectWorkbookKeys(worksheet, options.ignoreColumnName);
@@ -884,7 +932,7 @@ export async function syncFineWorkbook(options: FineSyncOptions): Promise<FineSy
   const catalogueMatches: FineCatalogueMatchSummary[] = [];
 
   for (const candidate of candidates) {
-    const key = buildWorkbookKey(candidate);
+    const key = buildCandidateKey(candidate);
 
     if (ignoredKeys.has(key)) {
       ignored += 1;
@@ -931,6 +979,11 @@ export async function syncFineWorkbook(options: FineSyncOptions): Promise<FineSy
   }
 
   if (!options.dryRun) {
+    if (options.createIfMissing) {
+      worksheet.autoFilter = { from: { row: 1, column: 1 },
+        to: { row: getLastDataRow(worksheet), column: worksheet.getRow(1).cellCount } };
+    }
+    await fs.mkdir(path.dirname(options.workbookPath), { recursive: true });
     await workbook.xlsx.writeFile(options.workbookPath);
   }
 

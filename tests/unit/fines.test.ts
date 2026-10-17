@@ -1,4 +1,5 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { access, mkdtemp, rm } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { Workbook } from "exceljs";
@@ -53,6 +54,95 @@ function baseMatch(overrides: Partial<MatchEntry> = {}): MatchEntry {
 }
 
 describe("deriveFineCandidates", () => {
+  const regulationsCatalogue = JSON.parse(readFileSync(
+    new URL("../../data/fine-catalogue.wttv-2026.json", import.meta.url), "utf8"
+  )) as FineCatalogue;
+  const regulationsOptions = {
+    defaultLiga: null, defaultGruppe: null, spielleiter: null, naKosten: 100,
+    fineCatalogue: regulationsCatalogue
+  };
+
+  it("exports ambiguous captain comments for review without a fine or assigned liability", () => {
+    const [candidate] = deriveFineCandidates([{
+      match: baseMatch({ date: "18.09.2026" }), action: "skipped",
+      validation: { isApprovable: false, checks: [
+        { rule: "mf-comment-review", passed: false, reason: "Bemerkungen: MF unklar" }
+      ] }
+    }], [], regulationsOptions);
+    expect(candidate).toMatchObject({ fineEvent: "mf-kommentar-pruefen", strafeGegen: "", kosten: "",
+      rechtsgrundlage: "", grund: "MF-Angabe in Bemerkungen prüfen", bemerkung: "Bemerkungen: MF unklar" });
+  });
+
+  it("exports incomplete-report findings against the home team without treating parser errors as fines", () => {
+    const match = baseMatch({ date: "04.09.2026", homeTeam: "TSV Eintracht Belle", guestTeam: "TuS Bad Wünnenberg" });
+    const [candidate] = deriveFineCandidates([{
+      match, action: "skipped", validation: { isApprovable: false, checks: [
+        { rule: "report-entry", passed: false, reason: "Mannschaftsaufstellung statt Kontrollansicht" }
+      ] }
+    }, { match, action: "error", error: "Expected detail page fields missing" }], [], regulationsOptions);
+    expect(candidate).toMatchObject({ strafeGegen: "TSV Eintracht Belle", kosten: 10,
+      grund: "Fehlerhafte Eintragung eines Spielberichts in click-TT", rechtsgrundlage: "A 20.1.13",
+      clickTtText: "", fineCatalogueMatched: true });
+    expect(candidate?.bemerkung).toContain("Mannschaftsaufstellung statt Kontrollansicht");
+    expect(deriveFineCandidates([{ match, action: "error", error: "timeout" }], [], regulationsOptions)).toEqual([]);
+  });
+
+  it.each([
+    ["Falsche Einzelaufstellung", "A 20.1.5 b", 10],
+    ["Falsche Doppelaufstellung", "A 20.1.5 b", 10],
+    ["falsche Spielpaarungen", "A 20.1.7", 10],
+    ["Fehlende Unterschrift", "A 20.1.9 b", 10],
+    ["verspätete Ergebnismeldung", "A 20.1.11", 10],
+    ["verspätete Eintragung des Spielberichts", "A 20.1.12", 10],
+    ["Fehlerhafte Eintragung", "A 20.1.13", 10],
+    ["nicht einheitliche Trikots", "A 20.1.14", 10],
+    ["Fehlender Spiel-PIN", "A 20.1.18", 10],
+    ["Verweigerung der Mitwirkung", "A 20.1.18", 10],
+    ["Vorsätzliche Falscheintragung", "A 20.1.4", 100],
+    ["Unbekannter Hinweis", "", ""],
+    ["Spielberechtigung vorhanden", "", ""]
+  ])("classifies 2026/27 district evidence: %s", (message, rechtsgrundlage, kosten) => {
+    const [candidate] = deriveFineCandidates([{
+      match: baseMatch({ date: "03.10.2026" }), action: "skipped",
+      validation: { isApprovable: false, checks: [
+        { rule: "error-messages", passed: false, reason: `error message found: ${message}` }
+      ] }
+    }], [], regulationsOptions);
+    expect(candidate).toMatchObject({ rechtsgrundlage, kosten, clickTtText: message,
+      fineCatalogueMatched: Boolean(rechtsgrundlage) });
+  });
+
+  it("charges per missing player, respects lowest-team exemption, and starts the season in July", () => {
+    const action: MatchAction = {
+      match: baseMatch({ date: "01.07.2026" }), action: "skipped",
+      validation: { isApprovable: false, checks: [
+        { rule: "player-count", passed: false, reason: "guest has 4 numbered players" }
+      ] }
+    };
+    const [candidate] = deriveFineCandidates([action], [], regulationsOptions);
+    expect(candidate).toMatchObject({ kosten: 20, fineSeason: "2026-2027", serie: "Hinserie" });
+    const exemptCatalogue: FineCatalogue = structuredClone(regulationsCatalogue);
+    exemptCatalogue.seasons["2026-2027"]!.lowestTeams = ["TTS Detmold"];
+    const [exempt] = deriveFineCandidates([action], [], { ...regulationsOptions, fineCatalogue: exemptCatalogue });
+    expect(exempt).toMatchObject({ kosten: 0, fineLowestTeamApplied: true });
+    const [noShow] = deriveFineCandidates([], [
+      baseMatch({ date: "01.07.2026", status: "nicht angetreten" })
+    ], { ...regulationsOptions, fineCatalogue: exemptCatalogue });
+    expect(noShow?.kosten).toBe(100);
+    action.validation!.checks.push({ rule: "match-format", passed: false });
+    expect(deriveFineCandidates([action], [], regulationsOptions)).toEqual([]);
+  });
+
+  it("does not apply district rates to Verband leagues", () => {
+    const [candidate] = deriveFineCandidates([{
+      match: baseMatch({ date: "03.10.2026", liga: "NRW-Liga" }), action: "skipped",
+      validation: { isApprovable: false, checks: [
+        { rule: "mf-present", passed: false, reason: "MF missing for TTS Detmold" }
+      ] }
+    }], [], regulationsOptions);
+    expect(candidate).toMatchObject({ kosten: "", fineCatalogueMatched: false });
+  });
+
   it("creates candidates for skipped validation reasons and nicht angetreten rows", () => {
     const action: MatchAction = {
       match: baseMatch({ homeTeam: "SC Wewer", guestTeam: "SV Heide Paderborn" }),
@@ -291,7 +381,33 @@ describe("deriveFineCandidates", () => {
 });
 
 describe("syncFineWorkbook", () => {
-  it("deduplicates by teams, date, and reason while keeping different reasons", async () => {
+  it("creates a recheck workbook only outside dry run, then deduplicates and preserves Ignore", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "click-tt-recheck-"));
+    tempDirs.push(dir);
+    const options = {
+      workbookPath: path.join(dir, "new-season", "fines.xlsx"), sheetName: "Sheet1", ignoreColumnName: "Ignore",
+      createIfMissing: true, spielleiter: "Tester", defaultLiga: null, defaultGruppe: null,
+      naKosten: 100, fineCatalogue: null, actions: [],
+      statusFineMatches: [baseMatch({ status: "nicht angetreten", isApproved: true })]
+    };
+    expect((await loadFineWorkbookIndex(options)).enabled).toBe(true);
+    expect(await syncFineWorkbook({ ...options, dryRun: true })).toMatchObject({ appended: 1, dryRun: true });
+    await expect(access(options.workbookPath)).rejects.toThrow();
+    expect(await syncFineWorkbook(options)).toMatchObject({ appended: 1 });
+    const workbook = new Workbook();
+    await workbook.xlsx.readFile(options.workbookPath);
+    const sheet = workbook.getWorksheet("Sheet1")!;
+    expect(sheet.autoFilter).toBe("A1:P2");
+    expect(sheet.getRow(1).values).toEqual([undefined, "Liga", "Gruppe", "Serie", "Datum", "Spielnummer", "Heim", "Gast",
+      "Strafe gegen", "Grund", "Rechtsgrundlage", "Bemerkung", "Kosten", "Spielleiter", "Ignore", "Eingetragen am", "Click-TT Text"]);
+    expect(await syncFineWorkbook(options)).toMatchObject({ appended: 0, existing: 1 });
+    sheet.getCell("N2").value = "x";
+    await workbook.xlsx.writeFile(options.workbookPath);
+    expect(await syncFineWorkbook(options)).toMatchObject({ appended: 0, ignored: 1 });
+    expect((await loadFineWorkbookIndex(options)).ignoredKeys.size).toBe(1);
+    await expect(syncFineWorkbook({ ...options, sheetName: "wrong" })).rejects.toThrow("sheet not found");
+  });
+  it("deduplicates by fixture, liable team and reason while keeping each team's fines", async () => {
     const workbookPath = await createWorkbook(
       [
         "Liga",
@@ -308,7 +424,7 @@ describe("syncFineWorkbook", () => {
         "Kosten",
         "Spielleiter"
       ],
-      [["Bezirksoberliga", "", "Hinserie", "03.10.2025", "old-number", "TuRa Elsen III", "TTS Detmold", "other team", "MF fehlt", "", "", "", "Timo Klerx"]]
+      [["Bezirksoberliga", "", "Hinserie", "03.10.2025", "old-number", "TuRa Elsen III", "TTS Detmold", "TTS Detmold", "MF fehlt", "", "", "", "Timo Klerx"]]
     );
 
     const result = await syncFineWorkbook({
@@ -327,7 +443,7 @@ describe("syncFineWorkbook", () => {
           validation: {
             isApprovable: false,
             checks: [
-              { rule: "mf-present", passed: false, reason: "MF missing for TTS Detmold" },
+              { rule: "mf-present", passed: false, reason: "MF missing for TuRa Elsen III; MF missing for TTS Detmold" },
               { rule: "player-count", passed: false, reason: "guest has 5 numbered players" }
             ]
           }
@@ -336,12 +452,14 @@ describe("syncFineWorkbook", () => {
       statusFineMatches: []
     });
 
-    expect(result).toMatchObject({ totalCandidates: 2, appended: 1, existing: 1 });
+    expect(result).toMatchObject({ totalCandidates: 3, appended: 2, existing: 1 });
     const workbook = new Workbook();
     await workbook.xlsx.readFile(workbookPath);
     const worksheet = workbook.getWorksheet("Sheet1");
-    expect(worksheet?.rowCount).toBe(3);
-    expect(worksheet?.getCell(3, 9).value).toBe("Unvollständige Einzelaufstellung");
+    expect(worksheet?.rowCount).toBe(4);
+    expect(worksheet?.getCell(3, 8).value).toBe("TuRa Elsen III");
+    expect(worksheet?.getCell(3, 9).value).toBe("MF fehlt");
+    expect(worksheet?.getCell(4, 9).value).toBe("Unvollständige Einzelaufstellung");
   });
 
   it("adds the metadata columns and appends only missing candidates", async () => {
@@ -417,13 +535,14 @@ describe("syncFineWorkbook", () => {
     });
     const dateValue = worksheet?.getCell(3, 4).value;
     expect(dateValue instanceof Date).toBe(true);
+    expect((dateValue as Date).toISOString()).toBe("2025-10-03T00:00:00.000Z");
     expect(worksheet?.getCell(3, 4).numFmt).toBe("dd.mm.yyyy");
     const addedAtValue = worksheet?.getCell(3, 14).value;
     expect(addedAtValue instanceof Date).toBe(true);
     expect(worksheet?.getCell(3, 14).numFmt).toBe("yyyy-mm-dd hh:mm:ss");
   });
 
-  it("does not append candidates whose existing row is marked ignored", async () => {
+  it("ignores only the liable team on the ignored row and keeps the other team's fine", async () => {
     const workbookPath = await createWorkbook(
       [
         "Liga",
@@ -464,7 +583,7 @@ describe("syncFineWorkbook", () => {
               { rule: "status", passed: true },
               { rule: "match-format", passed: true },
               { rule: "error-messages", passed: true },
-              { rule: "mf-present", passed: false, reason: "MF missing for SV Heide Paderborn" },
+              { rule: "mf-present", passed: false, reason: "MF missing for SC Wewer; MF missing for SV Heide Paderborn" },
               { rule: "player-count", passed: true },
               { rule: "already-approved", passed: true }
             ]
@@ -475,14 +594,14 @@ describe("syncFineWorkbook", () => {
     });
 
     expect(result).toMatchObject({
-      totalCandidates: 1,
-      appended: 0,
+      totalCandidates: 2,
+      appended: 1,
       existing: 0,
       ignored: 1
     });
   });
 
-  it("matches an existing fine by home, guest, date, and reason despite a different match number", async () => {
+  it("matches an existing fine by home, guest, date, liable team and reason despite a different match number", async () => {
     const workbookPath = await createWorkbook(
       [
         "Liga",
@@ -519,7 +638,7 @@ describe("syncFineWorkbook", () => {
           action: "skipped",
           validation: {
             isApprovable: false,
-            checks: [{ rule: "mf-present", passed: false, reason: "MF missing for SV Heide Paderborn" }]
+            checks: [{ rule: "mf-present", passed: false, reason: "MF missing for SC Wewer" }]
           }
         }
       ],

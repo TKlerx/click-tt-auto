@@ -1,7 +1,32 @@
 import type { Page } from "playwright";
 import { hasApprovalCheckbox, isApprovalCheckboxChecked } from "./approval-checkbox.js";
 import { createDocument, normalizeForSearch, normalizeWhitespace } from "./dom.js";
-import type { MatchDetail, Player, TeamLineup } from "./types.js";
+import type { MatchDetail, MatchEntry, Player, TeamLineup } from "./types.js";
+
+export class IncompleteMatchReportError extends Error {}
+
+function scheduledMatchTime(match: MatchEntry): number {
+  const date = match.date.match(/(\d{1,2})\.(\d{1,2})\.(\d{4})\s+(\d{1,2}):(\d{2})/);
+  if (!date) {
+    return Number.NaN;
+  }
+  const [, day, month, year, hour, minute] = date;
+  const scheduledAt = new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute));
+  if (scheduledAt.getFullYear() !== Number(year) || scheduledAt.getMonth() !== Number(month) - 1 ||
+    scheduledAt.getDate() !== Number(day) || scheduledAt.getHours() !== Number(hour) || scheduledAt.getMinutes() !== Number(minute)) {
+    return Number.NaN;
+  }
+  return scheduledAt.getTime();
+}
+
+export function isPastMatch(match: MatchEntry, now = Date.now()): boolean {
+  return scheduledMatchTime(match) < now;
+}
+
+export function isIncompleteFinishedReport(error: unknown, match: MatchEntry, now = Date.now(), recheck = false): boolean {
+  return error instanceof IncompleteMatchReportError && normalizeForSearch(match.status) === "abgeschlossen" &&
+    (recheck || !match.isApproved) && now - scheduledMatchTime(match) >= 24 * 60 * 60 * 1000;
+}
 
 function getDirectText(element: Element): string {
   return normalizeWhitespace(
@@ -350,6 +375,9 @@ function extractBemerkungen(document: Document): string {
     if (/^h[1-6]$/.test(tagName) || tagName === "legend") {
       break;
     }
+    if (cursor.matches('input, button, label, select') || cursor.querySelector('input, button, select')) {
+      break;
+    }
 
     if (tagName === "p" || tagName === "div" || tagName === "textarea" || tagName === "table") {
       const text =
@@ -357,16 +385,12 @@ function extractBemerkungen(document: Document): string {
           ? normalizeWhitespace((cursor as HTMLTextAreaElement).value)
           : normalizeWhitespace(cursor.textContent);
 
+      if (/^keine bemerkungen(?: vorhanden)?[.!]?$/i.test(text)) {
+        break;
+      }
       if (text) {
         collected.push(text);
       }
-    }
-
-    if (
-      cursor.querySelector('input[type="checkbox"]') &&
-      /spielbericht genehmigt/i.test(normalizeWhitespace(cursor.textContent))
-    ) {
-      break;
     }
 
     cursor = cursor.nextElementSibling;
@@ -424,30 +448,48 @@ function getMissingExpectedFields(document: Document, lineupTableCount: number):
   return missing;
 }
 
-export function mentionsMfInBemerkungen(teamName: string, bemerkungen: string): boolean {
-  const normalizedTeam = normalizeForSearch(teamName);
-  const normalizedRemarks = normalizeForSearch(bemerkungen);
-  if (!normalizedRemarks.includes("mf")) {
-    return false;
+export function mfEvidenceInBemerkungen(detail: MatchDetail): { home: boolean; guest: boolean } {
+  const romanNumbers = ["i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x"];
+  const normalizeTeamReferences = (value: string) => normalizeForSearch(value).replace(
+    /\b(?:i|ii|iii|iv|v|vi|vii|viii|ix|x)\b/g,
+    (number) => String(romanNumbers.indexOf(number) + 1)
+  );
+  const remarks = normalizeTeamReferences(detail.bemerkungen);
+  const label = /\b(?:m[.\s]*f|mann?schafts?f(?:u|ue)hrer(?:in(?:nen)?)?|spielf(?:u|ue)hrer|kapit(?:a|ae)n(?:e|in(?:nen)?)?|captains?)\b/;
+  if (!label.test(remarks)) {
+    return { home: false, guest: false };
   }
-
-  if (normalizedTeam && normalizedRemarks.includes(normalizedTeam)) {
-    return true;
+  // ponytail: conflicting/negative free text goes to review rather than guessing captain intent.
+  if (/\b(?:fehlt|fehlen|fehlend|keine?|nicht|unbekannt)\b/.test(remarks)) {
+    return { home: false, guest: false };
   }
-
-  const teamTokens = normalizedTeam.split(" ").filter((token) => token.length > 2);
-  return teamTokens.some((token) => normalizedRemarks.includes(token));
-}
-
-export function hasStructuredMfEvidenceInBemerkungen(bemerkungen: string): boolean {
-  const normalizedRemarks = normalizeForSearch(bemerkungen);
-  if (!/\b(?:mf|mannschaftsfuhrer)\b/.test(normalizedRemarks)) {
-    return false;
-  }
-
-  const hasTeamAReference = /\ba\s*[1-6]\b/.test(normalizedRemarks);
-  const hasTeamBReference = /\bb\s*[1-6]\b/.test(normalizedRemarks);
-  return hasTeamAReference && hasTeamBReference;
+  const words = (value: string) => normalizeForSearch(value).replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  const commentWords = ` ${words(detail.bemerkungen)} `;
+  const identifies = (team: TeamLineup, other: TeamLineup, side: string) => {
+    const teamName = normalizeTeamReferences(team.teamName);
+    const numberedTeam = teamName.match(/^(.*)\s+(\d+)$/);
+    if (numberedTeam && new RegExp(`\\b${escapeRegex(numberedTeam[1]!)}\\s+(?!${numberedTeam[2]}\\b)\\d+\\b`).test(remarks)) {
+      return false;
+    }
+    const position = new RegExp(`\\b(?:${side})\\s*[-:.]?\\s*[1-6]\\b`);
+    const namedSide = new RegExp(`\\b(?:${side})\\s*[:=–-]\\s*\\p{L}`, "u");
+    const namedTeam = new RegExp(`\\b${escapeRegex(teamName)}\\s*(?:[:=–-]|ist)\\s*\\p{L}`, "u");
+    const namedPlayer = team.players.some(({ name }) => {
+      const key = words(name).split(" ").sort().join(" ");
+      if (other.players.some((player) => words(player.name).split(" ").sort().join(" ") === key)) {
+        return false;
+      }
+      const parts = name.split(",");
+      return [parts.join(" "), parts.reverse().join(" ")].some((value) =>
+        words(value).split(" ").length >= 2 && commentWords.includes(` ${words(value)} `)
+      );
+    });
+    return position.test(remarks) || namedSide.test(remarks) || namedTeam.test(remarks) || namedPlayer;
+  };
+  return {
+    home: identifies(detail.homeTeam, detail.guestTeam, "a|heim|heimmannschaft"),
+    guest: identifies(detail.guestTeam, detail.homeTeam, "b|gast|gastmannschaft")
+  };
 }
 
 export function parseMatchDetailHtml(
@@ -455,6 +497,18 @@ export function parseMatchDetailHtml(
   teamHints: { homeTeam: string; guestTeam: string }
 ): MatchDetail {
   const document = createDocument(html);
+  const competitionName = detectCompetitionName(document, teamHints);
+  const lineupForm = document.querySelector('form[name="playerFormationForm"]');
+  const isLineupStep = Array.from(document.querySelectorAll("h2, h3, legend")).some(
+    (heading) => /^1\.\s*Mannschaftsaufstellung$/i.test(normalizeWhitespace(heading.textContent))
+  );
+  if (competitionName && lineupForm && isLineupStep && !hasApprovalCheckbox(document) &&
+    lineupForm.querySelector('input[type="submit"][value^="Weiter"], button[value^="Weiter"]') &&
+    lineupForm.querySelector('input[type="submit"][value="Abbrechen"], button[value="Abbrechen"]')) {
+    throw new IncompleteMatchReportError(
+      "Fehlerhafte Eintragung eines Spielberichts in click-TT: Mannschaftsaufstellung statt Kontrollansicht; Bericht nicht vollständig erfasst."
+    );
+  }
   const tables = findLineupTables(document);
   const missingExpectedFields = getMissingExpectedFields(document, tables.length);
   if (missingExpectedFields.length > 0) {
@@ -476,7 +530,6 @@ export function parseMatchDetailHtml(
   }
 
   const errorState = detectUnexpectedTopContent(document, tables);
-  const competitionName = detectCompetitionName(document, teamHints);
   const competitionInfo = competitionName ? splitCompetitionName(competitionName) : null;
 
   return {

@@ -166,7 +166,7 @@ export async function navigateToMatchSearch(
   }
 
   if (group) {
-    const groupSelect = page.locator('select[name*="gruppe" i], select').first();
+    const groupSelect = page.locator("select").filter({ has: page.getByRole("option", { name: group, exact: true }) }).first();
     if ((await groupSelect.count()) === 0) {
       throw new Error("Group select not found on filter page.");
     }

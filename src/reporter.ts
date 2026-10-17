@@ -55,7 +55,7 @@ export async function writeRunReport(report: RunReport, reportDir: string): Prom
 export function formatStdoutReport(report: RunReport): string {
   const skipped = report.actions.filter((action) => action.action === "skipped");
   const lines = [
-    "click-TT Match Auto-Approval",
+    report.recheck ? "click-TT Match Recheck (no approval changes)" : "click-TT Match Auto-Approval",
     "============================",
     `Mode: ${report.dryRun ? "DRY RUN" : "LIVE"}`,
     `Group: ${report.group ?? "Alle meine Gruppen"}`,
@@ -72,6 +72,9 @@ export function formatStdoutReport(report: RunReport): string {
     `  Already approved: ${report.totalAlreadyApproved}`,
     `  Errors:           ${report.totalErrors}`
   ];
+  if (report.recheck) {
+    lines.push(`  Checked clean:    ${report.actions.filter((action) => action.action === "checked").length}`);
+  }
 
   if (report.fineSync?.enabled) {
     lines.push(
