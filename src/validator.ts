@@ -1,4 +1,4 @@
-import { hasStructuredMfEvidenceInBemerkungen, mentionsMfInBemerkungen } from "./match-detail.js";
+import { mfEvidenceInBemerkungen } from "./match-detail.js";
 import type { MatchDetail, MatchEntry, ValidationCheck, ValidationResult } from "./types.js";
 
 function pushCheck(checks: ValidationCheck[], rule: ValidationCheck["rule"], passed: boolean, reason?: string): void {
@@ -25,15 +25,18 @@ function hasSixPlayers(detail: MatchDetail): { passed: boolean; reason?: string 
   return { passed: false, reason: reasons.join("; ") };
 }
 
-function hasMfForBothTeams(detail: MatchDetail): { passed: boolean; reason?: string } {
-  const structuredMfEvidence = hasStructuredMfEvidenceInBemerkungen(detail.bemerkungen);
-  const homeHasMf =
-    detail.homeTeam.hasMF || structuredMfEvidence || mentionsMfInBemerkungen(detail.homeTeam.teamName, detail.bemerkungen);
-  const guestHasMf =
-    detail.guestTeam.hasMF || structuredMfEvidence || mentionsMfInBemerkungen(detail.guestTeam.teamName, detail.bemerkungen);
+function hasMfForBothTeams(detail: MatchDetail): { passed: boolean; reason?: string; needsReview?: boolean } {
+  const comments = mfEvidenceInBemerkungen(detail);
+  const homeHasMf = detail.homeTeam.hasMF || comments.home;
+  const guestHasMf = detail.guestTeam.hasMF || comments.guest;
 
   if (homeHasMf && guestHasMf) {
     return { passed: true };
+  }
+
+  if (detail.bemerkungen.trim()) {
+    return { passed: false, needsReview: true,
+      reason: `MF-Angaben manuell prüfen (${[!homeHasMf ? detail.homeTeam.teamName : "", !guestHasMf ? detail.guestTeam.teamName : ""].filter(Boolean).join("; ")}). Bemerkungen: ${detail.bemerkungen}` };
   }
 
   const reasons: string[] = [];
@@ -46,7 +49,11 @@ function hasMfForBothTeams(detail: MatchDetail): { passed: boolean; reason?: str
   return { passed: false, reason: reasons.join("; ") };
 }
 
-export function validateMatch(match: MatchEntry, detail: MatchDetail): ValidationResult {
+export function shouldInspectMatch(match: MatchEntry, recheck = false): boolean {
+  return match.status.toLowerCase() === "abgeschlossen" && (recheck || !match.isApproved);
+}
+
+export function validateMatch(match: MatchEntry, detail: MatchDetail, recheck = false): ValidationResult {
   const checks: ValidationCheck[] = [];
 
   const statusPassed = match.status.toLowerCase() === "abgeschlossen";
@@ -59,12 +66,12 @@ export function validateMatch(match: MatchEntry, detail: MatchDetail): Validatio
   pushCheck(checks, "error-messages", errorPassed, errorPassed ? undefined : `error message found: ${detail.errorMessageText ?? "unexpected content"}`);
 
   const mfResult = hasMfForBothTeams(detail);
-  pushCheck(checks, "mf-present", mfResult.passed, mfResult.reason);
+  pushCheck(checks, mfResult.needsReview ? "mf-comment-review" : "mf-present", mfResult.passed, mfResult.reason);
 
   const playerResult = hasSixPlayers(detail);
   pushCheck(checks, "player-count", playerResult.passed, playerResult.reason);
 
-  const alreadyApprovedPassed = !detail.isAlreadyApproved;
+  const alreadyApprovedPassed = recheck || !detail.isAlreadyApproved;
   pushCheck(checks, "already-approved", alreadyApprovedPassed, alreadyApprovedPassed ? undefined : "approval checkbox already checked");
 
   return {

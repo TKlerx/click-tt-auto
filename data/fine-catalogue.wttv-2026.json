@@ -1,0 +1,209 @@
+{
+  "seasons": {
+    "2026-2027": {
+      "leagueNames": [
+        "Bezirksoberliga",
+        "Bezirksliga",
+        "1. Bezirksliga",
+        "2. Bezirksliga",
+        "Bezirksklasse",
+        "1. Bezirksklasse",
+        "2. Bezirksklasse",
+        "3. Bezirksklasse"
+      ],
+      "lowestTeams": [],
+      "events": {
+        "fehlerhafte-berichtseingabe": {
+          "grund": "Fehlerhafte Eintragung eines Spielberichts in click-TT",
+          "rechtsgrundlage": "A 20.1.13",
+          "kosten": 10
+        },
+        "nicht-angetreten": {
+          "grund": "Nichtantreten einer Mannschaft",
+          "rechtsgrundlage": "A 20.1.1",
+          "kosten": 100
+        },
+        "mf-fehlt": {
+          "grund": "Fehlende Angabe des Mannschaftsführers",
+          "rechtsgrundlage": "A 20.1.9 a",
+          "kosten": 10
+        },
+        "unvollstaendige-einzelaufstellung": {
+          "grund": "Unvollständiges Antreten einer Mannschaft im Einzel",
+          "rechtsgrundlage": "A 20.1.6",
+          "kosten": 10,
+          "perMissingPlayer": true,
+          "lowestTeam": {
+            "kosten": 0
+          }
+        },
+        "error-message": {
+          "patterns": [
+            {
+              "match": "Vorsätzliche Falscheintragung",
+              "grund": "Vorsätzliche Falscheintragung im Papier-Spielbericht, in nuScore oder in click-TT",
+              "rechtsgrundlage": "A 20.1.4",
+              "kosten": 100
+            },
+            {
+              "match": "Falsche Einzelaufstellung",
+              "grund": "Falsche Einzel- oder Doppelaufstellung",
+              "rechtsgrundlage": "A 20.1.5 b",
+              "kosten": 10
+            },
+            {
+              "match": "Falsche Doppelaufstellung",
+              "grund": "Falsche Einzel- oder Doppelaufstellung",
+              "rechtsgrundlage": "A 20.1.5 b",
+              "kosten": 10
+            },
+            {
+              "match": "fehlende Spielberechtigung",
+              "grund": "Fehlende Spiel- oder Einsatzberechtigung",
+              "rechtsgrundlage": "A 20.1.5 a",
+              "kosten": "10 € pro Spieler; Anzahl prüfen"
+            },
+            {
+              "match": "keine Spielberechtigung",
+              "grund": "Fehlende Spiel- oder Einsatzberechtigung",
+              "rechtsgrundlage": "A 20.1.5 a",
+              "kosten": "10 € pro Spieler; Anzahl prüfen"
+            },
+            {
+              "match": "fehlende Einsatzberechtigung",
+              "grund": "Fehlende Spiel- oder Einsatzberechtigung",
+              "rechtsgrundlage": "A 20.1.5 a",
+              "kosten": "10 € pro Spieler; Anzahl prüfen"
+            },
+            {
+              "match": "keine Einsatzberechtigung",
+              "grund": "Fehlende Spiel- oder Einsatzberechtigung",
+              "rechtsgrundlage": "A 20.1.5 a",
+              "kosten": "10 € pro Spieler; Anzahl prüfen"
+            },
+            {
+              "match": "falsche Spielpaarung",
+              "grund": "Falsche Spielpaarung/en im Spielbericht",
+              "rechtsgrundlage": "A 20.1.7",
+              "kosten": 10
+            },
+            {
+              "match": "ohne Umrandungen",
+              "grund": "Durchführung ohne Umrandungen oder Zählgeräte",
+              "rechtsgrundlage": "A 20.1.8",
+              "kosten": 10
+            },
+            {
+              "match": "ohne Zählgeräte",
+              "grund": "Durchführung ohne Umrandungen oder Zählgeräte",
+              "rechtsgrundlage": "A 20.1.8",
+              "kosten": 10
+            },
+            {
+              "match": "Fehlende Angabe des Mannschaftsführers",
+              "grund": "Fehlende Angabe des Mannschaftsführers",
+              "rechtsgrundlage": "A 20.1.9 a",
+              "kosten": 10
+            },
+            {
+              "match": "Fehlende Unterschrift",
+              "grund": "Fehlende Unterschrift unter dem Papier-Spielbericht",
+              "rechtsgrundlage": "A 20.1.9 b",
+              "kosten": 10
+            },
+            {
+              "match": "fehlende Angaben zu Spielbeginn",
+              "grund": "Fehlende Angaben zu Spielbeginn, Spielende, Trikots, Zählgeräten oder Umrandungen",
+              "rechtsgrundlage": "A 20.1.9 c",
+              "kosten": 10
+            },
+            {
+              "match": "fehlende Angaben zu Spielende",
+              "grund": "Fehlende Angaben zu Spielbeginn, Spielende, Trikots, Zählgeräten oder Umrandungen",
+              "rechtsgrundlage": "A 20.1.9 c",
+              "kosten": 10
+            },
+            {
+              "match": "fehlende Angaben zu Trikots",
+              "grund": "Fehlende Angaben zu Spielbeginn, Spielende, Trikots, Zählgeräten oder Umrandungen",
+              "rechtsgrundlage": "A 20.1.9 c",
+              "kosten": 10
+            },
+            {
+              "match": "fehlende Angaben zu Zählgeräten",
+              "grund": "Fehlende Angaben zu Spielbeginn, Spielende, Trikots, Zählgeräten oder Umrandungen",
+              "rechtsgrundlage": "A 20.1.9 c",
+              "kosten": 10
+            },
+            {
+              "match": "fehlende Angaben zu Umrandungen",
+              "grund": "Fehlende Angaben zu Spielbeginn, Spielende, Trikots, Zählgeräten oder Umrandungen",
+              "rechtsgrundlage": "A 20.1.9 c",
+              "kosten": 10
+            },
+            {
+              "match": "Verspätetes Antreten",
+              "grund": "Verspätetes Antreten zu einem Mannschaftskampf",
+              "rechtsgrundlage": "A 20.1.10",
+              "kosten": 10
+            },
+            {
+              "match": "verspätete Ergebnismeldung",
+              "grund": "Fehlende oder verspätete Ergebnismeldung",
+              "rechtsgrundlage": "A 20.1.11",
+              "kosten": 10
+            },
+            {
+              "match": "fehlende Ergebnismeldung",
+              "grund": "Fehlende oder verspätete Ergebnismeldung",
+              "rechtsgrundlage": "A 20.1.11",
+              "kosten": 10
+            },
+            {
+              "match": "verspätete Eintragung des Spielberichts",
+              "grund": "Fehlende oder verspätete Eintragung des Spielberichts in click-TT",
+              "rechtsgrundlage": "A 20.1.12",
+              "kosten": 10
+            },
+            {
+              "match": "fehlende Eintragung des Spielberichts",
+              "grund": "Fehlende oder verspätete Eintragung des Spielberichts in click-TT",
+              "rechtsgrundlage": "A 20.1.12",
+              "kosten": 10
+            },
+            {
+              "match": "Fehlerhafte Eintragung",
+              "grund": "Fehlerhafte Eintragung eines Spielberichts in click-TT",
+              "rechtsgrundlage": "A 20.1.13",
+              "kosten": 10
+            },
+            {
+              "match": "nicht einheitlichen Trikots",
+              "grund": "Spielen in nicht einheitlichen Trikots",
+              "rechtsgrundlage": "A 20.1.14",
+              "kosten": 10
+            },
+            {
+              "match": "nicht einheitliche Trikots",
+              "grund": "Spielen in nicht einheitlichen Trikots",
+              "rechtsgrundlage": "A 20.1.14",
+              "kosten": 10
+            },
+            {
+              "match": "Fehlender Spiel-PIN",
+              "grund": "Fehlender Spiel-PIN bzw. Verweigerung der Mitwirkung am digitalen Spielbericht",
+              "rechtsgrundlage": "A 20.1.18",
+              "kosten": 10
+            },
+            {
+              "match": "Verweigerung der Mitwirkung",
+              "grund": "Fehlender Spiel-PIN bzw. Verweigerung der Mitwirkung am digitalen Spielbericht",
+              "rechtsgrundlage": "A 20.1.18",
+              "kosten": 10
+            }
+          ]
+        }
+      }
+    }
+  }
+}

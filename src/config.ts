@@ -2,7 +2,17 @@ import { config as loadEnv } from "dotenv";
 import fs from "node:fs";
 import minimist from "minimist";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import type { AppConfig, FineCatalogue } from "./types.js";
+import { normalizeForSearch } from "./dom.js";
+
+export function isGroupInScope(group: string, groups: string[]): boolean {
+  return groups.length === 0 || groups.some((allowed) => normalizeForSearch(allowed) === normalizeForSearch(group));
+}
+
+export function describeGroupScope(config: Pick<AppConfig, "group" | "groups">): string {
+  return config.group ?? (config.groups.join(", ") || "Alle meine Gruppen");
+}
 
 interface CliArgs {
   "dry-run"?: boolean;
@@ -12,6 +22,8 @@ interface CliArgs {
   "halt-on-error"?: boolean;
   "plain-progress"?: boolean;
   "process-all"?: boolean;
+  recheck?: boolean;
+  "fine-workbook"?: string;
   "slow-mo"?: string;
   "report-dir"?: string;
 }
@@ -49,6 +61,9 @@ function assertFineCatalogueEvents(events: unknown, sourcePath: string, scope: s
     if (entry.lowestTeam !== undefined && !isRecord(entry.lowestTeam)) {
       throw new Error(`Invalid fine catalogue ${sourcePath}. ${scope} event ${eventName} lowestTeam must be an object.`);
     }
+    if (entry.perMissingPlayer !== undefined && typeof entry.perMissingPlayer !== "boolean") {
+      throw new Error(`Invalid fine catalogue ${sourcePath}. ${scope} event ${eventName} perMissingPlayer must be a boolean.`);
+    }
   }
 }
 
@@ -74,6 +89,10 @@ function assertFineCatalogue(value: unknown, sourcePath: string): asserts value 
 
     assertFineCatalogueEvents(season.events, sourcePath, `Season ${seasonName}`);
     assertLowestTeams(season.lowestTeams, sourcePath, `Season ${seasonName}`);
+    if (season.leagueNames !== undefined &&
+      (!Array.isArray(season.leagueNames) || season.leagueNames.some((name) => typeof name !== "string" || !name.trim()))) {
+      throw new Error(`Invalid fine catalogue ${sourcePath}. Season ${seasonName} leagueNames must be an array of league names.`);
+    }
 
     if (season.leagues !== undefined && !isRecord(season.leagues)) {
       throw new Error(`Invalid fine catalogue ${sourcePath}. Season ${seasonName} leagues must be an object.`);
@@ -104,13 +123,15 @@ function loadFineCatalogue(cataloguePath: string | null): FineCatalogue | null {
 
 export function loadConfig(argv = process.argv.slice(2)): AppConfig {
   loadEnv();
+  // Some package runners forward their argument separator to the script.
+  if (argv[0] === "--") argv = argv.slice(1);
 
   const explicitNoHaltOnError = argv.includes("--no-halt-on-error");
   const explicitHaltOnError = argv.includes("--halt-on-error");
 
   const args = minimist<CliArgs>(argv, {
-    boolean: ["dry-run", "debug", "headed", "halt-on-error", "plain-progress", "process-all"],
-    string: ["group", "slow-mo", "report-dir"],
+    boolean: ["dry-run", "debug", "headed", "halt-on-error", "plain-progress", "process-all", "recheck"],
+    string: ["group", "slow-mo", "report-dir", "fine-workbook"],
     alias: { g: "group" },
     default: {
       "dry-run": false,
@@ -135,14 +156,22 @@ export function loadConfig(argv = process.argv.slice(2)): AppConfig {
   const baseUrl =
     process.env.CLICK_TT_URL?.trim() ||
     "https://wttv.click-tt.de/cgi-bin/WebObjects/nuLigaAdminTTDE.woa";
-  const fineWorkbookPath = process.env.CLICK_TT_FINE_WORKBOOK_PATH?.trim() || null;
+  const fineWorkbookPath = args["fine-workbook"]?.trim() || process.env.CLICK_TT_FINE_WORKBOOK_PATH?.trim() || null;
+  if (args.recheck && !fineWorkbookPath) {
+    throw new Error("Recheck requires --fine-workbook or CLICK_TT_FINE_WORKBOOK_PATH.");
+  }
+  const groups = (process.env.CLICK_TT_GROUPS ?? "").split(",").map((group) => group.trim()).filter(Boolean);
+  if (args.group && !isGroupInScope(args.group, groups)) {
+    throw new Error("The requested --group is outside CLICK_TT_GROUPS.");
+  }
   const fineSheetName = process.env.CLICK_TT_FINE_SHEET_NAME?.trim() || null;
   const fineIgnoreColumn = process.env.CLICK_TT_FINE_IGNORE_COLUMN?.trim() || "Ignore";
   const fineSpielleiter = process.env.CLICK_TT_FINE_SPIELLEITER?.trim() || null;
   const fineLiga = process.env.CLICK_TT_FINE_DEFAULT_LIGA?.trim() || null;
   const fineGruppe = process.env.CLICK_TT_FINE_DEFAULT_GRUPPE?.trim() || null;
   const fineNaKosten = Number.parseInt(process.env.CLICK_TT_FINE_NA_KOSTEN?.trim() || "100", 10);
-  const fineCataloguePath = process.env.CLICK_TT_FINE_CATALOGUE_PATH?.trim() || null;
+  const fineCataloguePath = process.env.CLICK_TT_FINE_CATALOGUE_PATH?.trim() ||
+    fileURLToPath(new URL("../data/fine-catalogue.wttv-2026.json", import.meta.url));
   const resolvedFineCataloguePath = fineCataloguePath ? path.resolve(fineCataloguePath) : null;
   const fineCatalogue = loadFineCatalogue(resolvedFineCataloguePath);
 
@@ -160,12 +189,14 @@ export function loadConfig(argv = process.argv.slice(2)): AppConfig {
     baseUrl,
     dryRun: Boolean(args["dry-run"]),
     processAll: Boolean(args["process-all"]),
+    recheck: Boolean(args.recheck),
     debug,
     headed: debug || Boolean(args.headed),
     haltOnError: explicitNoHaltOnError ? false : explicitHaltOnError || debug,
     plainProgress: Boolean(args["plain-progress"]),
     slowMoMs: debug ? Math.max(slowMoMs, 1200) : slowMoMs,
     group: args.group?.trim() || null,
+    groups,
     reportDir: path.resolve(args["report-dir"] ?? "reports"),
     fineWorkbookPath: fineWorkbookPath ? path.resolve(fineWorkbookPath) : null,
     fineSheetName,

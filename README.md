@@ -2,6 +2,10 @@
 
 Automation and planning tools for click-TT league administration.
 
+**Match approvals and Excel fines:** see the [operator manual](docs/match-approval.md) for setup, group responsibility, season workbooks, dry/live runs, rechecking approved reports and manual review.
+
+**Rasterzahl optimization:** see the [optimization manual](docs/raster-optimization.md) for the webapp workflow, CLI imports, solver runs, comparison and CSV exports.
+
 ## Repository map
 
 | Path | Purpose |
@@ -19,7 +23,7 @@ Automation and planning tools for click-TT league administration.
 
 | Command | Purpose |
 | --- | --- |
-| `pnpm approve -- --dry-run` | Safely inspect match-report approval work |
+| `pnpm run approve --dry-run` | Safely inspect match-report approval work |
 | `pnpm raster -- ...` | Run the Rasterzahl planner CLI |
 | `pnpm spond:codes` | Parse local `codes/` PDFs without changing Spond |
 | `pnpm spond:codes -- --apply` | Update matching Spond events |
@@ -30,6 +34,8 @@ Automation and planning tools for click-TT league administration.
 
 ## Rasterzahl planner
 
+Start with the [optimization operator manual](docs/raster-optimization.md). The examples below are a command reference; review input coverage, model warnings and solver status before accepting a proposal.
+
 ```powershell
 pnpm raster:assignment
 pnpm raster:public-context
@@ -38,7 +44,7 @@ pnpm raster -- ingest --from-clicktt --out reports/raster/model.json --current r
 pnpm raster -- optimize --model reports/raster/model.json --start reports/raster/current.json --out reports/raster/proposal.json --report reports/raster/proposal-eval.json --csv reports/raster/optimized-assignment.csv --unmet reports/raster/unmet-wishes.csv
 ```
 
-For a proven-optimal solution, use the OR-Tools CP-SAT solver. It writes an assignment JSON plus solver metadata with `OPTIMAL`, `FEASIBLE`, or infeasible status:
+For explicit feasibility and optimality status, use the OR-Tools CP-SAT solver. It writes solver metadata and, when a solution is found, an assignment JSON. Only `OPTIMAL` proves optimality for the supplied model; `FEASIBLE` does not:
 
 ```powershell
 pnpm raster:optimize-cpsat --model reports/raster/review-model.json --out reports/raster/review-proposal-cpsat.json --metadata reports/raster/review-proposal-cpsat-metadata.json --time-limit 300 --workers 8
@@ -121,20 +127,29 @@ Create or update `.env` with your credentials:
 CLICK_TT_USERNAME=your-click-tt-username
 CLICK_TT_PASSWORD=your-click-tt-password
 CLICK_TT_URL=https://wttv.click-tt.de/cgi-bin/WebObjects/nuLigaAdminTTDE.woa
-CLICK_TT_FINE_WORKBOOK_PATH=data/2025-2026 - Ordnungsstrafen BOL 1BL.xlsx
+CLICK_TT_FINE_WORKBOOK_PATH=data/2026-2027 - Ordnungsstrafen BOL 1BL.xlsx
 CLICK_TT_FINE_SHEET_NAME=Sheet1
 CLICK_TT_FINE_IGNORE_COLUMN=Ignore
-CLICK_TT_FINE_CATALOGUE_PATH=data/fine-catalogue.json
+# Optional: override the bundled WO 7/26 district catalogue
+# CLICK_TT_FINE_CATALOGUE_PATH=data/fine-catalogue.wttv-2026.json
 ```
 
 Optional fine-workbook settings:
+
+Set your responsibility separately from your click-TT account permissions in `.env`:
+
+```bash
+CLICK_TT_GROUPS=Bezirksoberliga Erwachsene,1. Bezirksliga 1 Erwachsene,1. Bezirksliga 2 Erwachsene
+```
+
+These are exact click-TT group labels (case and whitespace are normalized). This scope applies to both approvals and fines, including `--process-all`. Other groups are filtered from each results page before opening detail pages or collecting status fines. `--group` can narrow this scope but cannot expand it. Unset/empty means all accessible groups. The example above covers Erwachsenen Bezirksoberliga and both 1. Bezirksliga groups; Damen, Jugend and lower leagues are excluded. Reports print the configured scope; the scanned count includes all rows seen on results pages.
 
 - `CLICK_TT_FINE_WORKBOOK_PATH`: when set, skipped fine candidates and `nicht angetreten` rows are synced into the workbook
 - `CLICK_TT_FINE_SHEET_NAME`: target worksheet; defaults to the first sheet
 - `CLICK_TT_FINE_IGNORE_COLUMN`: column used to suppress known false positives on future runs
 - `CLICK_TT_FINE_SPIELLEITER`: default value for the `Spielleiter` column on appended rows
 - `CLICK_TT_FINE_DEFAULT_LIGA` / `CLICK_TT_FINE_DEFAULT_GRUPPE`: fallback values when the list page does not expose a clean group name
-- `CLICK_TT_FINE_CATALOGUE_PATH`: optional season and league-specific fine catalogue JSON
+- `CLICK_TT_FINE_CATALOGUE_PATH`: optional season and league-specific fine catalogue JSON; defaults to `data/fine-catalogue.wttv-2026.json`
 - `CLICK_TT_FINE_NA_KOSTEN`: fallback fine amount used for appended `Nicht angetreten` rows when no catalogue entry matches
 
 Fine catalogue example:
@@ -180,13 +195,57 @@ Fine catalogue example:
 }
 ```
 
-The season is derived from the match date (`August-July`, for example `2025-2026`). League names are matched case-insensitively after whitespace normalization. Use `*` as a wildcard league or season. Supported event keys are `nicht-angetreten`, `mf-fehlt`, `unvollstaendige-einzelaufstellung`, and `error-message`.
+The season is derived from the match date (`July-June`, WO A 9, for example `2026-2027`). League names are matched case-insensitively after whitespace normalization. Use `*` as a wildcard league or season. Supported event keys are `nicht-angetreten`, `mf-fehlt`, `unvollstaendige-einzelaufstellung`, `fehlerhafte-berichtseingabe`, `mf-kommentar-pruefen` (review only), and `error-message`.
 
 League-specific reductions are represented by putting a different event entry below that league. Lowest-team reductions are represented by adding exact team names to `lowestTeams` at season or league level, then setting a `lowestTeam` override on the affected event. The tool does not infer lowest-team status from names like `III`, because it cannot know from one match row whether that is truly the lowest registered team.
 
 For `error-message`, optional `patterns` are checked against the click-TT message text in order. The first pattern whose `match` text appears in the message can override `Grund`, `Rechtsgrundlage`, and `Kosten`. Fines that do not appear on match reports, such as transfer applications or tournament approvals, should stay out of automatic matching and be handled manually.
 
+### Fines for 2026/27 (WO 7/26)
+
+Source: [WTTV Wettspielordnung, July 2026](https://wttv.de/wp-content/uploads/WO2026-07.pdf), A 20.1–20.6, pages 19–20; season dates: A 9, page 11.
+The bundled `data/fine-catalogue.wttv-2026.json` applies only to 2026/27 district leagues: Bezirksoberliga, Bezirksliga/1. Bezirksliga/2. Bezirksliga and Bezirksklasse/1.–3. Bezirksklasse. Other league names need an explicit catalogue entry. Verband rates are listed below for reference and require a custom catalogue. The historical example catalogue is not the default.
+
+| Check / words in click-TT evidence | Rule | Bezirk | Verband | Handling |
+| --- | --- | ---: | ---: | --- |
+| Status `nicht angetreten` | A 20.1.1 | €100 | €200* | Status candidate, including already marked rows |
+| Zurückziehung | A 20.1.2 | €100 | €200* | Manual; withdrawal is not inferred from a match result |
+| Spielabbruch / Verschulden | A 20.1.3 | €100 | €200 | Manual; establish responsibility |
+| `Vorsätzliche Falscheintragung` | A 20.1.4 | €100 | €200 | Explicit error text only; intent requires review under A 20.6 |
+| `fehlende` / `keine Spielberechtigung` or `Einsatzberechtigung` | A 20.1.5 a | €10/player | €20/player | Text candidate; amount per player shown as text until the count is verified |
+| `Falsche Einzelaufstellung` / `Falsche Doppelaufstellung` | A 20.1.5 b | €10 | €20 | Text candidate |
+| Fewer than six numbered players in the supported Sechser-Paarkreuz-System | A 20.1.6 | €10/missing player | €20/missing player | Multiply by missing count; lowest registered team exempt |
+| `falsche Spielpaarung` | A 20.1.7 | €10 | €20 | Text candidate |
+| `ohne Umrandungen` / `ohne Zählgeräte` | A 20.1.8 | €10 | €20 | Explicit text only |
+| Missing MF / `Fehlende Angabe des Mannschaftsführers` | A 20.1.9 a | €10 | €20 | Existing MF check or text candidate |
+| `Fehlende Unterschrift` | A 20.1.9 b | €10 | €20 | Paper report; explicit text only |
+| `fehlende Angaben zu` Spielbeginn, Spielende, Trikots, Zählgeräten, Umrandungen | A 20.1.9 c | €10 | €20 | Explicit text only |
+| `Verspätetes Antreten` | A 20.1.10 | €10 | €20 | Explicit text only |
+| `fehlende` / `verspätete Ergebnismeldung` | A 20.1.11 | €10 | €20 | Explicit text; verify first-entry timestamp and applicable deadline |
+| `fehlende` / `verspätete Eintragung des Spielberichts` | A 20.1.12 | €10 | €20 | Explicit text; verify applicable deadline |
+| `Fehlerhafte Eintragung` or an incomplete lineup-entry screen | A 20.1.13 | €10 | €20 | Explicit text, or a matching fixture heading with `playerFormationForm`, step `1. Mannschaftsaufstellung`, Weiter/Abbrechen controls and no approval checkbox. Rechecked before classification; only completed, unapproved fixtures past the 24-hour report-entry deadline (WO I 5.13) generate this candidate. The home team is liable; no approval is saved. Generic parser/network failures do not generate this fine. |
+| `nicht einheitliche Trikots` / `nicht einheitlichen Trikots` | A 20.1.14 | €10 | €20 | Explicit text only |
+| Nichteinhaltung von Terminen, e.g. Vereins-/Termin-/Mannschaftsmeldung | A 20.1.15 | €10 | €20 | Manual; not available from the match validation |
+| Venue not ready 30 minutes before start / at scheduled start | A 20.1.16 a/b | €10/€20 | €20/€50 | Manual; exact timing required |
+| Unequal colour, make or condition of tables, nets or balls | A 20.1.17 | €10 | €20 | Manual |
+| `Fehlender Spiel-PIN` / `Verweigerung der Mitwirkung` | A 20.1.18 | €10 | €20 | Explicit text only; bare `Spiel-PIN` does not prove an offence |
+| Paper report where nuScore is mandatory | A 20.1.18 | €10 | €20 | Manual; verify mandate and guest responsibility |
+| Playing despite a ban or suspension/termination of play | A 20.1.19 | €100/team | €200/team | Manual |
+| Withdrawal of a registration/transfer application in the specified cases | A 20.1.20 | — | €100 | Manual |
+| Tournament without approval / despite prohibition | A 20.1.21 | — | €200 | Manual |
+| Missing/incomplete tournament results or missing tournament closure | A 20.1.22 | — | €20 | Manual |
+
+*For Verband **league matches**, A 20.1.1/2 exceptions: NRW-Liga Erwachsene €300, Verbandsliga Erwachsene €250, Verbandsliga Jugend €100 unless the lowest team; lowest team in Damen, Senioren or Jugend €50. The €50 exception does **not** reduce a district adult team's no-show fine. District reductions below the listed rates require the relevant Bezirkstag/Bezirksjugendtag decision (A 20.2); Bezirksoberliga Erwachsene cannot be reduced. Repeated offences may be increased to at most twice the table amount (A 20.4); the tool does not infer recurrence.
+
+The bundled season's `leagueNames` list restricts the shared district rates to those exact league names; league-specific `leagues` entries can override them. For A 20.1.6, populate exact `lowestTeams` names from the Vereinsmeldung in a custom catalogue. `perMissingPlayer: true` multiplies `kosten` by the actual missing count; the `lowestTeam` override of zero records an exempt review candidate. Without that evidence, `Bemerkung` explicitly asks to verify lowest-team status. A failed player count in an unsupported match format does not generate this fine.
+
+Excel destination remains `CLICK_TT_FINE_WORKBOOK_PATH`, with `CLICK_TT_FINE_SHEET_NAME` or the first worksheet. Each candidate writes the regulation's wording to `Grund`, the A 20 reference to `Rechtsgrundlage`, the amount to `Kosten`, and the identified club/team to `Strafe gegen`. Original error text goes to `Click-TT Text`; validation evidence and exemption checks go to `Bemerkung`. Fixture metadata, `Spielleiter` and `Eingetragen am` keep their existing columns. Unknown text keeps the original message with blank rule/amount and `catalogueMatched: false`. The first matching text pattern is used; combined notices require review for additional offences and liable teams.
+
+These are review candidates, not issued penalties. Missing timestamps, signatures, venue conditions, intent and local decisions are not inferred from keywords. Existing rows remain append-only; changing a catalogue does not rewrite past entries. Duplicate/Ignore identity is home + guest + date + liable team (`Strafe gegen`) + reason. Both teams can receive separate rows for the same offence; ignoring one team's row does not suppress the other team's fine. Historical rows with an empty `Strafe gegen` need that field filled to match team-specific candidates. Start with `pnpm approve --dry-run` to inspect the resolved amounts before updating the configured workbook.
+
 ## Recommended Run Order
+
+For the complete operator workflows, use the separate [match approval manual](docs/match-approval.md) and [optimization manual](docs/raster-optimization.md).
 
 ### How To Run
 
@@ -245,6 +304,8 @@ npm run approve -- --group "Bezirksoberliga Erwachsene"
 - `--no-halt-on-error`: continue after fatal page-shape errors even in debug mode
 - `--plain-progress`: use plain line-by-line progress output instead of the redrawn progress bar
 - `--process-all`: open every match row detail page instead of only approval-relevant/fine-relevant rows
+- `--recheck`: audit past completed reports, including approved reports, and collect fines without changing click-TT approvals; creates a missing output workbook
+- `--fine-workbook <path>`: override the Excel output path for this run (existing files are appended to)
 - `--slow-mo <ms>`: add a delay between Playwright actions; in debug mode the effective minimum is `1200`
 - `--group "<name>"`: restrict the run to a specific click-TT group label
 - `--report-dir <path>`: write JSON reports and debug HTML snapshots to a custom directory
@@ -263,7 +324,7 @@ The tool approves only when all of these pass:
 
 1. Match format is `Sechser-Paarkreuz-System`.
 2. No unexpected text or warning elements appear between the top button row and the `Kontrolle` fieldset.
-3. Both teams have an `MF` entry, either in the lineup table or mentioned in `Bemerkungen`.
+3. Both teams have an `MF` entry, either in the lineup table or identified in `Bemerkungen`. Comments accept MF/M.F., Mannschaftsführer (including Manschaftsführer and ASCII umlauts), Spielführer, Kapitän and Captain. Captains can be identified by A/B positions, Heim/Gast labels, named teams (Roman/Arabic team numbers match), or full player names uniquely matching each lineup, including surname-first order. Unclear or contradictory nonempty comments require manual review: the report stays unapproved and Excel receives an unpriced review row with the comment evidence, without an automatic MF fine or assigned liability. Empty comments with no MF entries still generate missing-MF fine candidates.
 4. Both teams have exactly six numbered player rows (`1` through `6`).
 5. The approval checkbox is not already checked.
 
