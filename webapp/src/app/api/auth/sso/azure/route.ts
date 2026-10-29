@@ -92,7 +92,7 @@ export async function GET(request: Request) {
       where: {
         providerId_accountId: {
           providerId: "credential",
-          accountId: email,
+          accountId: user.id,
         },
       },
       update: {
@@ -102,7 +102,7 @@ export async function GET(request: Request) {
       create: {
         userId: user.id,
         providerId: "credential",
-        accountId: email,
+        accountId: user.id,
         password: passwordHash,
       },
     });

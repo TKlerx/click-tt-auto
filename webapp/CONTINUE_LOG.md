@@ -1726,3 +1726,9 @@
 ## 2026-10-14 PR63 reconciliation
 
 - Retained current security/runtime fixes and the diagnostic delivery history while merging current main.
+
+
+## Security follow-up (2026-10-29)
+
+- Patched reported CLI/webapp dependencies in existing PR #74. Aligned credential account IDs in login, password changes, account creation, SSO mocks and fixtures; added a hash-preserving migration.
+- Webapp typecheck passed. Full webapp run passed 570 tests with two existing skips; its only timeout passed unchanged on retry. Root typecheck/lint passed; fresh full CI remains required.

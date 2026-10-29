@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import {
   getPasswordComplexityErrorMessage,
   hashPassword,
@@ -166,8 +167,10 @@ export async function createLocalUser(
   }
 
   const passwordHash = await hashPassword(body.temporaryPassword);
+  const id = randomUUID();
   const user = await prisma.user.create({
     data: {
+      id,
       email,
       name: body.name,
       emailVerified: true,
@@ -179,7 +182,7 @@ export async function createLocalUser(
       accounts: {
         create: {
           providerId: "credential",
-          accountId: email,
+          accountId: id,
           password: passwordHash,
         },
       },

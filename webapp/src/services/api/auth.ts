@@ -34,7 +34,7 @@ export async function changePasswordForUser(
     where: {
       providerId_accountId: {
         providerId: "credential",
-        accountId: user.email.toLowerCase(),
+        accountId: user.id,
       },
     },
     select: {
@@ -71,7 +71,7 @@ export async function changePasswordForUser(
       where: {
         providerId_accountId: {
           providerId: "credential",
-          accountId: user.email.toLowerCase(),
+          accountId: user.id,
         },
       },
       data: {

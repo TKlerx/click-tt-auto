@@ -23,3 +23,9 @@
 - Latest non-continuity commit: 7b64f38 Document parsed identity review backlog.
 - Active specs: 004-compare-raster-runs.
 - Next focus: 004-compare-raster-runs: T045.
+
+
+## Security follow-up (2026-10-29)
+
+- Patched reported CLI/webapp dependencies in existing PR #74. Aligned credential account IDs in login, password changes, account creation, SSO mocks and fixtures; added a hash-preserving migration.
+- Webapp typecheck passed. Full webapp run passed 570 tests with two existing skips; its only timeout passed unchanged on retry. Root typecheck/lint passed; fresh full CI remains required.

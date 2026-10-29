@@ -85,7 +85,7 @@ describe("change password route", () => {
       where: {
         providerId_accountId: {
           providerId: "credential",
-          accountId: "member@example.com",
+          accountId: "user-1",
         },
       },
       select: {
@@ -96,7 +96,7 @@ describe("change password route", () => {
       where: {
         providerId_accountId: {
           providerId: "credential",
-          accountId: "member@example.com",
+          accountId: "user-1",
         },
       },
       data: {

@@ -79,6 +79,7 @@ describe("create user route", () => {
     });
     expect(prismaMock.user.create).toHaveBeenCalledWith({
       data: {
+        id: expect.any(String),
         email: "reviewer@example.com",
         emailVerified: true,
         name: "Review Person",
@@ -90,12 +91,14 @@ describe("create user route", () => {
         accounts: {
           create: {
             providerId: "credential",
-            accountId: "reviewer@example.com",
+            accountId: expect.any(String),
             password: "hashed-password",
           },
         },
       },
     });
+    const created = prismaMock.user.create.mock.calls[0][0].data;
+    expect(created.accounts?.create).toMatchObject({ accountId: created.id });
     if (!response) {
       throw new Error("Expected response");
     }
