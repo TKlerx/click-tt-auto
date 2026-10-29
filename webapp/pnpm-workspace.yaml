@@ -13,26 +13,23 @@ allowBuilds:
 overrides:
   brace-expansion@>=5.0.0 <5.0.12: ^5.0.12
   "@babel/core": 7.29.7
-  "@hono/node-server": 1.19.15
+  '@hono/node-server': 2.1.3
   "@prisma/config>deepmerge-ts": 8.0.1
   esbuild: 0.28.1
-  hono: 4.12.34
+  hono: 4.13.11
   js-yaml: 4.3.1
   nanoid: 3.3.18
   pdfjs-dist: 6.2.108
   postcss: 8.5.23
   sharp: 0.35.5
-  vite: 8.0.16
+  vite: ^8.2.4
   valibot: 1.4.2
-  '@vitest/mocker@>=2.1.0 <4.1.11': ^4.1.11
   baseline-browser-mapping@>=2.0.0 <2.11.0: ^2.11.0
   browserslist@<=4.28.6: ^4.28.7
-  hono@<4.13.5: ^4.13.5
   js-yaml@>=4.0.0 <4.3.2: ^4.3.2
   mysql2@<3.22.0: ^3.22.0
   mysql2@<=3.23.0: ^3.23.1
-  sharp@<0.35.5: ^0.35.5
-  vitest@>=2.1.0 <4.1.11: ^4.1.11
+  fast-uri@>=3.0.0 <3.1.9: ^3.1.9
 minimumReleaseAgeExclude:
   - browserslist@4.28.7
   - mysql2@3.22.0 || 3.23.1

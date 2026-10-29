@@ -184,7 +184,7 @@ async function main() {
         where: {
           providerId_accountId: {
             providerId: "credential",
-            accountId: normalizedEmail,
+            accountId: record.id,
           },
         },
         update: {
@@ -192,7 +192,7 @@ async function main() {
           password: passwordHash,
         },
         create: {
-          accountId: normalizedEmail,
+          accountId: record.id,
           providerId: "credential",
           userId: record.id,
           password: passwordHash,

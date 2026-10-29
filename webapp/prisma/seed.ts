@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { randomUUID } from "node:crypto";
 import { PrismaPg } from "@prisma/adapter-pg";
 import bcrypt from "bcryptjs";
 import { PrismaClient } from "../generated/prisma/client";
@@ -145,8 +146,10 @@ async function main() {
 
   const passwordHash = await bcrypt.hash(password, 12);
 
+  const adminId = randomUUID();
   await prisma.user.create({
     data: {
+      id: adminId,
       email,
       emailVerified: true,
       name: "Initial Admin",
@@ -159,7 +162,7 @@ async function main() {
       accounts: {
         create: {
           providerId: "credential",
-          accountId: email,
+          accountId: adminId,
           password: passwordHash,
         },
       },
@@ -167,8 +170,10 @@ async function main() {
   });
 
   for (const demoUser of demoRasterUsers) {
+    const id = randomUUID();
     await prisma.user.create({
       data: {
+        id,
         email: demoUser.email,
         emailVerified: true,
         name: demoUser.name,
@@ -181,7 +186,7 @@ async function main() {
         accounts: {
           create: {
             providerId: "credential",
-            accountId: demoUser.email,
+            accountId: id,
             password: passwordHash,
           },
         },

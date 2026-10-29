@@ -102,3 +102,9 @@
 - Updated affected CLI and webapp dependencies; removed obsolete overrides where native ranges suffice.
 - Webapp frozen lockfile passes. CLI audit is clean; webapp audit retains only the unpatched braces 3.0.3 advisory. Full application validation awaits PR CI.
 - Initial PR CI passed CLI checks but failed E2E because standalone tracing omitted Playwright runtime assets. Added a narrow playwright-core tracing include; existing E2E checks provide the regression check on the next CI run.
+
+
+## Security follow-up (2026-10-29)
+
+- Patched reported CLI/webapp dependencies in existing PR #74. Aligned credential account IDs in login, password changes, account creation, SSO mocks and fixtures; added a hash-preserving migration.
+- Webapp typecheck passed. Full webapp run passed 570 tests with two existing skips; its only timeout passed unchanged on retry. Root typecheck/lint passed; fresh full CI remains required.

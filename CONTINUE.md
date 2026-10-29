@@ -63,3 +63,9 @@
 
 1. 004-compare-raster-runs: T045 [Backlog] Add infeasibility diagnostics that identify which hard constraint family blocks a CP-SAT run in `scripts/solve-raster-cpsat.py` and `webapp/worker/src/starter_worker/main.py`
 2. 004-compare-raster-runs: T046 [Backlog] Show infeasibility diagnostics next to the no-solution run state in `webapp/src/components/raster/input-set-actions.tsx`
+
+
+## Security follow-up (2026-10-29)
+
+- Patched reported CLI/webapp dependencies in existing PR #74. Aligned credential account IDs in login, password changes, account creation, SSO mocks and fixtures; added a hash-preserving migration.
+- Webapp typecheck passed. Full webapp run passed 570 tests with two existing skips; its only timeout passed unchanged on retry. Root typecheck/lint passed; fresh full CI remains required.
