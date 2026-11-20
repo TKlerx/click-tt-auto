@@ -38,7 +38,7 @@ jobs:
         run: pnpm test
 
   webapp:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       BASE_PATH: /app-starter
       E2E_BASE_PATH: /app-starter
