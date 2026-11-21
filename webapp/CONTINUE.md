@@ -108,3 +108,7 @@
 
 - Patched reported CLI/webapp dependencies in existing PR #74. Aligned credential account IDs in login, password changes, account creation, SSO mocks and fixtures; added a hash-preserving migration.
 - Webapp typecheck passed. Full webapp run passed 570 tests with two existing skips; its only timeout passed unchanged on retry. Root typecheck/lint passed; fresh full CI remains required.
+
+## Security dependency follow-up (2026-11-20)
+
+Patched only the dependencies named in current GitHub alerts; existing quality and security gates remain required. Full validation results are recorded in the security PR. No database, deployment or feature changes.
