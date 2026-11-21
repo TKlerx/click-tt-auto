@@ -3,6 +3,7 @@ minimumReleaseAge: 4320 # nosemgrep: package_managers.pnpm.pnpm-missing-minimum-
 allowBuilds:
   esbuild: true
 overrides:
+  "minimatch@>=7.0.0 <11.0.1": "11.0.1"
   js-yaml: 4.3.1
   "exceljs>uuid": 11.1.1
   nanoid: 3.3.18
