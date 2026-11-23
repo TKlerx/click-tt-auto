@@ -79,7 +79,29 @@ jobs:
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
 
       - name: Run Bandit (report only)
-        run: uvx --python 3.12 bandit==1.9.4 --exit-zero -r webapp/worker/src scripts/solve-raster-cpsat.py
+        run: |
+          report="$RUNNER_TEMP/bandit.json"
+          uvx --python 3.12 bandit==1.9.4 --exit-zero -r webapp/worker/src scripts/solve-raster-cpsat.py -f json -o "$report"
+          uv run --no-project --python 3.12 python - "$report" <<'PY'
+          import json
+          import sys
+
+          def escape(value, property=False):
+              value = str(value).replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+              return value.replace(":", "%3A").replace(",", "%2C") if property else value
+
+          with open(sys.argv[1], encoding="utf-8") as report:
+              results = json.load(report)
+          for issue in results["results"]:
+              path = issue["filename"].removeprefix("./")
+              line = issue["line_number"]
+              severity = issue["issue_severity"]
+              message = f'{severity} {issue["test_id"]}: {issue["issue_text"]}'
+              print(f"{path}:{line}: {message}" if severity not in {"MEDIUM", "HIGH"} else
+                    f"::warning file={escape(path, True)},line={line},title=Bandit::{escape(message)}")
+          if results["errors"]:
+              sys.exit("Bandit could not scan all files: " + str(results["errors"]))
+          PY
 
       - name: Audit Python dependencies
         run: uv audit --project webapp/worker --frozen
